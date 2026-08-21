@@ -65,8 +65,9 @@ const MediaSchema = new Schema(
       enum: ["r2", "local", "youtube"],
       required: true,
     },
-    // YouTube-backed session videos (unlisted recommended)
+    // YouTube-backed session videos/playlists (unlisted recommended)
     youtubeId: { type: String, default: "" },
+    youtubePlaylistId: { type: String, default: "" },
     // Optional access window — after this, vault hides the item
     availableUntil: { type: Date, default: null },
     guestId: { type: Schema.Types.ObjectId, ref: "Guest", default: null, index: true },

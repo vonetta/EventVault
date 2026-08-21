@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (media.storageProvider === "youtube" || media.youtubeId) {
+  if (media.storageProvider === "youtube" || media.youtubeId || media.youtubePlaylistId) {
     return NextResponse.json(
       { error: "YouTube media is embedded in the vault, not downloaded here" },
       { status: 400 },

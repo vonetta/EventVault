@@ -45,7 +45,10 @@ function MediaGrid({ items }: { items: MediaItem[] }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {items.map((item) => {
-        const isYouTube = item.provider === "youtube" || item.contentType === "video/youtube";
+        const isYouTube =
+          item.provider === "youtube" ||
+          item.contentType === "video/youtube" ||
+          item.contentType === "video/youtube-playlist";
         if (isYouTube && item.embedUrl) {
           return (
             <div

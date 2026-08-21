@@ -65,6 +65,7 @@ export async function GET(request: Request) {
       sessionId: item.sessionId,
       storageProvider: item.storageProvider,
       youtubeId: item.youtubeId,
+      youtubePlaylistId: item.youtubePlaylistId,
       availableUntil: item.availableUntil,
       createdAt: item.createdAt,
       // storageKey intentionally omitted from admin list payloads
@@ -262,16 +263,23 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "add_youtube_session") {
-    const { parseYouTubeId, youtubeWatchUrl } = await import("@/lib/youtube");
+    const {
+      parseYouTubeRef,
+      youtubeEmbedForRef,
+      youtubeOpenUrlForRef,
+    } = await import("@/lib/youtube");
     const event = await Event.findById(body.eventId);
     const session = await Session.findById(body.sessionId);
     if (!event || !session || String(session.eventId) !== String(event._id)) {
       return NextResponse.json({ error: "Invalid event or session" }, { status: 400 });
     }
 
-    const youtubeId = parseYouTubeId(body.youtubeUrl);
-    if (!youtubeId) {
-      return NextResponse.json({ error: "Could not parse YouTube URL" }, { status: 400 });
+    const ref = parseYouTubeRef(body.youtubeUrl);
+    if (!ref) {
+      return NextResponse.json(
+        { error: "Could not parse YouTube video or playlist URL" },
+        { status: 400 },
+      );
     }
 
     let availableUntil: Date | null = null;
@@ -280,23 +288,27 @@ export async function POST(request: Request) {
       if (Number.isNaN(parsed.getTime())) {
         return NextResponse.json({ error: "Invalid availableUntil date" }, { status: 400 });
       }
-      // If date-only (YYYY-MM-DD), treat as end of that day UTC
       if (/^\d{4}-\d{2}-\d{2}$/.test(body.availableUntil.trim())) {
         parsed.setUTCHours(23, 59, 59, 999);
       }
       availableUntil = parsed;
     }
 
+    const label =
+      body.title?.trim() ||
+      (ref.type === "playlist" ? `YouTube playlist ${ref.id}` : `YouTube ${ref.id}`);
+
     const media = await Media.create({
       eventId: event._id,
       kind: "session_video",
-      title: body.title?.trim() || `YouTube ${youtubeId}`,
-      filename: `youtube-${youtubeId}`,
-      contentType: "video/youtube",
+      title: label,
+      filename: ref.type === "playlist" ? `youtube-playlist-${ref.id}` : `youtube-${ref.id}`,
+      contentType: ref.type === "playlist" ? "video/youtube-playlist" : "video/youtube",
       size: 0,
       storageKey: "",
       storageProvider: "youtube",
-      youtubeId,
+      youtubeId: ref.type === "video" ? ref.id : "",
+      youtubePlaylistId: ref.type === "playlist" ? ref.id : "",
       availableUntil,
       sessionId: session._id,
       guestId: null,
@@ -307,8 +319,11 @@ export async function POST(request: Request) {
         _id: media._id,
         kind: media.kind,
         title: media.title,
-        youtubeId,
-        youtubeUrl: youtubeWatchUrl(youtubeId),
+        youtubeType: ref.type,
+        youtubeId: media.youtubeId || undefined,
+        youtubePlaylistId: media.youtubePlaylistId || undefined,
+        youtubeUrl: youtubeOpenUrlForRef(ref),
+        embedUrl: youtubeEmbedForRef(ref),
         availableUntil: media.availableUntil,
         sessionId: media.sessionId,
       },

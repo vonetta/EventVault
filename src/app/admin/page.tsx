@@ -28,6 +28,7 @@ type MediaDoc = {
   sessionId?: string | null;
   storageProvider?: string;
   youtubeId?: string;
+  youtubePlaylistId?: string;
   availableUntil?: string | null;
 };
 
@@ -504,11 +505,13 @@ export default function AdminPage() {
 
           <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
             <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">
-              Session video (YouTube)
+              Session video / playlist (YouTube)
             </h2>
             <p className="text-sm text-pine/75">
-              Upload to YouTube as <strong>Unlisted</strong>, paste the link here. Optional end date
-              hides it from the vault after that day (also unpublish/delete on YouTube when done).
+              Upload videos to YouTube as <strong>Unlisted</strong>, then paste either a{" "}
+              <strong>single video</strong> link or a <strong>playlist</strong> link. Guests can
+              move through the whole playlist in the vault. Optional end date hides it after that
+              day (also unpublish on YouTube when done).
             </p>
             <form onSubmit={addYoutubeSession} className="grid gap-3 md:grid-cols-2">
               <select
@@ -533,7 +536,7 @@ export default function AdminPage() {
               <input
                 value={youtubeUrl}
                 onChange={(e) => setYoutubeUrl(e.target.value)}
-                placeholder="https://youtu.be/... or youtube.com/watch?v=..."
+                placeholder="Video or playlist URL (youtu.be/…, watch?v=…, playlist?list=…)"
                 required
                 className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
               />
@@ -547,7 +550,7 @@ export default function AdminPage() {
                 />
               </label>
               <button type="submit" className="h-11 rounded-xl bg-ink text-foam md:col-span-2">
-                Link YouTube video
+                Link YouTube video or playlist
               </button>
             </form>
           </section>
@@ -621,8 +624,12 @@ export default function AdminPage() {
                 <li key={item._id} className="flex flex-wrap items-center justify-between gap-2">
                   <span>
                     {item.kind}
-                    {item.storageProvider === "youtube" ? " (YouTube)" : ""}:{" "}
-                    {item.title || item.filename}
+                    {item.storageProvider === "youtube"
+                      ? item.youtubePlaylistId
+                        ? " (YouTube playlist)"
+                        : " (YouTube)"
+                      : ""}
+                    : {item.title || item.filename}
                     {item.availableUntil
                       ? ` · until ${new Date(item.availableUntil).toLocaleDateString()}`
                       : ""}

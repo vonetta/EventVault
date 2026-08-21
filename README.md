@@ -28,7 +28,7 @@ R2 free tier includes **10 GB**. Egress is free.
 | Heavy weekend (~1000 photos) | ~4 GB | **$0** |
 | Very large (~2000 large files) | ~15 GB | **~$0.08** |
 
-**Session videos:** prefer **YouTube Unlisted** links in admin (no R2 video cost). Optional “available until” date hides them from the vault after that day.
+**Session videos:** prefer **YouTube Unlisted** — paste a single video **or a playlist** in admin (no R2 video cost). Guests play the playlist in the vault. Optional “available until” date hides them after that day.
 
 ## Stack
 

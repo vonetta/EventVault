@@ -8,7 +8,7 @@ import {
 } from "@/lib/auth";
 import { Day, Event, Guest, Media, Session } from "@/lib/models";
 import { mediaProxyUrl } from "@/lib/storage";
-import { isMediaAvailable, youtubeEmbedUrl, youtubeWatchUrl } from "@/lib/youtube";
+import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
 function mapFileMedia(item: {
   _id: { toString(): string };
@@ -32,21 +32,38 @@ function mapSessionMedia(item: {
   contentType?: string | null;
   storageProvider?: string | null;
   youtubeId?: string | null;
+  youtubePlaylistId?: string | null;
   availableUntil?: Date | null;
 }) {
   if (!isMediaAvailable(item.availableUntil)) return null;
 
-  if (item.storageProvider === "youtube" && item.youtubeId) {
-    return {
-      id: String(item._id),
-      title: item.title || "Session video",
-      contentType: "video/youtube",
-      provider: "youtube" as const,
-      youtubeId: item.youtubeId,
-      url: youtubeWatchUrl(item.youtubeId),
-      embedUrl: youtubeEmbedUrl(item.youtubeId),
-      availableUntil: item.availableUntil || null,
-    };
+  if (item.storageProvider === "youtube") {
+    if (item.youtubePlaylistId) {
+      const ref = { type: "playlist" as const, id: item.youtubePlaylistId };
+      return {
+        id: String(item._id),
+        title: item.title || "Session playlist",
+        contentType: "video/youtube-playlist",
+        provider: "youtube" as const,
+        youtubePlaylistId: item.youtubePlaylistId,
+        url: youtubeOpenUrlForRef(ref),
+        embedUrl: youtubeEmbedForRef(ref),
+        availableUntil: item.availableUntil || null,
+      };
+    }
+    if (item.youtubeId) {
+      const ref = { type: "video" as const, id: item.youtubeId };
+      return {
+        id: String(item._id),
+        title: item.title || "Session video",
+        contentType: "video/youtube",
+        provider: "youtube" as const,
+        youtubeId: item.youtubeId,
+        url: youtubeOpenUrlForRef(ref),
+        embedUrl: youtubeEmbedForRef(ref),
+        availableUntil: item.availableUntil || null,
+      };
+    }
   }
 
   return {
