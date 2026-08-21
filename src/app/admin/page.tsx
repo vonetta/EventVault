@@ -440,7 +440,7 @@ export default function AdminPage() {
                   disabled={!data.emailConfigured}
                 />
                 Email ticket codes on import
-                {!data.emailConfigured ? " (set RESEND_API_KEY + EMAIL_FROM)" : ""}
+                {!data.emailConfigured ? " (set GMAIL_USER + GMAIL_APP_PASSWORD)" : ""}
               </label>
               <div className="flex flex-wrap gap-2">
                 <button type="submit" className="h-11 rounded-xl bg-ink px-4 text-foam">

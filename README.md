@@ -37,7 +37,7 @@ R2 free tier includes **10 GB**. Egress is free.
 | App | Next.js on **Vercel** |
 | Database | **MongoDB Atlas** |
 | Media | **Cloudflare R2** (local `/uploads` in development only) |
-| Email (optional) | **Resend** |
+| Email | **Gmail** (personal App Password) |
 
 ## Security (v1)
 
@@ -54,7 +54,8 @@ R2 free tier includes **10 GB**. Egress is free.
    - `MONGODB_URI`
    - `ADMIN_PASSWORD`
    - `SESSION_SECRET` (≥ 32 characters)
-2. Optional: R2 keys, `RESEND_API_KEY` + `EMAIL_FROM`, `APP_URL`
+2. Optional: R2 keys, `GMAIL_USER` + `GMAIL_APP_PASSWORD`, `APP_URL`
+   - Gmail: enable 2-Step Verification, then create an [App Password](https://myaccount.google.com/apppasswords)
 3. Install and run:
 
 ```bash
@@ -73,6 +74,6 @@ npm run dev
 
 ## Stage 2 status
 
-- Ticket email via Resend (import + per-guest send)
+- Ticket email via personal Gmail SMTP (import + per-guest send)
 - Multi-event create/switch in admin
 - Still later: face tagging, payments, richer standard-tier session packs
