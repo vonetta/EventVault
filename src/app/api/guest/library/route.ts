@@ -1,38 +1,55 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import { getGuestSession, unauthorized } from "@/lib/auth";
-import { Day, Event, Media, Session } from "@/lib/models";
-import { getDownloadUrl } from "@/lib/storage";
+import {
+  getGuestSession,
+  clearGuestSession,
+  unauthorized,
+  assertSameOrigin,
+} from "@/lib/auth";
+import { Day, Event, Guest, Media, Session } from "@/lib/models";
+import { mediaProxyUrl } from "@/lib/storage";
 
-export async function GET() {
+export async function GET(request: Request) {
+  try {
+    assertSameOrigin(request);
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const session = await getGuestSession();
   if (!session) return unauthorized("Enter a valid ticket code");
 
   await connectDB();
 
-  const event = await Event.findById(session.eventId);
+  const guest = await Guest.findById(session.guestId);
+  if (!guest) {
+    await clearGuestSession();
+    return unauthorized("Ticket no longer valid");
+  }
+
+  const event = await Event.findById(guest.eventId);
   if (!event) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
 
+  const tier = guest.tier;
+
   const groupPhotos = await Media.find({
-    eventId: session.eventId,
+    eventId: guest.eventId,
     kind: "group_photo",
   }).sort({ createdAt: -1 });
 
-  const group = await Promise.all(
-    groupPhotos.map(async (item) => ({
-      id: String(item._id),
-      title: item.title || item.filename,
-      contentType: item.contentType,
-      url: await getDownloadUrl(item.storageKey, item.storageProvider),
-    })),
-  );
+  const group = groupPhotos.map((item) => ({
+    id: String(item._id),
+    title: item.title || item.filename,
+    contentType: item.contentType,
+    url: mediaProxyUrl(String(item._id)),
+  }));
 
-  if (session.tier === "standard") {
+  if (tier === "standard") {
     return NextResponse.json({
-      guest: { name: session.name, tier: session.tier },
-      event,
+      guest: { name: guest.name, tier },
+      event: { name: event.name, description: event.description },
       groupGallery: group,
       personalPhotos: [],
       days: [],
@@ -41,26 +58,24 @@ export async function GET() {
 
   const [personalPhotos, days, sessions, sessionVideos] = await Promise.all([
     Media.find({
-      eventId: session.eventId,
+      eventId: guest.eventId,
       kind: "personal_photo",
-      guestId: session.guestId,
+      guestId: guest._id,
     }).sort({ createdAt: -1 }),
-    Day.find({ eventId: session.eventId }).sort({ sortOrder: 1 }),
-    Session.find({ eventId: session.eventId }).sort({ sortOrder: 1 }),
+    Day.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
+    Session.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
     Media.find({
-      eventId: session.eventId,
+      eventId: guest.eventId,
       kind: "session_video",
     }).sort({ createdAt: -1 }),
   ]);
 
-  const personal = await Promise.all(
-    personalPhotos.map(async (item) => ({
-      id: String(item._id),
-      title: item.title || item.filename,
-      contentType: item.contentType,
-      url: await getDownloadUrl(item.storageKey, item.storageProvider),
-    })),
-  );
+  const personal = personalPhotos.map((item) => ({
+    id: String(item._id),
+    title: item.title || item.filename,
+    contentType: item.contentType,
+    url: mediaProxyUrl(String(item._id)),
+  }));
 
   const videosBySession = new Map<string, typeof sessionVideos>();
   for (const video of sessionVideos) {
@@ -70,43 +85,37 @@ export async function GET() {
     videosBySession.set(key, list);
   }
 
-  const dayPayload = await Promise.all(
-    days.map(async (day) => {
-      const daySessions = sessions.filter(
-        (sessionItem) => String(sessionItem.dayId) === String(day._id),
-      );
+  const dayPayload = days.map((day) => {
+    const daySessions = sessions.filter(
+      (sessionItem) => String(sessionItem.dayId) === String(day._id),
+    );
 
-      return {
-        id: String(day._id),
-        label: day.label,
-        date: day.date,
-        sessions: await Promise.all(
-          daySessions.map(async (sessionItem) => {
-            const videos = videosBySession.get(String(sessionItem._id)) || [];
-            return {
-              id: String(sessionItem._id),
-              title: sessionItem.title,
-              speaker: sessionItem.speaker,
-              startsAt: sessionItem.startsAt,
-              description: sessionItem.description,
-              videos: await Promise.all(
-                videos.map(async (video) => ({
-                  id: String(video._id),
-                  title: video.title || video.filename,
-                  contentType: video.contentType,
-                  url: await getDownloadUrl(video.storageKey, video.storageProvider),
-                })),
-              ),
-            };
-          }),
-        ),
-      };
-    }),
-  );
+    return {
+      id: String(day._id),
+      label: day.label,
+      date: day.date,
+      sessions: daySessions.map((sessionItem) => {
+        const videos = videosBySession.get(String(sessionItem._id)) || [];
+        return {
+          id: String(sessionItem._id),
+          title: sessionItem.title,
+          speaker: sessionItem.speaker,
+          startsAt: sessionItem.startsAt,
+          description: sessionItem.description,
+          videos: videos.map((video) => ({
+            id: String(video._id),
+            title: video.title || video.filename,
+            contentType: video.contentType,
+            url: mediaProxyUrl(String(video._id)),
+          })),
+        };
+      }),
+    };
+  });
 
   return NextResponse.json({
-    guest: { name: session.name, tier: session.tier },
-    event,
+    guest: { name: guest.name, tier },
+    event: { name: event.name, description: event.description },
     groupGallery: group,
     personalPhotos: personal,
     days: dayPayload,

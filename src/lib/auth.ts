@@ -1,13 +1,39 @@
+import { timingSafeEqual } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-const GUEST_COOKIE = "ev_guest";
-const ADMIN_COOKIE = "ev_admin";
+export const GUEST_COOKIE = "ev_guest";
+export const ADMIN_COOKIE = "ev_admin";
 
-function secretKey() {
-  const secret = process.env.SESSION_SECRET || process.env.ADMIN_PASSWORD || "dev-only-secret";
+function requireSessionSecret() {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret || secret === "dev-only-secret" || secret.length < 32) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "SESSION_SECRET must be set to a random string of at least 32 characters",
+      );
+    }
+    return new TextEncoder().encode(
+      secret && secret.length >= 16 ? secret : "local-dev-only-session-secret!!",
+    );
+  }
   return new TextEncoder().encode(secret);
+}
+
+export function secretKey() {
+  return requireSessionSecret();
+}
+
+/** Constant-time string compare for passwords. */
+export function secureEqual(a: string, b: string) {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) {
+    timingSafeEqual(aBuf, aBuf);
+    return false;
+  }
+  return timingSafeEqual(aBuf, bBuf);
 }
 
 export type GuestSession = {
@@ -21,7 +47,7 @@ export async function setGuestSession(session: GuestSession) {
   const token = await new SignJWT(session)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("30d")
+    .setExpirationTime("12h")
     .sign(secretKey());
 
   const jar = await cookies();
@@ -30,7 +56,7 @@ export async function setGuestSession(session: GuestSession) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: 60 * 60 * 12,
   });
 }
 
@@ -56,7 +82,7 @@ export async function setAdminSession() {
   const token = await new SignJWT({ role: "admin" })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime("8h")
     .sign(secretKey());
 
   const jar = await cookies();
@@ -65,7 +91,7 @@ export async function setAdminSession() {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7,
+    maxAge: 60 * 60 * 8,
   });
 }
 
@@ -89,4 +115,21 @@ export async function isAdminAuthenticated() {
 
 export function unauthorized(message = "Unauthorized") {
   return NextResponse.json({ error: message }, { status: 401 });
+}
+
+/** Reject cross-site POSTs that still send cookies (defense in depth). */
+export function assertSameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return;
+  const host = request.headers.get("host");
+  if (!host) return;
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    throw new Error("Invalid Origin");
+  }
+  if (originHost !== host) {
+    throw new Error("Cross-origin request blocked");
+  }
 }

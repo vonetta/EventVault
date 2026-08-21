@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type EventDoc = { _id: string; name: string; slug: string; description?: string };
@@ -30,17 +30,40 @@ type MediaDoc = {
 
 type AdminData = {
   event: EventDoc | null;
+  events: EventDoc[];
   days: DayDoc[];
   sessions: SessionDoc[];
   guests: GuestDoc[];
   media: MediaDoc[];
+  emailConfigured?: boolean;
 };
+
+function parseGuestLines(text: string) {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      // Split on commas not inside quotes; fall back to simple 3-part split
+      const parts = line.includes('"')
+        ? line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)?.map((p) => p.replace(/^"|"$/g, "").trim())
+        : line.split(",").map((part) => part.trim());
+      const [name = "", email = "", tier = "standard"] = parts || [];
+      return { name, email, tier: tier.toLowerCase() };
+    })
+    .filter((row) => row.name);
+}
 
 export default function AdminPage() {
   const router = useRouter();
   const [data, setData] = useState<AdminData | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState("");
   const [message, setMessage] = useState("");
-  const [guestCsv, setGuestCsv] = useState("Jane Doe, jane@email.com, vip\nJohn Smith, john@email.com, standard");
+  const [guestCsv, setGuestCsv] = useState(
+    "Jane Doe, jane@email.com, vip\nJohn Smith, john@email.com, standard",
+  );
+  const [sendEmailOnImport, setSendEmailOnImport] = useState(false);
+  const [newEventName, setNewEventName] = useState("");
   const [sessionTitle, setSessionTitle] = useState("");
   const [sessionSpeaker, setSessionSpeaker] = useState("");
   const [sessionDayId, setSessionDayId] = useState("");
@@ -49,107 +72,162 @@ export default function AdminPage() {
   const [uploadSessionId, setUploadSessionId] = useState("");
   const [file, setFile] = useState<File | null>(null);
 
-  async function load() {
-    const response = await fetch("/api/admin/data");
-    if (response.status === 401) {
-      router.replace("/admin/login");
-      return;
-    }
-    const json = await response.json();
-    setData({
-      event: json.event,
-      days: json.days || [],
-      sessions: json.sessions || [],
-      guests: json.guests || [],
-      media: json.media || [],
-    });
-    if (json.days?.[0]?._id) setSessionDayId(json.days[0]._id);
-  }
+  const load = useCallback(
+    async (eventId?: string) => {
+      const query = eventId ? `?eventId=${encodeURIComponent(eventId)}` : "";
+      const response = await fetch(`/api/admin/data${query}`);
+      if (response.status === 401) {
+        router.replace("/admin/login");
+        return;
+      }
+      if (!response.ok) {
+        setMessage("Could not load admin data");
+        return;
+      }
+      const json = await response.json();
+      setData({
+        event: json.event,
+        events: json.events || [],
+        days: json.days || [],
+        sessions: json.sessions || [],
+        guests: json.guests || [],
+        media: json.media || [],
+        emailConfigured: Boolean(json.emailConfigured),
+      });
+      if (json.event?._id) setSelectedEventId(json.event._id);
+      if (json.days?.[0]?._id) setSessionDayId(json.days[0]._id);
+    },
+    [router],
+  );
 
   useEffect(() => {
     load();
-  }, [router]);
+  }, [load]);
 
   const vipGuests = useMemo(
     () => (data?.guests || []).filter((guest) => guest.tier === "vip"),
     [data],
   );
 
-  async function bootstrap(event: FormEvent) {
-    event.preventDefault();
+  async function postAction(payload: Record<string, unknown>) {
     const response = await fetch("/api/admin/data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "bootstrap",
-        name: "Weekend Gathering",
-        slug: "weekend-gathering",
-        days: ["Day 1", "Day 2", "Day 3"],
-      }),
+      body: JSON.stringify(payload),
     });
     const json = await response.json();
     if (!response.ok) {
-      setMessage(json.error || "Could not create event");
-      return;
+      setMessage(json.error || "Action failed");
+      return null;
     }
+    return json;
+  }
+
+  async function bootstrap(event: FormEvent) {
+    event.preventDefault();
+    const json = await postAction({
+      action: "bootstrap",
+      name: "Weekend Gathering",
+      slug: "weekend-gathering",
+      days: ["Day 1", "Day 2", "Day 3"],
+    });
+    if (!json) return;
     setMessage("Event ready with Day 1–3.");
     await load();
+  }
+
+  async function createEvent(event: FormEvent) {
+    event.preventDefault();
+    if (!newEventName.trim()) return;
+    const json = await postAction({
+      action: "create_event",
+      name: newEventName.trim(),
+      days: ["Day 1", "Day 2", "Day 3"],
+    });
+    if (!json) return;
+    setNewEventName("");
+    setMessage(`Created event “${json.event.name}”.`);
+    await load(json.event._id);
   }
 
   async function addSession(event: FormEvent) {
     event.preventDefault();
     if (!data?.event) return;
-    const response = await fetch("/api/admin/data", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "add_session",
-        eventId: data.event._id,
-        dayId: sessionDayId,
-        title: sessionTitle,
-        speaker: sessionSpeaker,
-      }),
+    const json = await postAction({
+      action: "add_session",
+      eventId: data.event._id,
+      dayId: sessionDayId,
+      title: sessionTitle,
+      speaker: sessionSpeaker,
     });
-    const json = await response.json();
-    if (!response.ok) {
-      setMessage(json.error || "Could not add session");
-      return;
-    }
+    if (!json) return;
     setSessionTitle("");
     setSessionSpeaker("");
     setMessage("Session added.");
-    await load();
+    await load(data.event._id);
   }
 
   async function importGuests(event: FormEvent) {
     event.preventDefault();
     if (!data?.event) return;
-
-    const guests = guestCsv
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [name, email, tier] = line.split(",").map((part) => part.trim());
-        return { name, email, tier };
-      });
-
-    const response = await fetch("/api/admin/data", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "import_guests",
-        eventId: data.event._id,
-        guests,
-      }),
-    });
-    const json = await response.json();
-    if (!response.ok) {
-      setMessage(json.error || "Import failed");
+    const guests = parseGuestLines(guestCsv);
+    if (!guests.length) {
+      setMessage("No valid guest lines found.");
       return;
     }
-    setMessage(`Created ${json.count} guests with ticket codes.`);
-    await load();
+    const json = await postAction({
+      action: "import_guests",
+      eventId: data.event._id,
+      guests,
+      sendEmail: sendEmailOnImport,
+    });
+    if (!json) return;
+    const emailNote =
+      sendEmailOnImport
+        ? ` Emailed ${json.emailed || 0}.${json.emailErrors?.length ? ` ${json.emailErrors.length} email error(s).` : ""}`
+        : "";
+    setMessage(
+      `Imported ${json.created || 0} new, updated ${json.updated || 0}.${emailNote}`,
+    );
+    await load(data.event._id);
+  }
+
+  async function copyCodes() {
+    if (!data?.guests.length) return;
+    const text = data.guests
+      .map((g) => `${g.name}\t${g.tier}\t${g.ticketCode}\t${g.email || ""}`)
+      .join("\n");
+    await navigator.clipboard.writeText(text);
+    setMessage("Ticket codes copied.");
+  }
+
+  async function regenerateCode(guestId: string) {
+    const json = await postAction({ action: "regenerate_code", guestId });
+    if (!json) return;
+    setMessage(`New code: ${json.guest.ticketCode}`);
+    await load(selectedEventId);
+  }
+
+  async function deleteGuest(guestId: string) {
+    if (!confirm("Delete this guest?")) return;
+    const json = await postAction({ action: "delete_guest", guestId });
+    if (!json) return;
+    setMessage("Guest deleted.");
+    await load(selectedEventId);
+  }
+
+  async function emailTicket(guestId: string) {
+    const json = await postAction({ action: "email_ticket", guestId });
+    if (!json) return;
+    setMessage("Ticket email sent.");
+  }
+
+  async function deleteMedia(mediaId: string) {
+    if (!confirm("Remove this media record?")) return;
+    const json = await postAction({ action: "delete_media", mediaId });
+    if (!json) return;
+    setMessage("Media removed.");
+    await load(selectedEventId);
   }
 
   async function uploadMedia(event: FormEvent) {
@@ -175,12 +253,12 @@ export default function AdminPage() {
     }
     setFile(null);
     setMessage("Media uploaded.");
-    await load();
+    await load(data.event._id);
   }
 
   async function logout() {
     await fetch("/api/auth/admin/logout", { method: "POST" });
-    router.replace("/admin/login");
+    window.location.assign("/admin/login");
   }
 
   if (!data) {
@@ -224,12 +302,43 @@ export default function AdminPage() {
         </form>
       ) : (
         <>
-          <section className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="text-sm text-pine" htmlFor="event-switch">
+                Active event
+              </label>
+              <select
+                id="event-switch"
+                value={selectedEventId}
+                onChange={(e) => {
+                  setSelectedEventId(e.target.value);
+                  load(e.target.value);
+                }}
+                className="h-11 min-w-[12rem] rounded-xl border border-[color:var(--line)] bg-white px-3"
+              >
+                {data.events.map((event) => (
+                  <option key={event._id} value={event._id}>
+                    {event.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">{data.event.name}</h2>
             <p className="mt-1 text-sm text-pine/75">
               {data.days.map((day) => day.label).join(" · ")} · {data.guests.length} guests ·{" "}
               {data.media.length} media files
             </p>
+            <form onSubmit={createEvent} className="flex flex-wrap gap-2 pt-2">
+              <input
+                value={newEventName}
+                onChange={(e) => setNewEventName(e.target.value)}
+                placeholder="New event name"
+                className="h-11 flex-1 rounded-xl border border-[color:var(--line)] bg-white px-3"
+              />
+              <button type="submit" className="h-11 rounded-xl border border-[color:var(--line)] px-4">
+                Add event
+              </button>
+            </form>
           </section>
 
           <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
@@ -279,8 +388,8 @@ export default function AdminPage() {
           <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
             <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Import guests</h2>
             <p className="text-sm text-pine/75">
-              One per line: <code>Name, email, vip|standard</code>. Ticket codes are generated
-              automatically.
+              One per line: <code>Name, email, vip|standard</code>. Same email updates the existing
+              guest. Ticket codes are auto-generated.
             </p>
             <form onSubmit={importGuests} className="space-y-3">
               <textarea
@@ -289,9 +398,28 @@ export default function AdminPage() {
                 rows={6}
                 className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 font-mono text-sm"
               />
-              <button type="submit" className="h-11 rounded-xl bg-ink px-4 text-foam">
-                Generate ticket codes
-              </button>
+              <label className="flex items-center gap-2 text-sm text-pine">
+                <input
+                  type="checkbox"
+                  checked={sendEmailOnImport}
+                  onChange={(e) => setSendEmailOnImport(e.target.checked)}
+                  disabled={!data.emailConfigured}
+                />
+                Email ticket codes on import
+                {!data.emailConfigured ? " (set RESEND_API_KEY + EMAIL_FROM)" : ""}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" className="h-11 rounded-xl bg-ink px-4 text-foam">
+                  Generate ticket codes
+                </button>
+                <button
+                  type="button"
+                  onClick={copyCodes}
+                  className="h-11 rounded-xl border border-[color:var(--line)] px-4"
+                >
+                  Copy all codes
+                </button>
+              </div>
             </form>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -300,14 +428,40 @@ export default function AdminPage() {
                     <th className="py-2">Name</th>
                     <th>Tier</th>
                     <th>Ticket code</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.guests.map((guest) => (
                     <tr key={guest._id} className="border-t border-[color:var(--line)]">
-                      <td className="py-2">{guest.name}</td>
+                      <td className="py-2">
+                        {guest.name}
+                        {guest.email ? (
+                          <span className="block text-xs text-pine/60">{guest.email}</span>
+                        ) : null}
+                      </td>
                       <td>{guest.tier}</td>
                       <td className="font-mono tracking-wider">{guest.ticketCode}</td>
+                      <td className="space-x-2 whitespace-nowrap py-2">
+                        <button
+                          type="button"
+                          className="underline"
+                          onClick={() => navigator.clipboard.writeText(guest.ticketCode)}
+                        >
+                          Copy
+                        </button>
+                        <button type="button" className="underline" onClick={() => regenerateCode(guest._id)}>
+                          Regen
+                        </button>
+                        {guest.email && data.emailConfigured ? (
+                          <button type="button" className="underline" onClick={() => emailTicket(guest._id)}>
+                            Email
+                          </button>
+                        ) : null}
+                        <button type="button" className="underline" onClick={() => deleteGuest(guest._id)}>
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -317,6 +471,10 @@ export default function AdminPage() {
 
           <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
             <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Upload media</h2>
+            <p className="text-sm text-pine/75">
+              Photos: JPEG/PNG/WebP/GIF up to 15MB. Session video: MP4/WebM/MOV up to 200MB (or an
+              image still). Personal photos are VIP-only in the vault.
+            </p>
             <form onSubmit={uploadMedia} className="grid gap-3 md:grid-cols-2">
               <select
                 value={uploadKind}
@@ -325,7 +483,7 @@ export default function AdminPage() {
               >
                 <option value="group_photo">Group gallery photo</option>
                 <option value="personal_photo">VIP personal photo</option>
-                <option value="session_video">Session video</option>
+                <option value="session_video">Session video / still</option>
               </select>
 
               {uploadKind === "personal_photo" ? (
@@ -362,6 +520,11 @@ export default function AdminPage() {
 
               <input
                 type="file"
+                accept={
+                  uploadKind === "session_video"
+                    ? "image/*,video/mp4,video/webm,video/quicktime"
+                    : "image/jpeg,image/png,image/webp,image/gif"
+                }
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
                 required
                 className="md:col-span-2"
@@ -371,9 +534,14 @@ export default function AdminPage() {
               </button>
             </form>
             <ul className="space-y-1 text-sm text-pine">
-              {data.media.slice(0, 12).map((item) => (
-                <li key={item._id}>
-                  {item.kind}: {item.title || item.filename}
+              {data.media.slice(0, 20).map((item) => (
+                <li key={item._id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {item.kind}: {item.title || item.filename}
+                  </span>
+                  <button type="button" className="underline" onClick={() => deleteMedia(item._id)}>
+                    Remove
+                  </button>
                 </li>
               ))}
             </ul>

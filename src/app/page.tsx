@@ -1,10 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function HomePage() {
-  const router = useRouter();
   const [ticketCode, setTicketCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,8 +23,8 @@ export default function HomePage() {
         setError(data.error || "Could not open vault");
         return;
       }
-      router.push("/vault");
-      router.refresh();
+      window.location.assign("/vault");
+      return;
     } catch {
       setError("Something went wrong. Try again.");
     } finally {

@@ -2,52 +2,64 @@
 
 Private event media delivery for ticketed guests.
 
+## Access model
+
+| Tier | Access |
+| --- | --- |
+| VIP | Personal photos + speaker session media + group gallery |
+| Standard | Group gallery only |
+
 ## What it does
 
-- Guests enter a **ticket code** to open their vault
-- **VIP**: personal photos + all speaker sessions across event days
-- **Standard**: group gallery only
-- Admin imports guests and **auto-generates ticket codes**
-- Admin uploads/tags media to guests and sessions
+- Guests enter a **ticket code** (no passwords)
+- Admin imports guests (deduped by email), auto-generates codes, can email/copy/regenerate
+- Admin uploads group photos, VIP personal photos, and session media
+- Multi-event admin switcher (create and switch events)
+- Media is served only through an **authorized** `/api/media/:id` proxy
 
-## Cost-conscious stack
+## Stack
 
-| Piece | Service | Notes |
-| --- | --- | --- |
-| App hosting | **Vercel** (Hobby) | Free for this size |
-| Database | **MongoDB Atlas** (M0) | Guests, codes, metadata |
-| Media files | **Cloudflare R2** | Cheapest practical photo/video storage |
-| Railway | Not required for v1 | Avoids an extra bill |
+| Piece | Service |
+| --- | --- |
+| App | Next.js on **Vercel** |
+| Database | **MongoDB Atlas** |
+| Media | **Cloudflare R2** (local `/uploads` in development only) |
+| Email (optional) | **Resend** |
 
-Photos/videos are **not** stored in MongoDB.
+## Security (v1)
+
+- HttpOnly session cookies; shorter TTLs; production requires a strong `SESSION_SECRET`
+- Timing-safe admin password check; rate limits on ticket + admin login
+- Same-origin checks on state-changing APIs
+- Guest tier re-checked from the database on every vault load
+- Upload MIME/size limits and event/guest/session ownership checks
+- No public R2 URLs for private media; legacy `?key=` media URLs disabled
 
 ## Local setup
 
-1. Copy `.env.example` to `.env.local` and fill in:
+1. Copy `.env.example` to `.env.local` and set at least:
    - `MONGODB_URI`
    - `ADMIN_PASSWORD`
-   - `SESSION_SECRET`
-   - Optional R2 keys (without R2, uploads go to local `/uploads` for development)
-2. Install and run:
+   - `SESSION_SECRET` (≥ 32 characters)
+2. Optional: R2 keys, `RESEND_API_KEY` + `EMAIL_FROM`, `APP_URL`
+3. Install and run:
 
 ```bash
 npm install
 npm run dev
 ```
 
-3. Open `/admin/login`, create the 3-day event, import guests, upload media.
-4. Open `/` and enter a generated ticket code.
+4. Open `/admin/login`, create an event, import guests, upload media.
+5. Open `/` and enter a generated ticket code.
 
 ## Deploy (Vercel)
 
-1. Push this repo to GitHub
-2. Import the project in Vercel
-3. Add the same env vars in Vercel project settings
-4. Create a free Cloudflare R2 bucket and add those env vars for production media
+1. Import the GitHub repo in Vercel
+2. Add the same env vars (R2 required for production media)
+3. Do **not** rely on a public R2 bucket URL for guest photos
 
-## Access model
+## Stage 2 status
 
-| Tier | Access |
-| --- | --- |
-| VIP | Personal photos + all session videos + group gallery |
-| Standard | Group gallery only |
+- Ticket email via Resend (import + per-guest send)
+- Multi-event create/switch in admin
+- Still later: face tagging, payments, richer standard-tier session packs

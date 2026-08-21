@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 import {
@@ -33,8 +33,22 @@ function r2Client() {
   });
 }
 
+export function uploadsRoot() {
+  return path.resolve(process.cwd(), "uploads");
+}
+
+/** Resolve a storage key under uploads/; reject path traversal. */
+export function resolveLocalPath(storageKey: string) {
+  const root = uploadsRoot();
+  const full = path.resolve(root, storageKey);
+  if (full !== root && !full.startsWith(root + path.sep)) {
+    throw new Error("Invalid storage key");
+  }
+  return full;
+}
+
 export async function storeFile(file: File, folder: string): Promise<StoredObject> {
-  const ext = path.extname(file.name) || "";
+  const ext = path.extname(file.name).toLowerCase() || "";
   const storageKey = `${folder}/${randomUUID()}${ext}`;
   const bytes = Buffer.from(await file.arrayBuffer());
 
@@ -50,28 +64,50 @@ export async function storeFile(file: File, folder: string): Promise<StoredObjec
     return { storageKey, storageProvider: "r2" };
   }
 
-  const uploadsDir = path.join(process.cwd(), "uploads");
-  const fullPath = path.join(uploadsDir, storageKey);
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("R2 must be configured for media storage in production");
+  }
+
+  const fullPath = resolveLocalPath(storageKey);
   await mkdir(path.dirname(fullPath), { recursive: true });
   await writeFile(fullPath, bytes);
   return { storageKey, storageProvider: "local" };
 }
 
-export async function getDownloadUrl(storageKey: string, storageProvider: "r2" | "local") {
+export async function readStoredObject(
+  storageKey: string,
+  storageProvider: "r2" | "local",
+): Promise<{ body: Buffer | Uint8Array; contentType?: string }> {
   if (storageProvider === "local") {
-    return `/api/media/local?key=${encodeURIComponent(storageKey)}`;
+    const fullPath = resolveLocalPath(storageKey);
+    const body = await readFile(fullPath);
+    return { body };
   }
 
-  if (process.env.R2_PUBLIC_BASE_URL) {
-    return `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${storageKey}`;
-  }
+  const result = await r2Client().send(
+    new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: storageKey,
+    }),
+  );
+  const bytes = await result.Body?.transformToByteArray();
+  if (!bytes) throw new Error("Empty object");
+  return { body: bytes, contentType: result.ContentType };
+}
 
+/** Short-lived signed URL for R2 — only used server-side after authz. Prefer proxy. */
+export async function getSignedR2Url(storageKey: string) {
   return getSignedUrl(
     r2Client(),
     new GetObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
       Key: storageKey,
     }),
-    { expiresIn: 60 * 60 },
+    { expiresIn: 60 * 10 },
   );
+}
+
+/** Browser-facing media URL — always goes through authz proxy. */
+export function mediaProxyUrl(mediaId: string) {
+  return `/api/media/${mediaId}`;
 }
