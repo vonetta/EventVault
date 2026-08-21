@@ -26,6 +26,9 @@ type MediaDoc = {
   filename: string;
   guestId?: string | null;
   sessionId?: string | null;
+  storageProvider?: string;
+  youtubeId?: string;
+  availableUntil?: string | null;
 };
 
 type AdminData = {
@@ -71,6 +74,10 @@ export default function AdminPage() {
   const [uploadGuestId, setUploadGuestId] = useState("");
   const [uploadSessionId, setUploadSessionId] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [youtubeTitle, setYoutubeTitle] = useState("");
+  const [youtubeSessionId, setYoutubeSessionId] = useState("");
+  const [youtubeUntil, setYoutubeUntil] = useState("");
 
   const load = useCallback(
     async (eventId?: string) => {
@@ -96,6 +103,10 @@ export default function AdminPage() {
       });
       if (json.event?._id) setSelectedEventId(json.event._id);
       if (json.days?.[0]?._id) setSessionDayId(json.days[0]._id);
+      if (json.sessions?.[0]?._id) {
+        setUploadSessionId((prev) => prev || json.sessions[0]._id);
+        setYoutubeSessionId((prev) => prev || json.sessions[0]._id);
+      }
     },
     [router],
   );
@@ -228,6 +239,28 @@ export default function AdminPage() {
     if (!json) return;
     setMessage("Media removed.");
     await load(selectedEventId);
+  }
+
+  async function addYoutubeSession(event: FormEvent) {
+    event.preventDefault();
+    if (!data?.event) return;
+    const json = await postAction({
+      action: "add_youtube_session",
+      eventId: data.event._id,
+      sessionId: youtubeSessionId,
+      youtubeUrl,
+      title: youtubeTitle || undefined,
+      availableUntil: youtubeUntil || undefined,
+    });
+    if (!json) return;
+    setYoutubeUrl("");
+    setYoutubeTitle("");
+    setMessage(
+      youtubeUntil
+        ? `YouTube session linked (available until ${youtubeUntil}). Use Unlisted on YouTube.`
+        : "YouTube session linked. Use Unlisted on YouTube.",
+    );
+    await load(data.event._id);
   }
 
   async function uploadMedia(event: FormEvent) {
@@ -470,10 +503,60 @@ export default function AdminPage() {
           </section>
 
           <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Upload media</h2>
+            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">
+              Session video (YouTube)
+            </h2>
             <p className="text-sm text-pine/75">
-              Photos: JPEG/PNG/WebP/GIF up to 15MB. Session video: MP4/WebM/MOV up to 200MB (or an
-              image still). Personal photos are VIP-only in the vault.
+              Upload to YouTube as <strong>Unlisted</strong>, paste the link here. Optional end date
+              hides it from the vault after that day (also unpublish/delete on YouTube when done).
+            </p>
+            <form onSubmit={addYoutubeSession} className="grid gap-3 md:grid-cols-2">
+              <select
+                value={youtubeSessionId}
+                onChange={(e) => setYoutubeSessionId(e.target.value)}
+                required
+                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
+              >
+                <option value="">Select session</option>
+                {data.sessions.map((session) => (
+                  <option key={session._id} value={session._id}>
+                    {session.title}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={youtubeTitle}
+                onChange={(e) => setYoutubeTitle(e.target.value)}
+                placeholder="Title (optional)"
+                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
+              />
+              <input
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                placeholder="https://youtu.be/... or youtube.com/watch?v=..."
+                required
+                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
+              />
+              <label className="text-sm text-pine md:col-span-2">
+                Available until (optional)
+                <input
+                  type="date"
+                  value={youtubeUntil}
+                  onChange={(e) => setYoutubeUntil(e.target.value)}
+                  className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
+                />
+              </label>
+              <button type="submit" className="h-11 rounded-xl bg-ink text-foam md:col-span-2">
+                Link YouTube video
+              </button>
+            </form>
+          </section>
+
+          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Upload photos</h2>
+            <p className="text-sm text-pine/75">
+              Photos stay on EventVault/R2 (private). Prefer YouTube above for session videos to save
+              storage. Photos: JPEG/PNG/WebP/GIF up to 15MB. Personal photos are VIP-only in the vault.
             </p>
             <form onSubmit={uploadMedia} className="grid gap-3 md:grid-cols-2">
               <select
@@ -483,7 +566,7 @@ export default function AdminPage() {
               >
                 <option value="group_photo">Group gallery photo</option>
                 <option value="personal_photo">VIP personal photo</option>
-                <option value="session_video">Session video / still</option>
+                <option value="session_video">Session file (fallback)</option>
               </select>
 
               {uploadKind === "personal_photo" ? (
@@ -537,7 +620,12 @@ export default function AdminPage() {
               {data.media.slice(0, 20).map((item) => (
                 <li key={item._id} className="flex flex-wrap items-center justify-between gap-2">
                   <span>
-                    {item.kind}: {item.title || item.filename}
+                    {item.kind}
+                    {item.storageProvider === "youtube" ? " (YouTube)" : ""}:{" "}
+                    {item.title || item.filename}
+                    {item.availableUntil
+                      ? ` · until ${new Date(item.availableUntil).toLocaleDateString()}`
+                      : ""}
                   </span>
                   <button type="button" className="underline" onClick={() => deleteMedia(item._id)}>
                     Remove

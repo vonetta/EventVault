@@ -8,6 +8,9 @@ type MediaItem = {
   title: string;
   contentType: string;
   url: string;
+  provider?: "file" | "youtube";
+  embedUrl?: string;
+  availableUntil?: string | null;
 };
 
 type SessionItem = {
@@ -41,23 +44,53 @@ function MediaGrid({ items }: { items: MediaItem[] }) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((item) => (
-        <a
-          key={item.id}
-          href={item.url}
-          target="_blank"
-          rel="noreferrer"
-          className="overflow-hidden rounded-2xl border border-[color:var(--line)] bg-white/70 transition hover:-translate-y-0.5 hover:shadow-md"
-        >
-          {item.contentType.startsWith("video/") ? (
-            <video className="aspect-video w-full bg-ink/90 object-cover" src={item.url} controls />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img className="aspect-[4/3] w-full object-cover" src={item.url} alt={item.title} />
-          )}
-          <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
-        </a>
-      ))}
+      {items.map((item) => {
+        const isYouTube = item.provider === "youtube" || item.contentType === "video/youtube";
+        if (isYouTube && item.embedUrl) {
+          return (
+            <div
+              key={item.id}
+              className="overflow-hidden rounded-2xl border border-[color:var(--line)] bg-white/70"
+            >
+              <div className="aspect-video w-full bg-ink/90">
+                <iframe
+                  className="h-full w-full"
+                  src={item.embedUrl}
+                  title={item.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+              <div className="px-3 py-2 text-sm text-pine">
+                {item.title}
+                {item.availableUntil ? (
+                  <span className="mt-1 block text-xs text-pine/60">
+                    Available until {new Date(item.availableUntil).toLocaleDateString()}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <a
+            key={item.id}
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            className="overflow-hidden rounded-2xl border border-[color:var(--line)] bg-white/70 transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            {item.contentType.startsWith("video/") ? (
+              <video className="aspect-video w-full bg-ink/90 object-cover" src={item.url} controls />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="aspect-[4/3] w-full object-cover" src={item.url} alt={item.title} />
+            )}
+            <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
+          </a>
+        );
+      })}
     </div>
   );
 }
@@ -86,7 +119,7 @@ export default function VaultPage() {
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.replace("/");
+    window.location.assign("/");
   }
 
   if (error) {

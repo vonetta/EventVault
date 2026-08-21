@@ -71,6 +71,14 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     action: z.literal("delete_media"),
     mediaId: objectIdSchema,
   }),
+  z.object({
+    action: z.literal("add_youtube_session"),
+    eventId: objectIdSchema,
+    sessionId: objectIdSchema,
+    youtubeUrl: z.string().min(5).max(500),
+    title: z.string().max(200).optional(),
+    availableUntil: z.string().max(40).optional(), // ISO date YYYY-MM-DD or datetime
+  }),
 ]);
 
 export const IMAGE_MIME = new Set([

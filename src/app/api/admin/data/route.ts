@@ -63,6 +63,9 @@ export async function GET(request: Request) {
       contentType: item.contentType,
       guestId: item.guestId,
       sessionId: item.sessionId,
+      storageProvider: item.storageProvider,
+      youtubeId: item.youtubeId,
+      availableUntil: item.availableUntil,
       createdAt: item.createdAt,
       // storageKey intentionally omitted from admin list payloads
     })),
@@ -256,6 +259,60 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Media not found" }, { status: 404 });
     }
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "add_youtube_session") {
+    const { parseYouTubeId, youtubeWatchUrl } = await import("@/lib/youtube");
+    const event = await Event.findById(body.eventId);
+    const session = await Session.findById(body.sessionId);
+    if (!event || !session || String(session.eventId) !== String(event._id)) {
+      return NextResponse.json({ error: "Invalid event or session" }, { status: 400 });
+    }
+
+    const youtubeId = parseYouTubeId(body.youtubeUrl);
+    if (!youtubeId) {
+      return NextResponse.json({ error: "Could not parse YouTube URL" }, { status: 400 });
+    }
+
+    let availableUntil: Date | null = null;
+    if (body.availableUntil?.trim()) {
+      const parsed = new Date(body.availableUntil);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "Invalid availableUntil date" }, { status: 400 });
+      }
+      // If date-only (YYYY-MM-DD), treat as end of that day UTC
+      if (/^\d{4}-\d{2}-\d{2}$/.test(body.availableUntil.trim())) {
+        parsed.setUTCHours(23, 59, 59, 999);
+      }
+      availableUntil = parsed;
+    }
+
+    const media = await Media.create({
+      eventId: event._id,
+      kind: "session_video",
+      title: body.title?.trim() || `YouTube ${youtubeId}`,
+      filename: `youtube-${youtubeId}`,
+      contentType: "video/youtube",
+      size: 0,
+      storageKey: "",
+      storageProvider: "youtube",
+      youtubeId,
+      availableUntil,
+      sessionId: session._id,
+      guestId: null,
+    });
+
+    return NextResponse.json({
+      media: {
+        _id: media._id,
+        kind: media.kind,
+        title: media.title,
+        youtubeId,
+        youtubeUrl: youtubeWatchUrl(youtubeId),
+        availableUntil: media.availableUntil,
+        sessionId: media.sessionId,
+      },
+    });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

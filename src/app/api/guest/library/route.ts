@@ -8,6 +8,52 @@ import {
 } from "@/lib/auth";
 import { Day, Event, Guest, Media, Session } from "@/lib/models";
 import { mediaProxyUrl } from "@/lib/storage";
+import { isMediaAvailable, youtubeEmbedUrl, youtubeWatchUrl } from "@/lib/youtube";
+
+function mapFileMedia(item: {
+  _id: { toString(): string };
+  title?: string | null;
+  filename?: string | null;
+  contentType?: string | null;
+}) {
+  return {
+    id: String(item._id),
+    title: item.title || item.filename || "Media",
+    contentType: item.contentType || "application/octet-stream",
+    provider: "file" as const,
+    url: mediaProxyUrl(String(item._id)),
+  };
+}
+
+function mapSessionMedia(item: {
+  _id: { toString(): string };
+  title?: string | null;
+  filename?: string | null;
+  contentType?: string | null;
+  storageProvider?: string | null;
+  youtubeId?: string | null;
+  availableUntil?: Date | null;
+}) {
+  if (!isMediaAvailable(item.availableUntil)) return null;
+
+  if (item.storageProvider === "youtube" && item.youtubeId) {
+    return {
+      id: String(item._id),
+      title: item.title || "Session video",
+      contentType: "video/youtube",
+      provider: "youtube" as const,
+      youtubeId: item.youtubeId,
+      url: youtubeWatchUrl(item.youtubeId),
+      embedUrl: youtubeEmbedUrl(item.youtubeId),
+      availableUntil: item.availableUntil || null,
+    };
+  }
+
+  return {
+    ...mapFileMedia(item),
+    availableUntil: item.availableUntil || null,
+  };
+}
 
 export async function GET(request: Request) {
   try {
@@ -39,12 +85,9 @@ export async function GET(request: Request) {
     kind: "group_photo",
   }).sort({ createdAt: -1 });
 
-  const group = groupPhotos.map((item) => ({
-    id: String(item._id),
-    title: item.title || item.filename,
-    contentType: item.contentType,
-    url: mediaProxyUrl(String(item._id)),
-  }));
+  const group = groupPhotos
+    .filter((item) => isMediaAvailable(item.availableUntil))
+    .map(mapFileMedia);
 
   if (tier === "standard") {
     return NextResponse.json({
@@ -70,18 +113,17 @@ export async function GET(request: Request) {
     }).sort({ createdAt: -1 }),
   ]);
 
-  const personal = personalPhotos.map((item) => ({
-    id: String(item._id),
-    title: item.title || item.filename,
-    contentType: item.contentType,
-    url: mediaProxyUrl(String(item._id)),
-  }));
+  const personal = personalPhotos
+    .filter((item) => isMediaAvailable(item.availableUntil))
+    .map(mapFileMedia);
 
-  const videosBySession = new Map<string, typeof sessionVideos>();
+  const videosBySession = new Map<string, NonNullable<ReturnType<typeof mapSessionMedia>>[]>();
   for (const video of sessionVideos) {
+    const mapped = mapSessionMedia(video);
+    if (!mapped) continue;
     const key = String(video.sessionId);
     const list = videosBySession.get(key) || [];
-    list.push(video);
+    list.push(mapped);
     videosBySession.set(key, list);
   }
 
@@ -102,12 +144,7 @@ export async function GET(request: Request) {
           speaker: sessionItem.speaker,
           startsAt: sessionItem.startsAt,
           description: sessionItem.description,
-          videos: videos.map((video) => ({
-            id: String(video._id),
-            title: video.title || video.filename,
-            contentType: video.contentType,
-            url: mediaProxyUrl(String(video._id)),
-          })),
+          videos,
         };
       }),
     };

@@ -5,6 +5,7 @@ import {
   clearGuestSession,
 } from "@/lib/auth";
 import { Guest, Media, type MediaDoc } from "@/lib/models";
+import { isMediaAvailable } from "@/lib/youtube";
 
 export async function canAccessMedia(media: MediaDoc): Promise<boolean> {
   if (await isAdminAuthenticated()) return true;
@@ -20,6 +21,8 @@ export async function canAccessMedia(media: MediaDoc): Promise<boolean> {
   }
 
   if (String(guest.eventId) !== String(media.eventId)) return false;
+
+  if (!isMediaAvailable(media.availableUntil)) return false;
 
   if (media.kind === "group_photo") return true;
 

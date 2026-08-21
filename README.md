@@ -17,6 +17,19 @@ Private event media delivery for ticketed guests.
 - Multi-event admin switcher (create and switch events)
 - Media is served only through an **authorized** `/api/media/:id` proxy
 
+## Photo storage cost (Cloudflare R2)
+
+R2 free tier includes **10 GB**. Egress is free.
+
+| Scenario | Approx size | Monthly storage |
+| --- | --- | --- |
+| Small retreat (~150 photos) | ~0.3 GB | **$0** |
+| Typical retreat (~400 photos) | ~1–2 GB | **$0** |
+| Heavy weekend (~1000 photos) | ~4 GB | **$0** |
+| Very large (~2000 large files) | ~15 GB | **~$0.08** |
+
+**Session videos:** prefer **YouTube Unlisted** links in admin (no R2 video cost). Optional “available until” date hides them from the vault after that day.
+
 ## Stack
 
 | Piece | Service |

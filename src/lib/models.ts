@@ -55,11 +55,20 @@ const MediaSchema = new Schema(
       index: true,
     },
     title: { type: String, default: "" },
-    filename: { type: String, required: true },
-    contentType: { type: String, required: true },
+    filename: { type: String, default: "" },
+    contentType: { type: String, default: "" },
     size: { type: Number, default: 0 },
-    storageKey: { type: String, required: true },
-    storageProvider: { type: String, enum: ["r2", "local"], required: true },
+    // File-backed media (photos / uploaded videos)
+    storageKey: { type: String, default: "" },
+    storageProvider: {
+      type: String,
+      enum: ["r2", "local", "youtube"],
+      required: true,
+    },
+    // YouTube-backed session videos (unlisted recommended)
+    youtubeId: { type: String, default: "" },
+    // Optional access window — after this, vault hides the item
+    availableUntil: { type: Date, default: null },
     guestId: { type: Schema.Types.ObjectId, ref: "Guest", default: null, index: true },
     sessionId: { type: Schema.Types.ObjectId, ref: "Session", default: null, index: true },
   },

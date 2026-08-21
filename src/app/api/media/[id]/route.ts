@@ -22,6 +22,17 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (media.storageProvider === "youtube" || media.youtubeId) {
+    return NextResponse.json(
+      { error: "YouTube media is embedded in the vault, not downloaded here" },
+      { status: 400 },
+    );
+  }
+
+  if (!media.storageKey || (media.storageProvider !== "r2" && media.storageProvider !== "local")) {
+    return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
+  }
+
   try {
     const { body, contentType } = await readStoredObject(
       media.storageKey,
