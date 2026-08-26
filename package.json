@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "bash scripts/dev-local.sh",
+    "mongo:local": "node scripts/start-memory-mongo.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
