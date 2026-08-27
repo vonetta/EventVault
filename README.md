@@ -14,6 +14,7 @@ Private event media delivery for ticketed guests.
 - Guests enter a **ticket code** (no passwords)
 - Admin imports guests (deduped by email), auto-generates codes, can email/copy/regenerate
 - Admin uploads group photos, VIP personal photos, and session media
+- Guests can **download all photos as a ZIP** (VIP: personal + group; Standard: group)
 - Multi-event admin switcher (create and switch events)
 - Media is served only through an **authorized** `/api/media/:id` proxy
 

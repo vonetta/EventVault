@@ -102,6 +102,8 @@ export default function VaultPage() {
   const router = useRouter();
   const [data, setData] = useState<Library | null>(null);
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [downloadMessage, setDownloadMessage] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -125,6 +127,40 @@ export default function VaultPage() {
     window.location.assign("/");
   }
 
+  async function downloadAll() {
+    setDownloading(true);
+    setDownloadMessage("");
+    try {
+      const response = await fetch("/api/guest/download");
+      if (response.status === 401) {
+        router.replace("/");
+        return;
+      }
+      if (!response.ok) {
+        const json = await response.json().catch(() => ({}));
+        setDownloadMessage(json.error || "Could not prepare your download");
+        return;
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match?.[1] || "eventvault-photos.zip";
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setDownloadMessage("Download started.");
+    } catch {
+      setDownloadMessage("Could not prepare your download");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   if (error) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-16">
@@ -142,6 +178,9 @@ export default function VaultPage() {
   }
 
   const isVip = data.guest.tier === "vip";
+  const photoCount =
+    data.groupGallery.filter((item) => item.provider !== "youtube").length +
+    data.personalPhotos.filter((item) => item.provider !== "youtube").length;
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-8 md:px-10 md:py-12">
@@ -156,13 +195,30 @@ export default function VaultPage() {
             {isVip ? " · VIP access" : " · Group gallery access"}
           </p>
         </div>
-        <button
-          onClick={logout}
-          className="rounded-full border border-[color:var(--line)] bg-white/70 px-4 py-2 text-sm text-pine"
-        >
-          Sign out
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={downloadAll}
+            disabled={downloading || photoCount === 0}
+            className="rounded-full bg-ink px-4 py-2 text-sm text-foam disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {downloading
+              ? "Preparing ZIP…"
+              : isVip
+                ? "Download all photos"
+                : "Download group gallery"}
+          </button>
+          <button
+            onClick={logout}
+            className="rounded-full border border-[color:var(--line)] bg-white/70 px-4 py-2 text-sm text-pine"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
+
+      {downloadMessage ? (
+        <p className="text-sm text-pine/80">{downloadMessage}</p>
+      ) : null}
 
       <section className="space-y-4">
         <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">Group gallery</h2>
