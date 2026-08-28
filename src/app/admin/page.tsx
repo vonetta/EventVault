@@ -103,6 +103,7 @@ export default function AdminPage() {
   const [youtubeTitle, setYoutubeTitle] = useState("");
   const [youtubeSessionId, setYoutubeSessionId] = useState("");
   const [youtubeUntil, setYoutubeUntil] = useState("");
+  const [savingEvent, setSavingEvent] = useState(false);
 
   const load = useCallback(
     async (eventId?: string) => {
@@ -126,7 +127,16 @@ export default function AdminPage() {
         media: json.media || [],
         emailConfigured: Boolean(json.emailConfigured),
       });
-      if (json.event?._id) setSelectedEventId(json.event._id);
+      if (json.event?._id) {
+        setSelectedEventId(json.event._id);
+        setEventNameEdit(json.event.name || "");
+        setEventDescriptionEdit(json.event.description || "");
+        setEventStartsOn(json.event.startsOn || "");
+        setEventEndsOn(json.event.endsOn || "");
+      }
+      const labels: Record<string, string> = {};
+      for (const day of json.days || []) labels[day._id] = day.label;
+      setDayLabelEdits(labels);
       if (json.days?.[0]?._id) setSessionDayId(json.days[0]._id);
       if (json.sessions?.[0]?._id) {
         setUploadSessionId((prev) => prev || json.sessions[0]._id);
@@ -139,17 +149,6 @@ export default function AdminPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (!data?.event) return;
-    setEventNameEdit(data.event.name);
-    setEventDescriptionEdit(data.event.description || "");
-    setEventStartsOn(data.event.startsOn || "");
-    setEventEndsOn(data.event.endsOn || "");
-    const labels: Record<string, string> = {};
-    for (const day of data.days) labels[day._id] = day.label;
-    setDayLabelEdits(labels);
-  }, [data?.event?._id, data?.days]);
 
   const vipGuests = useMemo(
     () => (data?.guests || []).filter((guest) => guest.tier === "vip"),
@@ -209,17 +208,24 @@ export default function AdminPage() {
     await load(json.event._id);
   }
 
-  async function saveEventSettings(event: FormEvent) {
-    event.preventDefault();
+  async function saveEventSettings(event?: FormEvent) {
+    event?.preventDefault();
     if (!data?.event) return;
+    const name = eventNameEdit.trim();
+    if (!name) {
+      setMessage("Enter an event name before saving.");
+      return;
+    }
+    setSavingEvent(true);
     const json = await postAction({
       action: "update_event",
       eventId: data.event._id,
-      name: eventNameEdit.trim(),
+      name,
       description: eventDescriptionEdit.trim(),
       startsOn: eventStartsOn.trim(),
       endsOn: eventEndsOn.trim(),
     });
+    setSavingEvent(false);
     if (!json) return;
     setMessage("Event settings saved.");
     await load(data.event._id);
@@ -498,14 +504,13 @@ export default function AdminPage() {
             </p>
           </section>
 
-          <section className="space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+          <section className="relative z-10 space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
             <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Event settings</h2>
-            <form onSubmit={saveEventSettings} className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-2">
               <input
                 value={eventNameEdit}
                 onChange={(e) => setEventNameEdit(e.target.value)}
                 placeholder="Event name"
-                required
                 className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
               />
               <textarea
@@ -533,10 +538,15 @@ export default function AdminPage() {
                   className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
                 />
               </label>
-              <button type="submit" className="h-11 rounded-xl bg-ink text-foam md:col-span-2">
-                Save event settings
+              <button
+                type="button"
+                onClick={() => saveEventSettings()}
+                disabled={savingEvent}
+                className="h-11 cursor-pointer rounded-xl bg-ink text-foam md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingEvent ? "Saving…" : "Save event settings"}
               </button>
-            </form>
+            </div>
 
             <div className="space-y-2 border-t border-[color:var(--line)] pt-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
