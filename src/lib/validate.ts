@@ -31,6 +31,7 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     slug: z.string().min(1).max(120).optional(),
     description: z.string().max(500).optional(),
     days: z.array(z.string().min(1).max(40)).max(14).optional(),
+    dayCount: z.number().int().min(1).max(14).optional(),
   }),
   z.object({
     action: z.literal("create_event"),
@@ -38,6 +39,29 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     slug: z.string().min(1).max(120).optional(),
     description: z.string().max(500).optional(),
     days: z.array(z.string().min(1).max(40)).max(14).optional(),
+    dayCount: z.number().int().min(1).max(14).optional(),
+  }),
+  z.object({
+    action: z.literal("update_event"),
+    eventId: objectIdSchema,
+    name: z.string().min(1).max(120).optional(),
+    description: z.string().max(500).optional(),
+    startsOn: z.string().max(40).optional(),
+    endsOn: z.string().max(40).optional(),
+  }),
+  z.object({
+    action: z.literal("update_day"),
+    dayId: objectIdSchema,
+    label: z.string().min(1).max(40),
+  }),
+  z.object({
+    action: z.literal("add_day"),
+    eventId: objectIdSchema,
+    label: z.string().min(1).max(40).optional(),
+  }),
+  z.object({
+    action: z.literal("delete_day"),
+    dayId: objectIdSchema,
   }),
   z.object({
     action: z.literal("add_session"),

@@ -3,7 +3,14 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type EventDoc = { _id: string; name: string; slug: string; description?: string };
+type EventDoc = {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  startsOn?: string;
+  endsOn?: string;
+};
 type DayDoc = { _id: string; label: string; sortOrder: number };
 type SessionDoc = {
   _id: string;
@@ -42,6 +49,15 @@ type AdminData = {
   emailConfigured?: boolean;
 };
 
+function parseDayLabels(text: string, dayCount: number) {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length) return lines;
+  return Array.from({ length: dayCount }, (_, index) => `Day ${index + 1}`);
+}
+
 function parseGuestLines(text: string) {
   return text
     .split("\n")
@@ -68,6 +84,14 @@ export default function AdminPage() {
   );
   const [sendEmailOnImport, setSendEmailOnImport] = useState(false);
   const [newEventName, setNewEventName] = useState("");
+  const [newEventDescription, setNewEventDescription] = useState("");
+  const [newEventDayCount, setNewEventDayCount] = useState(3);
+  const [newEventDayLabels, setNewEventDayLabels] = useState("");
+  const [eventNameEdit, setEventNameEdit] = useState("");
+  const [eventDescriptionEdit, setEventDescriptionEdit] = useState("");
+  const [eventStartsOn, setEventStartsOn] = useState("");
+  const [eventEndsOn, setEventEndsOn] = useState("");
+  const [dayLabelEdits, setDayLabelEdits] = useState<Record<string, string>>({});
   const [sessionTitle, setSessionTitle] = useState("");
   const [sessionSpeaker, setSessionSpeaker] = useState("");
   const [sessionDayId, setSessionDayId] = useState("");
@@ -116,6 +140,17 @@ export default function AdminPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (!data?.event) return;
+    setEventNameEdit(data.event.name);
+    setEventDescriptionEdit(data.event.description || "");
+    setEventStartsOn(data.event.startsOn || "");
+    setEventEndsOn(data.event.endsOn || "");
+    const labels: Record<string, string> = {};
+    for (const day of data.days) labels[day._id] = day.label;
+    setDayLabelEdits(labels);
+  }, [data?.event?._id, data?.days]);
+
   const vipGuests = useMemo(
     () => (data?.guests || []).filter((guest) => guest.tier === "vip"),
     [data],
@@ -137,15 +172,23 @@ export default function AdminPage() {
 
   async function bootstrap(event: FormEvent) {
     event.preventDefault();
+    if (!newEventName.trim()) {
+      setMessage("Enter an event name.");
+      return;
+    }
     const json = await postAction({
       action: "bootstrap",
-      name: "Weekend Gathering",
-      slug: "weekend-gathering",
-      days: ["Day 1", "Day 2", "Day 3"],
+      name: newEventName.trim(),
+      description: newEventDescription.trim() || undefined,
+      days: parseDayLabels(newEventDayLabels, newEventDayCount),
+      dayCount: newEventDayCount,
     });
     if (!json) return;
-    setMessage("Event ready with Day 1–3.");
-    await load();
+    setMessage(`Created “${json.event.name}” with ${json.days?.length || 0} day(s).`);
+    setNewEventName("");
+    setNewEventDescription("");
+    setNewEventDayLabels("");
+    await load(json.event._id);
   }
 
   async function createEvent(event: FormEvent) {
@@ -154,12 +197,60 @@ export default function AdminPage() {
     const json = await postAction({
       action: "create_event",
       name: newEventName.trim(),
-      days: ["Day 1", "Day 2", "Day 3"],
+      description: newEventDescription.trim() || undefined,
+      days: parseDayLabels(newEventDayLabels, newEventDayCount),
+      dayCount: newEventDayCount,
     });
     if (!json) return;
     setNewEventName("");
+    setNewEventDescription("");
+    setNewEventDayLabels("");
     setMessage(`Created event “${json.event.name}”.`);
     await load(json.event._id);
+  }
+
+  async function saveEventSettings(event: FormEvent) {
+    event.preventDefault();
+    if (!data?.event) return;
+    const json = await postAction({
+      action: "update_event",
+      eventId: data.event._id,
+      name: eventNameEdit.trim(),
+      description: eventDescriptionEdit.trim(),
+      startsOn: eventStartsOn.trim(),
+      endsOn: eventEndsOn.trim(),
+    });
+    if (!json) return;
+    setMessage("Event settings saved.");
+    await load(data.event._id);
+  }
+
+  async function saveDayLabel(dayId: string) {
+    const label = dayLabelEdits[dayId]?.trim();
+    if (!label) {
+      setMessage("Day name cannot be empty.");
+      return;
+    }
+    const json = await postAction({ action: "update_day", dayId, label });
+    if (!json) return;
+    setMessage("Day renamed.");
+    await load(selectedEventId);
+  }
+
+  async function addDay() {
+    if (!data?.event) return;
+    const json = await postAction({ action: "add_day", eventId: data.event._id });
+    if (!json) return;
+    setMessage(`Added “${json.day.label}”.`);
+    await load(data.event._id);
+  }
+
+  async function removeDay(dayId: string) {
+    if (!confirm("Delete this day? You must remove its sessions first.")) return;
+    const json = await postAction({ action: "delete_day", dayId });
+    if (!json) return;
+    setMessage("Day removed.");
+    await load(selectedEventId);
   }
 
   async function addSession(event: FormEvent) {
@@ -325,13 +416,56 @@ export default function AdminPage() {
       ) : null}
 
       {!data.event ? (
-        <form onSubmit={bootstrap} className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+        <form
+          onSubmit={bootstrap}
+          className="space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5"
+        >
           <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Create first event</h2>
           <p className="text-sm text-pine/75">
-            Sets up one event with Day 1, Day 2, and Day 3 ready for sessions.
+            Name your event and choose how many days (or enter custom day names).
           </p>
+          <input
+            value={newEventName}
+            onChange={(e) => setNewEventName(e.target.value)}
+            placeholder="Event name (e.g. Salt & Light Retreat 2026)"
+            required
+            className="h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
+          />
+          <textarea
+            value={newEventDescription}
+            onChange={(e) => setNewEventDescription(e.target.value)}
+            placeholder="Short description (optional)"
+            rows={2}
+            className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm"
+          />
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="text-sm text-pine">
+              Number of days
+              <select
+                value={newEventDayCount}
+                onChange={(e) => setNewEventDayCount(Number(e.target.value))}
+                className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
+              >
+                {Array.from({ length: 14 }, (_, index) => (
+                  <option key={index + 1} value={index + 1}>
+                    {index + 1} day{index === 0 ? "" : "s"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="self-end text-sm text-pine/70">
+              Or override with custom names below (one per line).
+            </p>
+          </div>
+          <textarea
+            value={newEventDayLabels}
+            onChange={(e) => setNewEventDayLabels(e.target.value)}
+            placeholder={"Custom day names (optional)\nFriday\nSaturday\nSunday"}
+            rows={4}
+            className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 font-mono text-sm"
+          />
           <button type="submit" className="h-11 rounded-2xl bg-ink px-4 text-foam">
-            Create 3-day event
+            Create event
           </button>
         </form>
       ) : (
@@ -362,12 +496,127 @@ export default function AdminPage() {
               {data.days.map((day) => day.label).join(" · ")} · {data.guests.length} guests ·{" "}
               {data.media.length} media files
             </p>
-            <form onSubmit={createEvent} className="flex flex-wrap gap-2 pt-2">
+          </section>
+
+          <section className="space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Event settings</h2>
+            <form onSubmit={saveEventSettings} className="grid gap-3 md:grid-cols-2">
+              <input
+                value={eventNameEdit}
+                onChange={(e) => setEventNameEdit(e.target.value)}
+                placeholder="Event name"
+                required
+                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
+              />
+              <textarea
+                value={eventDescriptionEdit}
+                onChange={(e) => setEventDescriptionEdit(e.target.value)}
+                placeholder="Description shown to guests (optional)"
+                rows={2}
+                className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm md:col-span-2"
+              />
+              <label className="text-sm text-pine">
+                Starts on
+                <input
+                  type="date"
+                  value={eventStartsOn}
+                  onChange={(e) => setEventStartsOn(e.target.value)}
+                  className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
+                />
+              </label>
+              <label className="text-sm text-pine">
+                Ends on
+                <input
+                  type="date"
+                  value={eventEndsOn}
+                  onChange={(e) => setEventEndsOn(e.target.value)}
+                  className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
+                />
+              </label>
+              <button type="submit" className="h-11 rounded-xl bg-ink text-foam md:col-span-2">
+                Save event settings
+              </button>
+            </form>
+
+            <div className="space-y-2 border-t border-[color:var(--line)] pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-lg font-semibold text-ink">Days</h3>
+                <button
+                  type="button"
+                  onClick={addDay}
+                  className="h-9 rounded-xl border border-[color:var(--line)] px-3 text-sm"
+                >
+                  Add day
+                </button>
+              </div>
+              <ul className="space-y-2">
+                {data.days.map((day) => (
+                  <li key={day._id} className="flex flex-wrap items-center gap-2">
+                    <input
+                      value={dayLabelEdits[day._id] ?? day.label}
+                      onChange={(e) =>
+                        setDayLabelEdits((prev) => ({ ...prev, [day._id]: e.target.value }))
+                      }
+                      className="h-10 min-w-[10rem] flex-1 rounded-xl border border-[color:var(--line)] bg-white px-3 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => saveDayLabel(day._id)}
+                      className="h-10 rounded-xl border border-[color:var(--line)] px-3 text-sm"
+                    >
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeDay(day._id)}
+                      className="h-10 rounded-xl border border-[color:var(--line)] px-3 text-sm text-red-800"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+
+          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Add another event</h2>
+            <form onSubmit={createEvent} className="space-y-3">
               <input
                 value={newEventName}
                 onChange={(e) => setNewEventName(e.target.value)}
                 placeholder="New event name"
-                className="h-11 flex-1 rounded-xl border border-[color:var(--line)] bg-white px-3"
+                className="h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
+              />
+              <textarea
+                value={newEventDescription}
+                onChange={(e) => setNewEventDescription(e.target.value)}
+                placeholder="Description (optional)"
+                rows={2}
+                className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm"
+              />
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="text-sm text-pine">
+                  Number of days
+                  <select
+                    value={newEventDayCount}
+                    onChange={(e) => setNewEventDayCount(Number(e.target.value))}
+                    className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
+                  >
+                    {Array.from({ length: 14 }, (_, index) => (
+                      <option key={index + 1} value={index + 1}>
+                        {index + 1} day{index === 0 ? "" : "s"}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <textarea
+                value={newEventDayLabels}
+                onChange={(e) => setNewEventDayLabels(e.target.value)}
+                placeholder="Custom day names (optional, one per line)"
+                rows={3}
+                className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 font-mono text-sm"
               />
               <button type="submit" className="h-11 rounded-xl border border-[color:var(--line)] px-4">
                 Add event

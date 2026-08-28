@@ -17,6 +17,30 @@ function slugify(input: string) {
     .slice(0, 80);
 }
 
+function defaultDayLabels(count: number) {
+  return Array.from({ length: count }, (_, index) => `Day ${index + 1}`);
+}
+
+function resolveDayLabels(body: {
+  days?: string[];
+  dayCount?: number;
+}) {
+  const custom = body.days?.map((label) => label.trim()).filter(Boolean);
+  if (custom?.length) return custom;
+  const count = body.dayCount ?? 3;
+  return defaultDayLabels(count);
+}
+
+async function uniqueSlug(slugBase: string) {
+  let slug = slugBase;
+  for (let i = 0; i < 5; i++) {
+    const clash = await Event.findOne({ slug });
+    if (!clash) return slug;
+    slug = `${slugBase}-${i + 2}`;
+  }
+  return `${slugBase}-${Date.now()}`;
+}
+
 async function uniqueTicketCode() {
   let ticketCode = createTicketCode();
   for (let i = 0; i < 8; i++) {
@@ -102,22 +126,17 @@ export async function POST(request: Request) {
 
     const name = body.name || "Retreat Weekend";
     const slugBase = body.slug || slugify(name) || "event";
-    let slug = slugBase;
-    for (let i = 0; i < 5; i++) {
-      const clash = await Event.findOne({ slug });
-      if (!clash) break;
-      slug = `${slugBase}-${i + 2}`;
-    }
+    const slug = await uniqueSlug(slugBase);
 
     const event = await Event.create({
       name,
       slug,
-      description: body.description || "Event media vault",
+      description: body.description || "",
       startsOn: "",
       endsOn: "",
     });
 
-    const dayLabels = body.days?.length ? body.days : ["Day 1", "Day 2", "Day 3"];
+    const dayLabels = resolveDayLabels(body);
     const days = await Day.insertMany(
       dayLabels.map((label: string, index: number) => ({
         eventId: event._id,
@@ -127,6 +146,70 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json({ event, days, created: true });
+  }
+
+  if (body.action === "update_event") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    if (body.name !== undefined) event.name = body.name.trim();
+    if (body.description !== undefined) event.description = body.description.trim();
+    if (body.startsOn !== undefined) event.startsOn = body.startsOn.trim();
+    if (body.endsOn !== undefined) event.endsOn = body.endsOn.trim();
+    await event.save();
+
+    return NextResponse.json({ event });
+  }
+
+  if (body.action === "update_day") {
+    const day = await Day.findById(body.dayId);
+    if (!day) {
+      return NextResponse.json({ error: "Day not found" }, { status: 404 });
+    }
+    day.label = body.label.trim();
+    await day.save();
+    return NextResponse.json({ day });
+  }
+
+  if (body.action === "add_day") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    const existing = await Day.find({ eventId: event._id }).sort({ sortOrder: 1 });
+    if (existing.length >= 14) {
+      return NextResponse.json({ error: "Maximum 14 days per event" }, { status: 400 });
+    }
+
+    const sortOrder = existing.length ? existing[existing.length - 1].sortOrder + 1 : 0;
+    const label = body.label?.trim() || `Day ${sortOrder + 1}`;
+    const day = await Day.create({
+      eventId: event._id,
+      label,
+      sortOrder,
+    });
+    return NextResponse.json({ day });
+  }
+
+  if (body.action === "delete_day") {
+    const day = await Day.findById(body.dayId);
+    if (!day) {
+      return NextResponse.json({ error: "Day not found" }, { status: 404 });
+    }
+
+    const sessionCount = await Session.countDocuments({ dayId: day._id });
+    if (sessionCount > 0) {
+      return NextResponse.json(
+        { error: "Remove or move sessions on this day before deleting it" },
+        { status: 400 },
+      );
+    }
+
+    await Day.deleteOne({ _id: day._id });
+    return NextResponse.json({ ok: true });
   }
 
   if (body.action === "add_session") {
