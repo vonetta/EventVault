@@ -819,7 +819,7 @@ export default function AdminPage() {
             <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Upload photos</h2>
             <p className="text-sm text-pine/75">
               <strong>Step 1:</strong> pick photo type · <strong>Step 2:</strong> tap the box below to
-              choose a file · <strong>Step 3:</strong> Upload. JPEG/PNG/WebP/GIF up to 15MB.
+              choose a file · <strong>Step 3:</strong> Upload. JPEG/PNG/WebP/GIF up to 4MB on Vercel.
             </p>
             <form onSubmit={uploadMedia} className="grid gap-3 md:grid-cols-2">
               <select

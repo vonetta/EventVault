@@ -75,6 +75,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // Vercel serverless request body limit is ~4.5MB on most plans.
+  const vercelLimit = 4.5 * 1024 * 1024;
+  if (process.env.VERCEL && file.size > vercelLimit) {
+    return NextResponse.json(
+      {
+        error:
+          "This file is too large for direct upload on Vercel (max ~4.5MB). Resize or compress the photo, then try again.",
+      },
+      { status: 400 },
+    );
+  }
+
   let guestId: string | null = null;
   let sessionId: string | null = null;
 
@@ -147,6 +159,24 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Upload failed";
+    if (message.includes("R2 must be configured")) {
+      return NextResponse.json(
+        {
+          error:
+            "Photo storage is not configured. Add R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME in Vercel, then redeploy.",
+        },
+        { status: 500 },
+      );
+    }
+    if (/AccessDenied|InvalidAccessKeyId|SignatureDoesNotMatch|NoSuchBucket/i.test(message)) {
+      return NextResponse.json(
+        {
+          error:
+            "Cloudflare R2 rejected the upload. Double-check your four R2 env vars in Vercel (Account ID, keys, bucket name) and redeploy.",
+        },
+        { status: 500 },
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
