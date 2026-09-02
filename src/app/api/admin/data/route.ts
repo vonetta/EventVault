@@ -213,6 +213,52 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  if (body.action === "sync_days") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    const labels = body.days.map((label) => label.trim()).filter(Boolean);
+    if (!labels.length) {
+      return NextResponse.json({ error: "Add at least one day" }, { status: 400 });
+    }
+
+    const existing = await Day.find({ eventId: event._id }).sort({ sortOrder: 1 });
+
+    for (let index = 0; index < labels.length; index++) {
+      const label = labels[index];
+      if (existing[index]) {
+        existing[index].label = label;
+        existing[index].sortOrder = index;
+        await existing[index].save();
+      } else {
+        await Day.create({
+          eventId: event._id,
+          label,
+          sortOrder: index,
+        });
+      }
+    }
+
+    for (let index = labels.length; index < existing.length; index++) {
+      const day = existing[index];
+      const sessionCount = await Session.countDocuments({ dayId: day._id });
+      if (sessionCount > 0) {
+        return NextResponse.json(
+          {
+            error: `Cannot remove "${day.label}" — it still has ${sessionCount} session(s). Delete or move those sessions first.`,
+          },
+          { status: 400 },
+        );
+      }
+      await Day.deleteOne({ _id: day._id });
+    }
+
+    const days = await Day.find({ eventId: event._id }).sort({ sortOrder: 1 });
+    return NextResponse.json({ days });
+  }
+
   if (body.action === "add_session") {
     const event = await Event.findById(body.eventId);
     const day = await Day.findById(body.dayId);

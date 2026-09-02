@@ -174,7 +174,8 @@ export default function AdminPage() {
   const [eventDescriptionEdit, setEventDescriptionEdit] = useState("");
   const [eventStartsOn, setEventStartsOn] = useState("");
   const [eventEndsOn, setEventEndsOn] = useState("");
-  const [dayLabelEdits, setDayLabelEdits] = useState<Record<string, string>>({});
+  const [scheduleLabels, setScheduleLabels] = useState<string[]>([]);
+  const [savingSchedule, setSavingSchedule] = useState(false);
   const [sessionTitle, setSessionTitle] = useState("");
   const [sessionSpeaker, setSessionSpeaker] = useState("");
   const [sessionDayId, setSessionDayId] = useState("");
@@ -228,9 +229,7 @@ export default function AdminPage() {
         setEventStartsOn(json.event.startsOn || "");
         setEventEndsOn(json.event.endsOn || "");
       }
-      const labels: Record<string, string> = {};
-      for (const day of json.days || []) labels[day._id] = day.label;
-      setDayLabelEdits(labels);
+      setScheduleLabels((json.days || []).map((day: DayDoc) => day.label));
       if (json.days?.[0]?._id) setSessionDayId(json.days[0]._id);
       if (json.sessions?.[0]?._id) {
         setUploadSessionId((prev) => prev || json.sessions[0]._id);
@@ -337,7 +336,7 @@ export default function AdminPage() {
     if (!data?.event) return;
     if (
       !confirm(
-        `Apply the retreat template?\n\n• ${RETREAT_TEMPLATE.name}\n• Day names: ${RETREAT_TEMPLATE.dayLabels.join(", ")}\n\nYou can still edit dates before saving.`,
+        `Apply the Koinonia template?\n\n• ${RETREAT_TEMPLATE.name}\n• ${RETREAT_TEMPLATE.dayLabels.length} days: ${RETREAT_TEMPLATE.dayLabels.join(", ")}`,
       )
     ) {
       return;
@@ -346,16 +345,9 @@ export default function AdminPage() {
     setApplyingTemplate(true);
     setEventNameEdit(RETREAT_TEMPLATE.name);
     setEventDescriptionEdit(RETREAT_TEMPLATE.description);
+    setScheduleLabels([...RETREAT_TEMPLATE.dayLabels]);
 
-    const nextDayLabels = { ...dayLabelEdits };
-    data.days.forEach((day, index) => {
-      const label = RETREAT_TEMPLATE.dayLabels[index];
-      if (label) nextDayLabels[day._id] = label;
-    });
-    setDayLabelEdits(nextDayLabels);
-
-    setSavingEvent(true);
-    const json = await postAction({
+    const eventJson = await postAction({
       action: "update_event",
       eventId: data.event._id,
       name: RETREAT_TEMPLATE.name,
@@ -363,24 +355,74 @@ export default function AdminPage() {
       startsOn: eventStartsOn.trim(),
       endsOn: eventEndsOn.trim(),
     });
-    setSavingEvent(false);
-    if (!json) {
+    if (!eventJson) {
       setApplyingTemplate(false);
       return;
     }
 
-    for (const day of data.days) {
-      const label = nextDayLabels[day._id]?.trim();
-      if (!label || label === day.label) continue;
-      const json = await postAction({ action: "update_day", dayId: day._id, label });
-      if (!json) {
-        setApplyingTemplate(false);
-        return;
-      }
+    const daysJson = await postAction({
+      action: "sync_days",
+      eventId: data.event._id,
+      days: RETREAT_TEMPLATE.dayLabels,
+    });
+    setApplyingTemplate(false);
+    if (!daysJson) return;
+
+    setMessage("Koinonia template applied. Adjust dates in Event settings if needed.");
+    await load(data.event._id);
+  }
+
+  function updateScheduleLabel(index: number, label: string) {
+    setScheduleLabels((prev) => prev.map((item, itemIndex) => (itemIndex === index ? label : item)));
+  }
+
+  function addScheduleDay() {
+    if (scheduleLabels.length >= 14) {
+      setMessage("Maximum 14 days per event.");
+      return;
+    }
+    setScheduleLabels((prev) => [...prev, `Day ${prev.length + 1}`]);
+  }
+
+  function removeScheduleDay(index: number) {
+    if (scheduleLabels.length <= 1) {
+      setMessage("Keep at least one day.");
+      return;
+    }
+    setScheduleLabels((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function moveScheduleDay(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= scheduleLabels.length) return;
+    setScheduleLabels((prev) => {
+      const copy = [...prev];
+      [copy[index], copy[nextIndex]] = [copy[nextIndex], copy[index]];
+      return copy;
+    });
+  }
+
+  async function saveDaySchedule() {
+    if (!data?.event) return;
+    const labels = scheduleLabels.map((label) => label.trim()).filter(Boolean);
+    if (!labels.length) {
+      setMessage("Each day needs a name.");
+      return;
+    }
+    if (labels.length !== scheduleLabels.length) {
+      setMessage("Remove empty day rows before saving.");
+      return;
     }
 
-    setApplyingTemplate(false);
-    setMessage("Retreat template applied. Adjust dates above if needed, then save again.");
+    setSavingSchedule(true);
+    const json = await postAction({
+      action: "sync_days",
+      eventId: data.event._id,
+      days: labels,
+    });
+    setSavingSchedule(false);
+    if (!json) return;
+    setMessage("Day schedule saved.");
     await load(data.event._id);
   }
 
@@ -417,34 +459,6 @@ export default function AdminPage() {
     } finally {
       setSendingTestEmail(false);
     }
-  }
-
-  async function saveDayLabel(dayId: string) {
-    const label = dayLabelEdits[dayId]?.trim();
-    if (!label) {
-      setMessage("Day name cannot be empty.");
-      return;
-    }
-    const json = await postAction({ action: "update_day", dayId, label });
-    if (!json) return;
-    setMessage("Day renamed.");
-    await load(selectedEventId);
-  }
-
-  async function addDay() {
-    if (!data?.event) return;
-    const json = await postAction({ action: "add_day", eventId: data.event._id });
-    if (!json) return;
-    setMessage(`Added “${json.day.label}”.`);
-    await load(data.event._id);
-  }
-
-  async function removeDay(dayId: string) {
-    if (!confirm("Delete this day? You must remove its sessions first.")) return;
-    const json = await postAction({ action: "delete_day", dayId });
-    if (!json) return;
-    setMessage("Day removed.");
-    await load(selectedEventId);
   }
 
   async function addSession(event: FormEvent) {
@@ -798,32 +812,70 @@ export default function AdminPage() {
       </AdminPanel>
 
       <AdminPanel
-        title="Retreat days"
-        description="Rename days to match your schedule."
+        title="Retreat schedule"
+        description="Add, rename, reorder, or remove days — then save once. Removing a day with sessions will be blocked."
         action={
-          <AdminButton onClick={addDay}>Add day</AdminButton>
+          <div className="flex flex-wrap gap-2">
+            <AdminButton onClick={() => setScheduleLabels([...RETREAT_TEMPLATE.dayLabels])}>
+              Koinonia preset
+            </AdminButton>
+            <AdminButton onClick={addScheduleDay}>Add day</AdminButton>
+          </div>
         }
       >
         <ul className="space-y-2">
-          {data.days.map((day) => (
+          {scheduleLabels.map((label, index) => (
             <li
-              key={day._id}
+              key={`${index}-${label}`}
               className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--line)] bg-mist/30 p-2"
             >
+              <span className="w-6 shrink-0 text-center text-xs font-medium text-pine/60">
+                {index + 1}
+              </span>
               <input
-                value={dayLabelEdits[day._id] ?? day.label}
-                onChange={(e) =>
-                  setDayLabelEdits((prev) => ({ ...prev, [day._id]: e.target.value }))
-                }
+                value={label}
+                onChange={(e) => updateScheduleLabel(index, e.target.value)}
+                placeholder={`Day ${index + 1}`}
                 className={`${inputClassName} min-w-[10rem] flex-1`}
               />
-              <AdminButton onClick={() => saveDayLabel(day._id)}>Save</AdminButton>
-              <AdminButton variant="danger" onClick={() => removeDay(day._id)}>
-                Remove
-              </AdminButton>
+              <div className="flex gap-1">
+                <AdminButton
+                  className="!h-9 !w-9 !px-0"
+                  onClick={() => moveScheduleDay(index, -1)}
+                  disabled={index === 0}
+                  aria-label="Move up"
+                >
+                  ↑
+                </AdminButton>
+                <AdminButton
+                  className="!h-9 !w-9 !px-0"
+                  onClick={() => moveScheduleDay(index, 1)}
+                  disabled={index === scheduleLabels.length - 1}
+                  aria-label="Move down"
+                >
+                  ↓
+                </AdminButton>
+                <AdminButton
+                  variant="danger"
+                  className="!h-9 !px-3"
+                  onClick={() => removeScheduleDay(index)}
+                  disabled={scheduleLabels.length <= 1}
+                >
+                  Remove
+                </AdminButton>
+              </div>
             </li>
           ))}
         </ul>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <AdminButton
+            variant="primary"
+            onClick={saveDaySchedule}
+            disabled={savingSchedule}
+          >
+            {savingSchedule ? "Saving schedule…" : "Save schedule"}
+          </AdminButton>
+        </div>
       </AdminPanel>
 
       <AdminPanel title="Speaker sessions" description="Create sessions before linking YouTube videos.">
