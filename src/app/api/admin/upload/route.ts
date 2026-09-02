@@ -168,7 +168,7 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
-    if (/AccessDenied|InvalidAccessKeyId|SignatureDoesNotMatch|NoSuchBucket/i.test(message)) {
+    if (/Access\s*Denied|InvalidAccessKeyId|SignatureDoesNotMatch|NoSuchBucket/i.test(message)) {
       return NextResponse.json(
         {
           error:
