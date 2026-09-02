@@ -630,7 +630,7 @@ export default function AdminPage() {
           <input
             value={newEventName}
             onChange={(e) => setNewEventName(e.target.value)}
-            placeholder="Event name (e.g. Salt & Light Retreat 2026)"
+            placeholder="Event name (e.g. Koinonia Retreat 2026)"
             required
             className="h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
           />
@@ -753,7 +753,7 @@ export default function AdminPage() {
 {`GMAIL_USER=vonettastevenson@gmail.com
 GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 APP_URL=https://event-vault-dusky.vercel.app
-EMAIL_FROM_NAME=Salt & Light Retreat`}
+EMAIL_FROM_NAME=Koinonia Retreat`}
                 </pre>
                 <ol className="list-decimal space-y-2 pl-5">
                   <li>
@@ -786,7 +786,7 @@ EMAIL_FROM_NAME=Salt & Light Retreat`}
                 disabled={applyingTemplate || savingEvent}
                 className="h-9 rounded-xl border border-[color:var(--line)] px-3 text-sm"
               >
-                {applyingTemplate ? "Applying…" : "Apply Salt & Light retreat template"}
+                {applyingTemplate ? "Applying…" : "Apply Koinonia retreat template"}
               </button>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
