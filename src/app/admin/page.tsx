@@ -3,6 +3,17 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MediaGrid, type MediaItem } from "@/components/MediaGrid";
+import { AdminShell, type AdminTab } from "@/components/admin/AdminShell";
+import {
+  AdminButton,
+  AdminField,
+  AdminPanel,
+  StatCard,
+  StatusBadge,
+  TierBadge,
+  inputClassName,
+  textareaClassName,
+} from "@/components/admin/ui";
 import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
 type EventDoc = {
@@ -64,7 +75,7 @@ const RETREAT_TEMPLATE = {
   name: "Koinonia Retreat 2026",
   description:
     "Your private vault for Koinonia Retreat photos and speaker sessions. VIP guests also receive personal photo galleries.",
-  dayLabels: ["Friday", "Saturday", "Sunday"],
+  dayLabels: ["Thursday", "Friday", "Saturday", "Sunday", "Monday"],
 };
 
 function parseDayLabels(text: string, dayCount: number) {
@@ -157,7 +168,7 @@ export default function AdminPage() {
   const [sendEmailOnImport, setSendEmailOnImport] = useState(false);
   const [newEventName, setNewEventName] = useState("");
   const [newEventDescription, setNewEventDescription] = useState("");
-  const [newEventDayCount, setNewEventDayCount] = useState(3);
+  const [newEventDayCount, setNewEventDayCount] = useState(5);
   const [newEventDayLabels, setNewEventDayLabels] = useState("");
   const [eventNameEdit, setEventNameEdit] = useState("");
   const [eventDescriptionEdit, setEventDescriptionEdit] = useState("");
@@ -182,6 +193,7 @@ export default function AdminPage() {
   const [testEmailTo, setTestEmailTo] = useState("");
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
+  const [activeTab, setActiveTab] = useState<AdminTab>("overview");
 
   const load = useCallback(
     async (eventId?: string) => {
@@ -591,63 +603,50 @@ export default function AdminPage() {
 
   if (!data) {
     return (
-      <main className="mx-auto max-w-5xl px-6 py-16">
+      <main className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6">
         <p className="text-pine/70">Loading admin…</p>
       </main>
     );
   }
 
-  return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-8 md:px-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-[family-name:var(--font-fraunces)] text-3xl text-ink">EventVault</p>
-          <h1 className="mt-2 font-[family-name:var(--font-fraunces)] text-4xl text-ink">Admin</h1>
-        </div>
-        <button
-          onClick={logout}
-          className="rounded-full border border-[color:var(--line)] bg-white/70 px-4 py-2 text-sm"
-        >
-          Sign out
-        </button>
-      </header>
+  if (!data.event) {
+    return (
+      <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-6 py-12">
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-pine/60">EventVault Admin</p>
+        <h1 className="mt-2 font-[family-name:var(--font-fraunces)] text-4xl text-ink">Create your event</h1>
+        <p className="mt-2 text-pine/75">Set up Koinonia Retreat or any ticketed event.</p>
 
-      {message ? (
-        <p className="rounded-2xl border border-[color:var(--line)] bg-white/70 px-4 py-3 text-sm text-pine">
-          {message}
-        </p>
-      ) : null}
-
-      {!data.event ? (
-        <form
-          onSubmit={bootstrap}
-          className="space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5"
-        >
-          <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Create first event</h2>
-          <p className="text-sm text-pine/75">
-            Name your event and choose how many days (or enter custom day names).
+        {message ? (
+          <p className="mt-4 rounded-2xl border border-gold/30 bg-gold/10 px-4 py-3 text-sm text-ink">
+            {message}
           </p>
-          <input
-            value={newEventName}
-            onChange={(e) => setNewEventName(e.target.value)}
-            placeholder="Event name (e.g. Koinonia Retreat 2026)"
-            required
-            className="h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
-          />
-          <textarea
-            value={newEventDescription}
-            onChange={(e) => setNewEventDescription(e.target.value)}
-            placeholder="Short description (optional)"
-            rows={2}
-            className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm"
-          />
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="text-sm text-pine">
-              Number of days
+        ) : null}
+
+        <form onSubmit={bootstrap} className="mt-8 space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/90 p-6 shadow-sm">
+          <AdminField label="Event name">
+            <input
+              value={newEventName}
+              onChange={(e) => setNewEventName(e.target.value)}
+              placeholder="Koinonia Retreat 2026"
+              required
+              className={inputClassName}
+            />
+          </AdminField>
+          <AdminField label="Description" hint="Shown to guests on their vault page">
+            <textarea
+              value={newEventDescription}
+              onChange={(e) => setNewEventDescription(e.target.value)}
+              placeholder="Your private vault for retreat photos and sessions."
+              rows={2}
+              className={textareaClassName}
+            />
+          </AdminField>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <AdminField label="Number of days">
               <select
                 value={newEventDayCount}
                 onChange={(e) => setNewEventDayCount(Number(e.target.value))}
-                className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
+                className={inputClassName}
               >
                 {Array.from({ length: 14 }, (_, index) => (
                   <option key={index + 1} value={index + 1}>
@@ -655,424 +654,456 @@ export default function AdminPage() {
                   </option>
                 ))}
               </select>
-            </label>
-            <p className="self-end text-sm text-pine/70">
-              Or override with custom names below (one per line).
-            </p>
-          </div>
-          <textarea
-            value={newEventDayLabels}
-            onChange={(e) => setNewEventDayLabels(e.target.value)}
-            placeholder={"Custom day names (optional)\nFriday\nSaturday\nSunday"}
-            rows={4}
-            className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 font-mono text-sm"
-          />
-          <button type="submit" className="h-11 rounded-2xl bg-ink px-4 text-foam">
-            Create event
-          </button>
-        </form>
-      ) : (
-        <>
-          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="text-sm text-pine" htmlFor="event-switch">
-                Active event
-              </label>
-              <select
-                id="event-switch"
-                value={selectedEventId}
-                onChange={(e) => {
-                  setSelectedEventId(e.target.value);
-                  load(e.target.value);
-                }}
-                className="h-11 min-w-[12rem] rounded-xl border border-[color:var(--line)] bg-white px-3"
-              >
-                {data.events.map((event) => (
-                  <option key={event._id} value={event._id}>
-                    {event.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">{data.event.name}</h2>
-            <p className="mt-1 text-sm text-pine/75">
-              {data.days.map((day) => day.label).join(" · ")} · {data.guests.length} guests ·{" "}
-              {data.media.length} media files
-            </p>
-          </section>
-
-          <section className="space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Ticket email (Gmail)</h2>
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  data.emailConfigured
-                    ? "bg-emerald-100 text-emerald-900"
-                    : "bg-amber-100 text-amber-900"
-                }`}
-              >
-                {data.emailConfigured ? "Configured" : "Not configured"}
-              </span>
-            </div>
-
-            {data.emailConfigured ? (
-              <div className="space-y-3 text-sm text-pine/80">
-                <p>
-                  Sending from <strong>{data.email?.fromName}</strong>
-                  {data.email?.gmailUser ? ` (${data.email.gmailUser})` : ""}. Links use{" "}
-                  <strong>{data.email?.appUrl}</strong>.
-                </p>
-                <p>
-                  Import guests with <strong>Email ticket codes on import</strong> checked, or tap
-                  <strong> Email</strong> on any guest row.
-                </p>
-                <form onSubmit={sendTestEmail} className="flex flex-wrap items-end gap-2">
-                  <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm text-pine">
-                    Send test email to
-                    <input
-                      type="email"
-                      value={testEmailTo}
-                      onChange={(e) => setTestEmailTo(e.target.value)}
-                      placeholder="you@gmail.com"
-                      className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    disabled={sendingTestEmail}
-                    className="h-11 rounded-xl border border-[color:var(--line)] px-4"
-                  >
-                    {sendingTestEmail ? "Sending…" : "Send test"}
-                  </button>
-                </form>
-              </div>
-            ) : (
-              <div className="space-y-3 text-sm text-pine/80">
-                <p>Add these in <strong>Vercel → Project → Settings → Environment Variables</strong>, then redeploy:</p>
-                <pre className="overflow-x-auto rounded-xl bg-mist/80 p-3 font-mono text-xs text-ink">
-{`GMAIL_USER=vonettastevenson@gmail.com
-GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
-APP_URL=https://event-vault-dusky.vercel.app
-EMAIL_FROM_NAME=Koinonia Retreat`}
-                </pre>
-                <ol className="list-decimal space-y-2 pl-5">
-                  <li>
-                    Turn on <strong>2-Step Verification</strong> for the Google account.
-                  </li>
-                  <li>
-                    Create an App Password:{" "}
-                    <a
-                      href="https://myaccount.google.com/apppasswords"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline"
-                    >
-                      myaccount.google.com/apppasswords
-                    </a>
-                  </li>
-                  <li>Paste the 16-character password into <code>GMAIL_APP_PASSWORD</code> (spaces are fine).</li>
-                  <li>Redeploy Vercel, refresh this page, then send a test email.</li>
-                </ol>
-              </div>
-            )}
-          </section>
-
-          <section className="relative z-10 space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Event settings</h2>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={applyRetreatTemplate}
-                disabled={applyingTemplate || savingEvent}
-                className="h-9 rounded-xl border border-[color:var(--line)] px-3 text-sm"
-              >
-                {applyingTemplate ? "Applying…" : "Apply Koinonia retreat template"}
-              </button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <input
-                value={eventNameEdit}
-                onChange={(e) => setEventNameEdit(e.target.value)}
-                placeholder="Event name"
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
-              />
-              <textarea
-                value={eventDescriptionEdit}
-                onChange={(e) => setEventDescriptionEdit(e.target.value)}
-                placeholder="Description shown to guests (optional)"
-                rows={2}
-                className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm md:col-span-2"
-              />
-              <label className="text-sm text-pine">
-                Starts on
-                <input
-                  type="date"
-                  value={eventStartsOn}
-                  onChange={(e) => setEventStartsOn(e.target.value)}
-                  className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
-                />
-              </label>
-              <label className="text-sm text-pine">
-                Ends on
-                <input
-                  type="date"
-                  value={eventEndsOn}
-                  onChange={(e) => setEventEndsOn(e.target.value)}
-                  className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => saveEventSettingsAndNotify()}
-                disabled={savingEvent}
-                className="h-11 cursor-pointer rounded-xl bg-ink text-foam md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingEvent ? "Saving…" : "Save event settings"}
-              </button>
-            </div>
-
-            <div className="space-y-2 border-t border-[color:var(--line)] pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-lg font-semibold text-ink">Days</h3>
-                <button
-                  type="button"
-                  onClick={addDay}
-                  className="h-9 rounded-xl border border-[color:var(--line)] px-3 text-sm"
-                >
-                  Add day
-                </button>
-              </div>
-              <ul className="space-y-2">
-                {data.days.map((day) => (
-                  <li key={day._id} className="flex flex-wrap items-center gap-2">
-                    <input
-                      value={dayLabelEdits[day._id] ?? day.label}
-                      onChange={(e) =>
-                        setDayLabelEdits((prev) => ({ ...prev, [day._id]: e.target.value }))
-                      }
-                      className="h-10 min-w-[10rem] flex-1 rounded-xl border border-[color:var(--line)] bg-white px-3 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => saveDayLabel(day._id)}
-                      className="h-10 rounded-xl border border-[color:var(--line)] px-3 text-sm"
-                    >
-                      Rename
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeDay(day._id)}
-                      className="h-10 rounded-xl border border-[color:var(--line)] px-3 text-sm text-red-800"
-                    >
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-
-          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Add another event</h2>
-            <form onSubmit={createEvent} className="space-y-3">
-              <input
-                value={newEventName}
-                onChange={(e) => setNewEventName(e.target.value)}
-                placeholder="New event name"
-                className="h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
-              />
-              <textarea
-                value={newEventDescription}
-                onChange={(e) => setNewEventDescription(e.target.value)}
-                placeholder="Description (optional)"
-                rows={2}
-                className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 text-sm"
-              />
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="text-sm text-pine">
-                  Number of days
-                  <select
-                    value={newEventDayCount}
-                    onChange={(e) => setNewEventDayCount(Number(e.target.value))}
-                    className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
-                  >
-                    {Array.from({ length: 14 }, (_, index) => (
-                      <option key={index + 1} value={index + 1}>
-                        {index + 1} day{index === 0 ? "" : "s"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+            </AdminField>
+            <AdminField label="Custom day names" hint="One per line (optional)">
               <textarea
                 value={newEventDayLabels}
                 onChange={(e) => setNewEventDayLabels(e.target.value)}
-                placeholder="Custom day names (optional, one per line)"
+                placeholder={"Thursday\nFriday\nSaturday\nSunday\nMonday"}
                 rows={3}
-                className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 font-mono text-sm"
+                className={`${textareaClassName} font-mono`}
               />
-              <button type="submit" className="h-11 rounded-xl border border-[color:var(--line)] px-4">
-                Add event
-              </button>
-            </form>
-          </section>
+            </AdminField>
+          </div>
+          <AdminButton type="submit" variant="primary" className="h-11 w-full">
+            Create event
+          </AdminButton>
+        </form>
+      </main>
+    );
+  }
 
-          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Add session</h2>
-            <form onSubmit={addSession} className="grid gap-3 md:grid-cols-2">
-              <select
-                value={sessionDayId}
-                onChange={(e) => setSessionDayId(e.target.value)}
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
+  const overviewContent = (
+    <>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Guests" value={data.guests.length} />
+        <StatCard label="Media files" value={data.media.length} />
+        <StatCard label="Sessions" value={data.sessions.length} />
+        <StatCard label="Days" value={data.days.length} />
+      </div>
+
+      <AdminPanel
+        title="Active event"
+        description={data.days.map((day) => day.label).join(" · ")}
+        action={
+          data.events.length > 1 ? (
+            <select
+              id="event-switch"
+              value={selectedEventId}
+              onChange={(e) => {
+                setSelectedEventId(e.target.value);
+                load(e.target.value);
+              }}
+              className={`${inputClassName} !w-auto min-w-[12rem]`}
+            >
+              {data.events.map((event) => (
+                <option key={event._id} value={event._id}>
+                  {event.name}
+                </option>
+              ))}
+            </select>
+          ) : null
+        }
+      >
+        <p className="text-sm text-pine/80">{eventDescriptionEdit || "No description yet."}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <AdminButton variant="primary" onClick={() => setActiveTab("event")}>
+            Edit event
+          </AdminButton>
+          <AdminButton onClick={() => setActiveTab("guests")}>
+            Manage guests
+          </AdminButton>
+          <AdminButton onClick={() => setActiveTab("media")}>
+            Upload media
+          </AdminButton>
+          <AdminButton
+            onClick={applyRetreatTemplate}
+            disabled={applyingTemplate || savingEvent}
+          >
+            {applyingTemplate ? "Applying…" : "Apply Koinonia template"}
+          </AdminButton>
+        </div>
+      </AdminPanel>
+
+      <AdminPanel title="Email status">
+        <div className="flex flex-wrap items-center gap-3">
+          <StatusBadge tone={data.emailConfigured ? "success" : "warning"}>
+            {data.emailConfigured ? "Gmail configured" : "Gmail not configured"}
+          </StatusBadge>
+          {!data.emailConfigured ? (
+            <AdminButton onClick={() => setActiveTab("email")}>Set up email</AdminButton>
+          ) : null}
+        </div>
+      </AdminPanel>
+    </>
+  );
+
+  const eventContent = (
+    <>
+      <AdminPanel
+        title="Event details"
+        description="Name and description guests see when they open their vault."
+        action={
+          <AdminButton
+            onClick={applyRetreatTemplate}
+            disabled={applyingTemplate || savingEvent}
+          >
+            {applyingTemplate ? "Applying…" : "Koinonia template"}
+          </AdminButton>
+        }
+      >
+        <div className="grid gap-4">
+          <AdminField label="Event name">
+            <input
+              value={eventNameEdit}
+              onChange={(e) => setEventNameEdit(e.target.value)}
+              className={inputClassName}
+            />
+          </AdminField>
+          <AdminField label="Guest-facing description">
+            <textarea
+              value={eventDescriptionEdit}
+              onChange={(e) => setEventDescriptionEdit(e.target.value)}
+              rows={3}
+              className={textareaClassName}
+            />
+          </AdminField>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <AdminField label="Starts on">
+              <input
+                type="date"
+                value={eventStartsOn}
+                onChange={(e) => setEventStartsOn(e.target.value)}
+                className={inputClassName}
+              />
+            </AdminField>
+            <AdminField label="Ends on">
+              <input
+                type="date"
+                value={eventEndsOn}
+                onChange={(e) => setEventEndsOn(e.target.value)}
+                className={inputClassName}
+              />
+            </AdminField>
+          </div>
+          <AdminButton
+            variant="primary"
+            onClick={() => saveEventSettingsAndNotify()}
+            disabled={savingEvent}
+            className="w-full sm:w-auto"
+          >
+            {savingEvent ? "Saving…" : "Save changes"}
+          </AdminButton>
+        </div>
+      </AdminPanel>
+
+      <AdminPanel
+        title="Retreat days"
+        description="Rename days to match your schedule."
+        action={
+          <AdminButton onClick={addDay}>Add day</AdminButton>
+        }
+      >
+        <ul className="space-y-2">
+          {data.days.map((day) => (
+            <li
+              key={day._id}
+              className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--line)] bg-mist/30 p-2"
+            >
+              <input
+                value={dayLabelEdits[day._id] ?? day.label}
+                onChange={(e) =>
+                  setDayLabelEdits((prev) => ({ ...prev, [day._id]: e.target.value }))
+                }
+                className={`${inputClassName} min-w-[10rem] flex-1`}
+              />
+              <AdminButton onClick={() => saveDayLabel(day._id)}>Save</AdminButton>
+              <AdminButton variant="danger" onClick={() => removeDay(day._id)}>
+                Remove
+              </AdminButton>
+            </li>
+          ))}
+        </ul>
+      </AdminPanel>
+
+      <AdminPanel title="Speaker sessions" description="Create sessions before linking YouTube videos.">
+        <form onSubmit={addSession} className="grid gap-3 sm:grid-cols-2">
+          <AdminField label="Day">
+            <select
+              value={sessionDayId}
+              onChange={(e) => setSessionDayId(e.target.value)}
+              className={inputClassName}
+            >
+              {data.days.map((day) => (
+                <option key={day._id} value={day._id}>
+                  {day.label}
+                </option>
+              ))}
+            </select>
+          </AdminField>
+          <AdminField label="Session title">
+            <input
+              value={sessionTitle}
+              onChange={(e) => setSessionTitle(e.target.value)}
+              placeholder="Morning worship"
+              required
+              className={inputClassName}
+            />
+          </AdminField>
+          <AdminField label="Speaker" className="sm:col-span-2">
+            <input
+              value={sessionSpeaker}
+              onChange={(e) => setSessionSpeaker(e.target.value)}
+              placeholder="Optional"
+              className={inputClassName}
+            />
+          </AdminField>
+          <AdminButton type="submit" variant="primary" className="sm:col-span-2 sm:w-auto">
+            Add session
+          </AdminButton>
+        </form>
+        {data.sessions.length ? (
+          <ul className="mt-4 space-y-2">
+            {data.sessions.map((session) => {
+              const day = data.days.find((item) => item._id === session.dayId);
+              return (
+                <li
+                  key={session._id}
+                  className="rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-pine"
+                >
+                  <span className="font-medium text-ink">{session.title}</span>
+                  <span className="text-pine/70">
+                    {" "}
+                    · {day?.label}
+                    {session.speaker ? ` · ${session.speaker}` : ""}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-pine/70">No sessions yet.</p>
+        )}
+      </AdminPanel>
+
+      <details className="rounded-2xl border border-[color:var(--line)] bg-white/60 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-pine">
+          Add another event (advanced)
+        </summary>
+        <form onSubmit={createEvent} className="mt-4 space-y-3">
+          <input
+            value={newEventName}
+            onChange={(e) => setNewEventName(e.target.value)}
+            placeholder="New event name"
+            className={inputClassName}
+          />
+          <textarea
+            value={newEventDescription}
+            onChange={(e) => setNewEventDescription(e.target.value)}
+            placeholder="Description (optional)"
+            rows={2}
+            className={textareaClassName}
+          />
+          <AdminButton type="submit">Add event</AdminButton>
+        </form>
+      </details>
+    </>
+  );
+
+  const guestsContent = (
+    <>
+      <AdminPanel
+        title="Import guests"
+        description="One per line: Name, email, vip or standard. Same email updates the existing guest."
+      >
+        <form onSubmit={importGuests} className="space-y-4">
+          <textarea
+            value={guestCsv}
+            onChange={(e) => setGuestCsv(e.target.value)}
+            rows={6}
+            className={`${textareaClassName} font-mono`}
+          />
+          <label className="flex items-center gap-2 text-sm text-pine">
+            <input
+              type="checkbox"
+              checked={sendEmailOnImport}
+              onChange={(e) => setSendEmailOnImport(e.target.checked)}
+              disabled={!data.emailConfigured}
+              className="h-4 w-4 rounded border-[color:var(--line)]"
+            />
+            Email ticket codes on import
+            {!data.emailConfigured ? (
+              <button type="button" className="underline" onClick={() => setActiveTab("email")}>
+                (set up Gmail first)
+              </button>
+            ) : null}
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <AdminButton type="submit" variant="primary">
+              Import guests
+            </AdminButton>
+            <AdminButton onClick={copyCodes}>Copy all codes</AdminButton>
+          </div>
+        </form>
+      </AdminPanel>
+
+      <AdminPanel title={`Guest list (${data.guests.length})`} description="Preview what each guest sees with View vault.">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[36rem] text-left text-sm">
+            <thead>
+              <tr className="border-b border-[color:var(--line)] text-xs uppercase tracking-wide text-pine/60">
+                <th className="py-3 pr-4">Guest</th>
+                <th className="py-3 pr-4">Tier</th>
+                <th className="py-3 pr-4">Ticket</th>
+                <th className="py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.guests.map((guest) => (
+                <tr key={guest._id} className="border-b border-[color:var(--line)] last:border-0">
+                  <td className="py-3 pr-4">
+                    <p className="font-medium text-ink">{guest.name}</p>
+                    {guest.email ? (
+                      <p className="text-xs text-pine/60">{guest.email}</p>
+                    ) : null}
+                  </td>
+                  <td className="py-3 pr-4">
+                    <TierBadge tier={guest.tier} />
+                  </td>
+                  <td className="py-3 pr-4 font-mono text-xs tracking-wider">{guest.ticketCode}</td>
+                  <td className="py-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      <AdminButton
+                        variant="primary"
+                        className="!h-8 !px-3 !text-xs"
+                        disabled={previewingGuestId === guest._id}
+                        onClick={() => previewGuest(guest._id)}
+                      >
+                        {previewingGuestId === guest._id ? "…" : "View vault"}
+                      </AdminButton>
+                      <AdminButton
+                        className="!h-8 !px-2 !text-xs"
+                        onClick={() => navigator.clipboard.writeText(guest.ticketCode)}
+                      >
+                        Copy
+                      </AdminButton>
+                      <AdminButton
+                        className="!h-8 !px-2 !text-xs"
+                        onClick={() => regenerateCode(guest._id)}
+                      >
+                        Regen
+                      </AdminButton>
+                      {guest.email && data.emailConfigured ? (
+                        <AdminButton
+                          className="!h-8 !px-2 !text-xs"
+                          onClick={() => emailTicket(guest._id)}
+                        >
+                          Email
+                        </AdminButton>
+                      ) : null}
+                      <AdminButton
+                        variant="danger"
+                        className="!h-8 !px-2 !text-xs"
+                        onClick={() => deleteGuest(guest._id)}
+                      >
+                        Delete
+                      </AdminButton>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!data.guests.length ? (
+            <p className="py-6 text-center text-sm text-pine/70">No guests imported yet.</p>
+          ) : null}
+        </div>
+      </AdminPanel>
+    </>
+  );
+
+  const mediaContent = (
+    <>
+      <AdminPanel
+        title="Media library"
+        description={`${data.media.length} file${data.media.length === 1 ? "" : "s"} for this event`}
+        action={
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                ["all", "All"],
+                ["group_photo", "Group"],
+                ["personal_photo", "VIP"],
+                ["session_video", "Sessions"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMediaFilter(value)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                  mediaFilter === value ? "bg-ink text-foam" : "bg-mist text-pine"
+                }`}
               >
-                {data.days.map((day) => (
-                  <option key={day._id} value={day._id}>
-                    {day.label}
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        <MediaGrid
+          items={filteredMediaItems}
+          emptyMessage="No media yet — upload photos below."
+          onRemove={deleteMedia}
+        />
+      </AdminPanel>
+
+      <AdminPanel
+        title="Upload photos"
+        description="Group gallery for everyone. VIP personal photos go to one guest only."
+      >
+        <form onSubmit={uploadMedia} className="grid gap-4">
+          <AdminField label="Photo type">
+            <select
+              value={uploadKind}
+              onChange={(e) => {
+                setUploadKind(e.target.value);
+                setFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }}
+              className={inputClassName}
+            >
+              <option value="group_photo">Group gallery photo</option>
+              <option value="personal_photo">VIP personal photo</option>
+              <option value="session_video">Session file (fallback)</option>
+            </select>
+          </AdminField>
+
+          {uploadKind === "personal_photo" ? (
+            <AdminField label="VIP guest">
+              <select
+                value={uploadGuestId}
+                onChange={(e) => setUploadGuestId(e.target.value)}
+                required
+                className={inputClassName}
+              >
+                <option value="">Select VIP guest</option>
+                {vipGuests.map((guest) => (
+                  <option key={guest._id} value={guest._id}>
+                    {guest.name}
                   </option>
                 ))}
               </select>
-              <input
-                value={sessionTitle}
-                onChange={(e) => setSessionTitle(e.target.value)}
-                placeholder="Session title"
-                required
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
-              />
-              <input
-                value={sessionSpeaker}
-                onChange={(e) => setSessionSpeaker(e.target.value)}
-                placeholder="Speaker"
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
-              />
-              <button type="submit" className="h-11 rounded-xl bg-ink text-foam">
-                Add session
-              </button>
-            </form>
-            <ul className="space-y-2 text-sm text-pine">
-              {data.sessions.map((session) => {
-                const day = data.days.find((item) => item._id === session.dayId);
-                return (
-                  <li key={session._id}>
-                    {day?.label}: {session.title}
-                    {session.speaker ? ` — ${session.speaker}` : ""}
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
+            </AdminField>
+          ) : null}
 
-          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Guests & preview</h2>
-            <p className="text-sm text-pine/75">
-              Use <strong>View vault</strong> to see exactly what that guest sees — group gallery,
-              personal photos (VIP), and sessions.
-            </p>
-            <p className="text-sm text-pine/75">
-              One per line: <code>Name, email, vip|standard</code>. Same email updates the existing
-              guest. Ticket codes are auto-generated.
-            </p>
-            <form onSubmit={importGuests} className="space-y-3">
-              <textarea
-                value={guestCsv}
-                onChange={(e) => setGuestCsv(e.target.value)}
-                rows={6}
-                className="w-full rounded-xl border border-[color:var(--line)] bg-white p-3 font-mono text-sm"
-              />
-              <label className="flex items-center gap-2 text-sm text-pine">
-                <input
-                  type="checkbox"
-                  checked={sendEmailOnImport}
-                  onChange={(e) => setSendEmailOnImport(e.target.checked)}
-                  disabled={!data.emailConfigured}
-                />
-                Email ticket codes on import
-                {!data.emailConfigured ? " (set GMAIL_USER + GMAIL_APP_PASSWORD)" : ""}
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <button type="submit" className="h-11 rounded-xl bg-ink px-4 text-foam">
-                  Generate ticket codes
-                </button>
-                <button
-                  type="button"
-                  onClick={copyCodes}
-                  className="h-11 rounded-xl border border-[color:var(--line)] px-4"
-                >
-                  Copy all codes
-                </button>
-              </div>
-            </form>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="text-pine/70">
-                    <th className="py-2">Name</th>
-                    <th>Tier</th>
-                    <th>Ticket code</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.guests.map((guest) => (
-                    <tr key={guest._id} className="border-t border-[color:var(--line)]">
-                      <td className="py-2">
-                        {guest.name}
-                        {guest.email ? (
-                          <span className="block text-xs text-pine/60">{guest.email}</span>
-                        ) : null}
-                      </td>
-                      <td>{guest.tier}</td>
-                      <td className="font-mono tracking-wider">{guest.ticketCode}</td>
-                      <td className="space-x-2 whitespace-nowrap py-2">
-                        <button
-                          type="button"
-                          className="rounded-full bg-ink px-3 py-1 text-xs text-foam"
-                          disabled={previewingGuestId === guest._id}
-                          onClick={() => previewGuest(guest._id)}
-                        >
-                          {previewingGuestId === guest._id ? "Opening…" : "View vault"}
-                        </button>
-                        <button
-                          type="button"
-                          className="underline"
-                          onClick={() => navigator.clipboard.writeText(guest.ticketCode)}
-                        >
-                          Copy
-                        </button>
-                        <button type="button" className="underline" onClick={() => regenerateCode(guest._id)}>
-                          Regen
-                        </button>
-                        {guest.email && data.emailConfigured ? (
-                          <button type="button" className="underline" onClick={() => emailTicket(guest._id)}>
-                            Email
-                          </button>
-                        ) : null}
-                        <button type="button" className="underline" onClick={() => deleteGuest(guest._id)}>
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">
-              Session video / playlist (YouTube)
-            </h2>
-            <p className="text-sm text-pine/75">
-              Upload videos to YouTube as <strong>Unlisted</strong>, then paste either a{" "}
-              <strong>single video</strong> link or a <strong>playlist</strong> link. Guests can
-              move through the whole playlist in the vault. Optional end date hides it after that
-              day (also unpublish on YouTube when done).
-            </p>
-            <form onSubmit={addYoutubeSession} className="grid gap-3 md:grid-cols-2">
+          {uploadKind === "session_video" ? (
+            <AdminField label="Session">
               <select
-                value={youtubeSessionId}
-                onChange={(e) => setYoutubeSessionId(e.target.value)}
+                value={uploadSessionId}
+                onChange={(e) => setUploadSessionId(e.target.value)}
                 required
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
+                className={inputClassName}
               >
                 <option value="">Select session</option>
                 {data.sessions.map((session) => (
@@ -1081,168 +1112,176 @@ EMAIL_FROM_NAME=Koinonia Retreat`}
                   </option>
                 ))}
               </select>
-              <input
-                value={youtubeTitle}
-                onChange={(e) => setYoutubeTitle(e.target.value)}
-                placeholder="Title (optional)"
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
-              />
-              <input
-                value={youtubeUrl}
-                onChange={(e) => setYoutubeUrl(e.target.value)}
-                placeholder="Video or playlist URL (youtu.be/…, watch?v=…, playlist?list=…)"
-                required
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
-              />
-              <label className="text-sm text-pine md:col-span-2">
-                Available until (optional)
-                <input
-                  type="date"
-                  value={youtubeUntil}
-                  onChange={(e) => setYoutubeUntil(e.target.value)}
-                  className="mt-1 h-11 w-full rounded-xl border border-[color:var(--line)] bg-white px-3"
-                />
-              </label>
-              <button type="submit" className="h-11 rounded-xl bg-ink text-foam md:col-span-2">
-                Link YouTube video or playlist
-              </button>
-            </form>
-          </section>
+            </AdminField>
+          ) : null}
 
-          <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Upload photos</h2>
-            <p className="text-sm text-pine/75">
-              <strong>Step 1:</strong> pick photo type · <strong>Step 2:</strong> tap the box below to
-              choose a file · <strong>Step 3:</strong> Upload. JPEG/PNG/WebP/GIF up to 4MB on Vercel.
-            </p>
-            <form onSubmit={uploadMedia} className="grid gap-3 md:grid-cols-2">
-              <select
-                value={uploadKind}
-                onChange={(e) => {
-                  setUploadKind(e.target.value);
-                  setFile(null);
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
-              >
-                <option value="group_photo">Group gallery photo</option>
-                <option value="personal_photo">VIP personal photo</option>
-                <option value="session_video">Session file (fallback)</option>
-              </select>
+          <input
+            ref={fileInputRef}
+            id="photo-upload-input"
+            type="file"
+            accept={
+              uploadKind === "session_video"
+                ? "image/*,video/mp4,video/webm,video/quicktime"
+                : "image/jpeg,image/png,image/webp,image/gif"
+            }
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            className="sr-only"
+          />
+          <label
+            htmlFor="photo-upload-input"
+            className="flex min-h-[9rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-pine/25 bg-mist/40 px-4 py-6 text-center transition hover:border-gold/50 hover:bg-mist/70"
+          >
+            <span className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-foam">
+              Choose photo
+            </span>
+            <span className="text-sm text-pine/80">
+              {file ? (
+                <>
+                  Selected: <strong className="text-ink">{file.name}</strong>
+                </>
+              ) : (
+                "JPEG, PNG, WebP, or GIF · under 4MB on Vercel"
+              )}
+            </span>
+          </label>
 
-              {uploadKind === "personal_photo" ? (
-                <select
-                  value={uploadGuestId}
-                  onChange={(e) => setUploadGuestId(e.target.value)}
-                  required
-                  className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
-                >
-                  <option value="">Select VIP guest</option>
-                  {vipGuests.map((guest) => (
-                    <option key={guest._id} value={guest._id}>
-                      {guest.name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
+          <AdminButton type="submit" variant="primary" disabled={!file} className="w-full sm:w-auto">
+            {file ? `Upload ${file.name}` : "Choose a file first"}
+          </AdminButton>
+        </form>
+      </AdminPanel>
 
-              {uploadKind === "session_video" ? (
-                <select
-                  value={uploadSessionId}
-                  onChange={(e) => setUploadSessionId(e.target.value)}
-                  required
-                  className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
-                >
-                  <option value="">Select session</option>
-                  {data.sessions.map((session) => (
-                    <option key={session._id} value={session._id}>
-                      {session.title}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-
-              <div className="md:col-span-2">
-                <input
-                  ref={fileInputRef}
-                  id="photo-upload-input"
-                  type="file"
-                  accept={
-                    uploadKind === "session_video"
-                      ? "image/*,video/mp4,video/webm,video/quicktime"
-                      : "image/jpeg,image/png,image/webp,image/gif"
-                  }
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  className="sr-only"
-                />
-                <label
-                  htmlFor="photo-upload-input"
-                  className="flex min-h-[8rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-pine/35 bg-mist/60 px-4 py-6 text-center transition hover:border-pine/60 hover:bg-mist"
-                >
-                  <span className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-foam">
-                    Choose photo from device
-                  </span>
-                  <span className="text-sm text-pine/80">
-                    {file ? (
-                      <>
-                        Selected: <strong className="text-ink">{file.name}</strong>
-                      </>
-                    ) : (
-                      "Tap here to browse — or drag a file onto this box"
-                    )}
-                  </span>
-                </label>
-              </div>
-              <button
-                type="submit"
-                disabled={!file}
-                className="h-12 rounded-xl bg-ink text-base font-medium text-foam md:col-span-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {file ? `Upload ${file.name}` : "Upload (choose a file first)"}
-              </button>
-            </form>
-          </section>
-
-          <section className="space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Media library</h2>
-                <p className="mt-1 text-sm text-pine/75">
-                  {data.media.length} file{data.media.length === 1 ? "" : "s"} uploaded for this event.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(
-                  [
-                    ["all", "All"],
-                    ["group_photo", "Group"],
-                    ["personal_photo", "VIP personal"],
-                    ["session_video", "Sessions"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setMediaFilter(value)}
-                    className={`rounded-full px-3 py-1 text-sm ${
-                      mediaFilter === value
-                        ? "bg-ink text-foam"
-                        : "border border-[color:var(--line)] text-pine"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <MediaGrid
-              items={filteredMediaItems}
-              emptyMessage="No media in this category yet."
-              onRemove={deleteMedia}
+      <AdminPanel
+        title="YouTube sessions"
+        description="Upload to YouTube as Unlisted, then paste a video or playlist link."
+      >
+        <form onSubmit={addYoutubeSession} className="grid gap-4 sm:grid-cols-2">
+          <AdminField label="Session">
+            <select
+              value={youtubeSessionId}
+              onChange={(e) => setYoutubeSessionId(e.target.value)}
+              required
+              className={inputClassName}
+            >
+              <option value="">Select session</option>
+              {data.sessions.map((session) => (
+                <option key={session._id} value={session._id}>
+                  {session.title}
+                </option>
+              ))}
+            </select>
+          </AdminField>
+          <AdminField label="Title (optional)">
+            <input
+              value={youtubeTitle}
+              onChange={(e) => setYoutubeTitle(e.target.value)}
+              className={inputClassName}
             />
-          </section>
-        </>
+          </AdminField>
+          <AdminField label="YouTube URL" className="sm:col-span-2">
+            <input
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              placeholder="youtu.be/… or playlist?list=…"
+              required
+              className={inputClassName}
+            />
+          </AdminField>
+          <AdminField label="Available until (optional)" className="sm:col-span-2">
+            <input
+              type="date"
+              value={youtubeUntil}
+              onChange={(e) => setYoutubeUntil(e.target.value)}
+              className={inputClassName}
+            />
+          </AdminField>
+          <AdminButton type="submit" variant="primary" className="sm:col-span-2 sm:w-auto">
+            Link YouTube
+          </AdminButton>
+        </form>
+      </AdminPanel>
+    </>
+  );
+
+  const emailContent = (
+    <AdminPanel
+      title="Ticket email (Gmail)"
+      description="Automatically email ticket codes when you import guests."
+      action={
+        <StatusBadge tone={data.emailConfigured ? "success" : "warning"}>
+          {data.emailConfigured ? "Configured" : "Not configured"}
+        </StatusBadge>
+      }
+    >
+      {data.emailConfigured ? (
+        <div className="space-y-4 text-sm text-pine/80">
+          <p>
+            Sending as <strong>{data.email?.fromName}</strong>
+            {data.email?.gmailUser ? ` (${data.email.gmailUser})` : ""} · Links use{" "}
+            <strong>{data.email?.appUrl}</strong>
+          </p>
+          <form onSubmit={sendTestEmail} className="flex flex-wrap items-end gap-3">
+            <AdminField label="Send test email to" className="min-w-[14rem] flex-1">
+              <input
+                type="email"
+                value={testEmailTo}
+                onChange={(e) => setTestEmailTo(e.target.value)}
+                placeholder="you@gmail.com"
+                className={inputClassName}
+              />
+            </AdminField>
+            <AdminButton type="submit" disabled={sendingTestEmail}>
+              {sendingTestEmail ? "Sending…" : "Send test"}
+            </AdminButton>
+          </form>
+        </div>
+      ) : (
+        <div className="space-y-4 text-sm text-pine/80">
+          <p>Add these in <strong>Vercel → Settings → Environment Variables</strong>, then redeploy:</p>
+          <pre className="overflow-x-auto rounded-xl bg-mist/80 p-4 font-mono text-xs text-ink">
+{`GMAIL_USER=vonettastevenson@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+APP_URL=https://event-vault-dusky.vercel.app
+EMAIL_FROM_NAME=Koinonia Retreat`}
+          </pre>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>Turn on <strong>2-Step Verification</strong> on the Google account.</li>
+            <li>
+              Create an App Password at{" "}
+              <a
+                href="https://myaccount.google.com/apppasswords"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                myaccount.google.com/apppasswords
+              </a>
+            </li>
+            <li>Redeploy Vercel, refresh this page, then send a test email.</li>
+          </ol>
+        </div>
       )}
-    </main>
+    </AdminPanel>
+  );
+
+  const tabContent = {
+    overview: overviewContent,
+    event: eventContent,
+    guests: guestsContent,
+    media: mediaContent,
+    email: emailContent,
+  }[activeTab];
+
+  return (
+    <AdminShell
+      eventName={data.event.name}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      message={message}
+      onDismissMessage={() => setMessage("")}
+      onSignOut={logout}
+    >
+      {tabContent}
+    </AdminShell>
   );
 }
