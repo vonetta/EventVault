@@ -61,9 +61,9 @@ type AdminData = {
 };
 
 const RETREAT_TEMPLATE = {
-  name: "Salt & Light Retreat 2026",
+  name: "Koinonia Retreat 2026",
   description:
-    "Your private vault for retreat photos and speaker sessions. VIP guests also receive personal photo galleries.",
+    "Your private vault for Koinonia Retreat photos and speaker sessions. VIP guests also receive personal photo galleries.",
   dayLabels: ["Friday", "Saturday", "Sunday"],
 };
 

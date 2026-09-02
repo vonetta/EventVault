@@ -82,7 +82,7 @@ In Vercel → **Settings → Environment Variables**, add:
 | `GMAIL_USER` | `you@gmail.com` |
 | `GMAIL_APP_PASSWORD` | 16-char Google App Password |
 | `APP_URL` | `https://your-app.vercel.app` |
-| `EMAIL_FROM_NAME` | `Salt & Light Retreat` |
+| `EMAIL_FROM_NAME` | `Koinonia Retreat` |
 
 1. Enable **2-Step Verification** on the Google account
 2. Create an [App Password](https://myaccount.google.com/apppasswords) (not your normal password)
