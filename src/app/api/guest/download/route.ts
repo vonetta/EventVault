@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import JSZip from "jszip";
+import { ZipArchive } from "archiver";
+import { PassThrough } from "node:stream";
+import { Readable } from "node:stream";
 import { connectDB } from "@/lib/db";
-import {
-  getGuestSession,
-  clearGuestSession,
-  unauthorized,
-  assertSameOrigin,
-} from "@/lib/auth";
-import { Event, Guest, Media, type MediaDoc } from "@/lib/models";
+import { unauthorized, assertSameOrigin } from "@/lib/auth";
+import { Event, Media, type MediaDoc } from "@/lib/models";
 import { readStoredObject } from "@/lib/storage";
+import { resolveGuestSession } from "@/lib/guest-session";
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+
+const MAX_ZIP_FILES = 300;
+const MAX_ZIP_BYTES = 150 * 1024 * 1024;
 
 function safeName(input: string, fallback: string) {
   const cleaned = input
@@ -41,23 +42,29 @@ function pathHasExt(name: string) {
   return i > 0 && i < name.length - 1;
 }
 
-async function addPhotoToZip(
-  zip: JSZip,
-  used: Set<string>,
-  folder: string,
-  media: MediaDoc,
-) {
-  if (media.storageProvider === "youtube") return false;
-  if (!media.storageKey) return false;
-  if (media.storageProvider !== "r2" && media.storageProvider !== "local") {
-    return false;
-  }
+type ZipEntry = {
+  path: string;
+  media: MediaDoc;
+};
 
-  const { body } = await readStoredObject(media.storageKey, media.storageProvider);
-  const filename = media.filename || media.title || `${String(media._id)}.jpg`;
-  const entry = uniqueZipPath(used, folder, filename);
-  zip.file(entry, body);
-  return true;
+async function collectZipEntries(
+  photos: MediaDoc[],
+  folder: string,
+  used: Set<string>,
+  entries: ZipEntry[],
+) {
+  for (const photo of photos) {
+    if (entries.length >= MAX_ZIP_FILES) break;
+    if (!isMediaAvailable(photo.availableUntil)) continue;
+    if (photo.storageProvider === "youtube" || !photo.storageKey) continue;
+    if (photo.storageProvider !== "r2" && photo.storageProvider !== "local") continue;
+
+    const filename = photo.filename || photo.title || `${String(photo._id)}.jpg`;
+    entries.push({
+      path: uniqueZipPath(used, folder, filename),
+      media: photo,
+    });
+  }
 }
 
 export async function GET(request: Request) {
@@ -67,11 +74,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const session = await getGuestSession();
-  if (!session) return unauthorized("Enter a valid ticket code");
+  const resolved = await resolveGuestSession();
+  if (!resolved) return unauthorized("Enter a valid ticket code");
 
-  const limited = rateLimit(
-    `guest-download:${session.guestId}:${clientIp(request)}`,
+  const { guest } = resolved;
+
+  const limited = await rateLimit(
+    `guest-download:${guest._id}:${clientIp(request)}`,
     5,
     10 * 60_000,
   );
@@ -86,12 +95,6 @@ export async function GET(request: Request) {
   }
 
   await connectDB();
-
-  const guest = await Guest.findById(session.guestId);
-  if (!guest) {
-    await clearGuestSession();
-    return unauthorized("Ticket no longer valid");
-  }
 
   const event = await Event.findById(guest.eventId);
   if (!event) {
@@ -112,46 +115,63 @@ export async function GET(request: Request) {
         }).sort({ createdAt: -1 })
       : [];
 
-  const zip = new JSZip();
   const used = new Set<string>();
-  let added = 0;
+  const entries: ZipEntry[] = [];
+  await collectZipEntries(groupPhotos, "group-gallery", used, entries);
+  await collectZipEntries(personalPhotos, "personal", used, entries);
 
-  for (const photo of groupPhotos) {
-    if (!isMediaAvailable(photo.availableUntil)) continue;
-    try {
-      if (await addPhotoToZip(zip, used, "group-gallery", photo)) added += 1;
-    } catch {
-      // Skip missing files; continue packing the rest
-    }
-  }
-
-  for (const photo of personalPhotos) {
-    if (!isMediaAvailable(photo.availableUntil)) continue;
-    try {
-      if (await addPhotoToZip(zip, used, "personal", photo)) added += 1;
-    } catch {
-      // Skip missing files; continue packing the rest
-    }
-  }
-
-  if (added === 0) {
+  if (!entries.length) {
     return NextResponse.json(
       { error: "No downloadable photos are available yet" },
       { status: 404 },
     );
   }
 
-  const bytes = await zip.generateAsync({
-    type: "uint8array",
-    compression: "DEFLATE",
-    compressionOptions: { level: 6 },
-  });
-
   const eventSlug = safeName(event.slug || event.name, "event").replace(/\s+/g, "-");
   const guestSlug = safeName(guest.name, "guest").replace(/\s+/g, "-");
   const filename = `${eventSlug}-${guestSlug}-photos.zip`;
 
-  return new NextResponse(Buffer.from(bytes), {
+  const pass = new PassThrough();
+  const archive = new ZipArchive({ zlib: { level: 6 } });
+  archive.pipe(pass);
+
+  void (async () => {
+    try {
+      let totalBytes = 0;
+      let added = 0;
+
+      for (const entry of entries) {
+        if (totalBytes >= MAX_ZIP_BYTES) break;
+
+        try {
+          const { body } = await readStoredObject(
+            entry.media.storageKey,
+            entry.media.storageProvider as "r2" | "local",
+          );
+          const buffer = Buffer.from(body);
+          totalBytes += buffer.length;
+          if (totalBytes > MAX_ZIP_BYTES) break;
+          archive.append(buffer, { name: entry.path });
+          added += 1;
+        } catch {
+          // Skip missing files
+        }
+      }
+
+      if (added === 0) {
+        archive.abort();
+        pass.destroy(new Error("No photos could be packed"));
+        return;
+      }
+
+      await archive.finalize();
+    } catch (error) {
+      archive.abort();
+      pass.destroy(error instanceof Error ? error : undefined);
+    }
+  })();
+
+  return new Response(Readable.toWeb(pass) as ReadableStream, {
     status: 200,
     headers: {
       "Content-Type": "application/zip",
@@ -161,3 +181,5 @@ export async function GET(request: Request) {
     },
   });
 }
+
+export const maxDuration = 60;

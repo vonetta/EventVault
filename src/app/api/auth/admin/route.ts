@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { setAdminSession, secureEqual, assertSameOrigin } from "@/lib/auth";
+import { assertProductionSecrets } from "@/lib/env";
 import { adminLoginSchema } from "@/lib/validate";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
   }
 
   const ip = clientIp(request);
-  const limited = rateLimit(`admin:${ip}`, 10, 60_000);
+  const limited = await rateLimit(`admin:${ip}`, 10, 60_000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -32,6 +33,13 @@ export async function POST(request: Request) {
 
     if (!secureEqual(body.password, expected)) {
       return NextResponse.json({ error: "Incorrect password" }, { status: 401 });
+    }
+
+    try {
+      assertProductionSecrets();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Server misconfigured";
+      return NextResponse.json({ error: message }, { status: 500 });
     }
 
     await setAdminSession();

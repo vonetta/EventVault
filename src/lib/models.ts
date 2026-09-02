@@ -41,8 +41,27 @@ const GuestSchema = new Schema(
     email: { type: String, default: "" },
     tier: { type: String, enum: ["vip", "standard"], required: true, default: "standard" },
     ticketCode: { type: String, required: true, unique: true, index: true },
+    sessionVersion: { type: Number, default: 0 },
   },
   { timestamps: true },
+);
+
+const RateLimitBucketSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true, index: true },
+    count: { type: Number, default: 0 },
+    resetAt: { type: Date, required: true },
+  },
+  { timestamps: false },
+);
+
+const AuditLogSchema = new Schema(
+  {
+    action: { type: String, required: true, index: true },
+    details: { type: Schema.Types.Mixed, default: {} },
+    ip: { type: String, default: "" },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } },
 );
 
 const MediaSchema = new Schema(
@@ -81,6 +100,10 @@ export type DayDoc = InferSchemaType<typeof DaySchema> & { _id: mongoose.Types.O
 export type SessionDoc = InferSchemaType<typeof SessionSchema> & { _id: mongoose.Types.ObjectId };
 export type GuestDoc = InferSchemaType<typeof GuestSchema> & { _id: mongoose.Types.ObjectId };
 export type MediaDoc = InferSchemaType<typeof MediaSchema> & { _id: mongoose.Types.ObjectId };
+export type RateLimitBucketDoc = InferSchemaType<typeof RateLimitBucketSchema> & {
+  _id: mongoose.Types.ObjectId;
+};
+export type AuditLogDoc = InferSchemaType<typeof AuditLogSchema> & { _id: mongoose.Types.ObjectId };
 
 export const Event: Model<EventDoc> =
   mongoose.models.Event || mongoose.model("Event", EventSchema);
@@ -92,3 +115,7 @@ export const Guest: Model<GuestDoc> =
   mongoose.models.Guest || mongoose.model("Guest", GuestSchema);
 export const Media: Model<MediaDoc> =
   mongoose.models.Media || mongoose.model("Media", MediaSchema);
+export const RateLimitBucket: Model<RateLimitBucketDoc> =
+  mongoose.models.RateLimitBucket || mongoose.model("RateLimitBucket", RateLimitBucketSchema);
+export const AuditLog: Model<AuditLogDoc> =
+  mongoose.models.AuditLog || mongoose.model("AuditLog", AuditLogSchema);

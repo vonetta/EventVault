@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
-import { clearGuestSession } from "@/lib/auth";
+import { assertSameOrigin, clearGuestSession } from "@/lib/auth";
 
-export async function POST() {
+export async function POST(request: Request) {
+  try {
+    assertSameOrigin(request);
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   await clearGuestSession();
   return NextResponse.json({ ok: true });
 }

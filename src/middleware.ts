@@ -1,12 +1,27 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { jwtVerify } from "jose";
 
-/** Soft gate: admin UI pages still rely on API auth; this nudges unauthenticated users. */
-export function middleware(request: NextRequest) {
+const ADMIN_COOKIE = "ev_admin";
+
+async function verifyAdminToken(token: string) {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret || secret.length < 32) return false;
+
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
+    return payload.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
+/** Soft gate: redirect unauthenticated or expired admin sessions. */
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
-    const token = request.cookies.get("ev_admin")?.value;
-    if (!token) {
+    const token = request.cookies.get(ADMIN_COOKIE)?.value;
+    if (!token || !(await verifyAdminToken(token))) {
       return NextResponse.redirect(new URL("/admin/login", request.url));
     }
   }

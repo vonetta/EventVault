@@ -90,6 +90,19 @@ In Vercel → **Settings → Environment Variables**, add:
 4. In **Admin → Ticket email**, send a test email to confirm delivery
 5. Import guests with **Email ticket codes on import** checked
 
+## Security (v2)
+
+- Guest sessions include a **session version** — regenerating a ticket code invalidates old logins
+- Rate limits stored in **MongoDB** (shared across Vercel instances)
+- Uploads validated with **magic-byte** sniffing (not just file extension)
+- Media deleted in admin also removed from **R2**
+- ZIP downloads **stream** with file/count caps (300 files / 150MB)
+- Security headers (CSP, HSTS, X-Frame-Options) on all routes
+- Admin audit log for imports, regen, deletes, and email actions
+- Health check: `GET /api/health`
+
+Production requires `SESSION_SECRET` (≥32 chars), `ADMIN_PASSWORD` (≥12 chars), and `APP_URL` set to your live domain.
+
 ## Stage 2 status
 
 - Ticket email via personal Gmail SMTP (import + per-guest send)

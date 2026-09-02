@@ -41,6 +41,7 @@ export type GuestSession = {
   eventId: string;
   tier: "vip" | "standard";
   name: string;
+  sv: number;
   adminPreview?: boolean;
 };
 
@@ -50,6 +51,7 @@ export async function setGuestSession(
 ) {
   const payload: GuestSession = {
     ...session,
+    sv: session.sv ?? 0,
     adminPreview: options?.adminPreview ?? session.adminPreview,
   };
   const token = await new SignJWT(payload)
@@ -125,19 +127,36 @@ export function unauthorized(message = "Unauthorized") {
   return NextResponse.json({ error: message }, { status: 401 });
 }
 
+function hostsMatch(requestHost: string, candidate: string) {
+  try {
+    return new URL(candidate).host === requestHost;
+  } catch {
+    return false;
+  }
+}
+
 /** Reject cross-site POSTs that still send cookies (defense in depth). */
 export function assertSameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (!origin) return;
   const host = request.headers.get("host");
   if (!host) return;
-  let originHost: string;
-  try {
-    originHost = new URL(origin).host;
-  } catch {
-    throw new Error("Invalid Origin");
+
+  const origin = request.headers.get("origin");
+  if (origin) {
+    if (!hostsMatch(host, origin)) {
+      throw new Error("Cross-origin request blocked");
+    }
+    return;
   }
-  if (originHost !== host) {
-    throw new Error("Cross-origin request blocked");
+
+  const method = request.method.toUpperCase();
+  if (method === "GET" || method === "HEAD") {
+    return;
   }
+
+  const referer = request.headers.get("referer");
+  if (referer && hostsMatch(host, referer)) {
+    return;
+  }
+
+  throw new Error("Cross-origin request blocked");
 }

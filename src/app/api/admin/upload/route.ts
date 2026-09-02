@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { isAdminAuthenticated, unauthorized, assertSameOrigin } from "@/lib/auth";
 import { Event, Guest, Media, Session } from "@/lib/models";
 import { storeFile } from "@/lib/storage";
+import { assertFileMatchesMime } from "@/lib/file-sniff";
 import {
   IMAGE_MIME,
   VIDEO_MIME,
@@ -48,8 +49,20 @@ export async function POST(request: Request) {
   const kind = kindRaw as MediaKind;
 
   const contentType = (file.type || "").toLowerCase();
-  const isImage = IMAGE_MIME.has(contentType);
-  const isVideo = VIDEO_MIME.has(contentType);
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  let verifiedMime: string;
+  try {
+    verifiedMime = assertFileMatchesMime(bytes, contentType);
+  } catch {
+    return NextResponse.json(
+      { error: "File content does not match a supported photo or video type" },
+      { status: 400 },
+    );
+  }
+
+  const isImage = IMAGE_MIME.has(verifiedMime);
+  const isVideo = VIDEO_MIME.has(verifiedMime);
 
   if (kind === "session_video") {
     if (!isVideo && !isImage) {
@@ -131,14 +144,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const stored = await storeFile(file, `events/${eventId.data}/${kind}`);
+    const stored = await storeFile(
+      new File([bytes], file.name, { type: verifiedMime }),
+      `events/${eventId.data}/${kind}`,
+    );
 
     const media = await Media.create({
       eventId: eventId.data,
       kind,
       title: title || file.name,
       filename: file.name,
-      contentType: contentType || "application/octet-stream",
+      contentType: verifiedMime || "application/octet-stream",
       size: file.size,
       storageKey: stored.storageKey,
       storageProvider: stored.storageProvider,

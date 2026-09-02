@@ -1,12 +1,14 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { createReadStream } from "fs";
+import { mkdir, readFile, unlink, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import type { Readable } from "stream";
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export type StoredObject = {
   storageKey: string;
@@ -95,15 +97,57 @@ export async function readStoredObject(
   return { body: bytes, contentType: result.ContentType };
 }
 
-/** Short-lived signed URL for R2 — only used server-side after authz. Prefer proxy. */
-export async function getSignedR2Url(storageKey: string) {
-  return getSignedUrl(
-    r2Client(),
+export async function openStoredObjectStream(
+  storageKey: string,
+  storageProvider: "r2" | "local",
+): Promise<{ stream: Readable; contentType?: string; contentLength?: number }> {
+  if (storageProvider === "local") {
+    const fullPath = resolveLocalPath(storageKey);
+    return { stream: createReadStream(fullPath) };
+  }
+
+  const result = await r2Client().send(
     new GetObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
       Key: storageKey,
     }),
-    { expiresIn: 60 * 10 },
+  );
+
+  const body = result.Body;
+  if (!body || typeof body.transformToWebStream !== "function") {
+    throw new Error("Empty object");
+  }
+
+  const { Readable: NodeReadable } = await import("stream");
+  return {
+    stream: NodeReadable.fromWeb(body.transformToWebStream() as import("stream/web").ReadableStream),
+    contentType: result.ContentType,
+    contentLength: result.ContentLength,
+  };
+}
+
+export async function deleteStoredObject(
+  storageKey: string,
+  storageProvider: "r2" | "local",
+) {
+  if (!storageKey) return;
+
+  if (storageProvider === "local") {
+    try {
+      await unlink(resolveLocalPath(storageKey));
+    } catch {
+      // File may already be gone
+    }
+    return;
+  }
+
+  if (!r2Configured()) return;
+
+  await r2Client().send(
+    new DeleteObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: storageKey,
+    }),
   );
 }
 

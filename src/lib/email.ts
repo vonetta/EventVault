@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { requireProductionAppUrl } from "@/lib/env";
 
 export type EmailConfigStatus = {
   configured: boolean;
@@ -36,6 +37,9 @@ function fromAddress() {
 }
 
 function vaultUrl() {
+  if (process.env.NODE_ENV === "production") {
+    return requireProductionAppUrl();
+  }
   return process.env.APP_URL?.trim() || "http://localhost:3000";
 }
 

@@ -1,24 +1,17 @@
+import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
-import {
-  getGuestSession,
-  isAdminAuthenticated,
-  clearGuestSession,
-} from "@/lib/auth";
+import { isAdminAuthenticated } from "@/lib/auth";
 import { Guest, Media, type MediaDoc } from "@/lib/models";
+import { resolveGuestSession } from "@/lib/guest-session";
 import { isMediaAvailable } from "@/lib/youtube";
 
 export async function canAccessMedia(media: MediaDoc): Promise<boolean> {
   if (await isAdminAuthenticated()) return true;
 
-  const session = await getGuestSession();
-  if (!session) return false;
+  const resolved = await resolveGuestSession();
+  if (!resolved) return false;
 
-  await connectDB();
-  const guest = await Guest.findById(session.guestId);
-  if (!guest) {
-    await clearGuestSession();
-    return false;
-  }
+  const { guest } = resolved;
 
   if (String(guest.eventId) !== String(media.eventId)) return false;
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Guest } from "@/lib/models";
 import { setGuestSession, assertSameOrigin } from "@/lib/auth";
+import { guestSessionPayload } from "@/lib/guest-session";
 import { normalizeTicketCode } from "@/lib/tickets";
 import { ticketLoginSchema } from "@/lib/validate";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
   }
 
   const ip = clientIp(request);
-  const limited = rateLimit(`ticket:${ip}`, 20, 60_000);
+  const limited = await rateLimit(`ticket:${ip}`, 20, 60_000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     const body = ticketLoginSchema.parse(await request.json());
     const ticketCode = normalizeTicketCode(body.ticketCode);
 
-    const codeLimited = rateLimit(`ticket-code:${ticketCode}`, 10, 60_000);
+    const codeLimited = await rateLimit(`ticket-code:${ticketCode}`, 10, 60_000);
     if (!codeLimited.ok) {
       return NextResponse.json(
         { error: "Too many attempts. Try again shortly." },
@@ -41,12 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid ticket code" }, { status: 401 });
     }
 
-    await setGuestSession({
-      guestId: String(guest._id),
-      eventId: String(guest.eventId),
-      tier: guest.tier,
-      name: guest.name,
-    });
+    await setGuestSession(guestSessionPayload(guest));
 
     return NextResponse.json({
       ok: true,

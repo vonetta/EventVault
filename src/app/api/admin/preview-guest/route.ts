@@ -7,6 +7,7 @@ import {
   unauthorized,
 } from "@/lib/auth";
 import { Guest } from "@/lib/models";
+import { guestSessionPayload } from "@/lib/guest-session";
 import { objectIdSchema } from "@/lib/validate";
 
 export async function POST(request: Request) {
@@ -33,13 +34,7 @@ export async function POST(request: Request) {
   }
 
   await setGuestSession(
-    {
-      guestId: String(guest._id),
-      eventId: String(guest.eventId),
-      tier: guest.tier,
-      name: guest.name,
-      adminPreview: true,
-    },
+    { ...guestSessionPayload(guest), adminPreview: true },
     { adminPreview: true },
   );
 

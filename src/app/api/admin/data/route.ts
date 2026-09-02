@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { isAdminAuthenticated, unauthorized, assertSameOrigin } from "@/lib/auth";
+import { logAdminAction } from "@/lib/audit";
 import { Day, Event, Guest, Media, Session } from "@/lib/models";
 import { createTicketCode } from "@/lib/tickets";
 import { adminActionSchema } from "@/lib/validate";
 import { emailConfigured, getEmailConfigStatus, sendTicketEmail } from "@/lib/email";
+import { deleteStoredObject } from "@/lib/storage";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import type { z } from "zod";
 
 type AdminAction = z.infer<typeof adminActionSchema>;
@@ -116,6 +119,24 @@ export async function POST(request: Request) {
   }
 
   await connectDB();
+
+  const sensitiveActions = new Set([
+    "delete_guest",
+    "delete_media",
+    "regenerate_code",
+    "import_guests",
+    "email_ticket",
+    "sync_days",
+  ]);
+  if (sensitiveActions.has(body.action)) {
+    const limited = await rateLimit(`admin-action:${clientIp(request)}`, 80, 60_000);
+    if (!limited.ok) {
+      return NextResponse.json(
+        { error: "Too many admin actions. Try again shortly." },
+        { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } },
+      );
+    }
+  }
 
   if (body.action === "bootstrap" || body.action === "create_event") {
     if (body.action === "bootstrap") {
@@ -256,6 +277,7 @@ export async function POST(request: Request) {
     }
 
     const days = await Day.find({ eventId: event._id }).sort({ sortOrder: 1 });
+    await logAdminAction(request, "sync_days", { eventId: body.eventId, dayCount: labels.length });
     return NextResponse.json({ days });
   }
 
@@ -329,6 +351,13 @@ export async function POST(request: Request) {
       }
     }
 
+    await logAdminAction(request, "import_guests", {
+      eventId: body.eventId,
+      created: created.length,
+      updated: updated.length,
+      emailed: emailed.length,
+    });
+
     return NextResponse.json({
       guests: [...created, ...updated],
       created: created.length,
@@ -344,8 +373,8 @@ export async function POST(request: Request) {
     if (!guest) {
       return NextResponse.json({ error: "Guest not found" }, { status: 404 });
     }
-    // Keep media files but unlink personal tags
     await Media.updateMany({ guestId: guest._id }, { $set: { guestId: null } });
+    await logAdminAction(request, "delete_guest", { guestId: body.guestId });
     return NextResponse.json({ ok: true });
   }
 
@@ -355,7 +384,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Guest not found" }, { status: 404 });
     }
     guest.ticketCode = await uniqueTicketCode();
+    guest.sessionVersion = (guest.sessionVersion ?? 0) + 1;
     await guest.save();
+    await logAdminAction(request, "regenerate_code", { guestId: body.guestId });
     return NextResponse.json({ guest });
   }
 
@@ -385,10 +416,24 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "delete_media") {
-    const media = await Media.findByIdAndDelete(body.mediaId);
+    const media = await Media.findById(body.mediaId);
     if (!media) {
       return NextResponse.json({ error: "Media not found" }, { status: 404 });
     }
+
+    if (
+      media.storageKey &&
+      (media.storageProvider === "r2" || media.storageProvider === "local")
+    ) {
+      try {
+        await deleteStoredObject(media.storageKey, media.storageProvider);
+      } catch {
+        // Continue removing DB record even if blob delete fails
+      }
+    }
+
+    await Media.deleteOne({ _id: media._id });
+    await logAdminAction(request, "delete_media", { mediaId: body.mediaId });
     return NextResponse.json({ ok: true });
   }
 

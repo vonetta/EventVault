@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import {
-  getGuestSession,
-  clearGuestSession,
   unauthorized,
   assertSameOrigin,
 } from "@/lib/auth";
-import { Day, Event, Guest, Media, Session } from "@/lib/models";
+import { Day, Event, Media, Session } from "@/lib/models";
+import { resolveGuestSession } from "@/lib/guest-session";
 import { mediaProxyUrl } from "@/lib/storage";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
@@ -79,16 +78,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const session = await getGuestSession();
-  if (!session) return unauthorized("Enter a valid ticket code");
+  const resolved = await resolveGuestSession();
+  if (!resolved) return unauthorized("Enter a valid ticket code");
+
+  const { session, guest } = resolved;
 
   await connectDB();
-
-  const guest = await Guest.findById(session.guestId);
-  if (!guest) {
-    await clearGuestSession();
-    return unauthorized("Ticket no longer valid");
-  }
 
   const event = await Event.findById(guest.eventId);
   if (!event) {

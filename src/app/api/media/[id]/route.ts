@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Media } from "@/lib/models";
 import { canAccessMedia } from "@/lib/media-access";
-import { readStoredObject } from "@/lib/storage";
+import { openStoredObjectStream } from "@/lib/storage";
+import { Readable } from "node:stream";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -34,18 +35,24 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   try {
-    const { body, contentType } = await readStoredObject(
+    const { stream, contentType, contentLength } = await openStoredObjectStream(
       media.storageKey,
       media.storageProvider,
     );
-    return new NextResponse(Buffer.from(body), {
+
+    const headers: Record<string, string> = {
+      "Content-Type": contentType || media.contentType || "application/octet-stream",
+      "Content-Disposition": `inline; filename="${encodeURIComponent(media.filename)}"`,
+      "Cache-Control": "private, max-age=300",
+      "X-Content-Type-Options": "nosniff",
+    };
+    if (contentLength) {
+      headers["Content-Length"] = String(contentLength);
+    }
+
+    return new Response(Readable.toWeb(stream) as ReadableStream, {
       status: 200,
-      headers: {
-        "Content-Type": contentType || media.contentType || "application/octet-stream",
-        "Content-Disposition": `inline; filename="${encodeURIComponent(media.filename)}"`,
-        "Cache-Control": "private, max-age=300",
-        "X-Content-Type-Options": "nosniff",
-      },
+      headers,
     });
   } catch {
     return NextResponse.json({ error: "Media unavailable" }, { status: 404 });
