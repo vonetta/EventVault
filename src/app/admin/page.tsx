@@ -14,6 +14,7 @@ import {
   inputClassName,
   textareaClassName,
 } from "@/components/admin/ui";
+import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
 import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
 type EventDoc = {
@@ -183,6 +184,7 @@ export default function AdminPage() {
   const [uploadGuestId, setUploadGuestId] = useState("");
   const [uploadSessionId, setUploadSessionId] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [resizingFile, setResizingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [youtubeTitle, setYoutubeTitle] = useState("");
@@ -582,6 +584,33 @@ export default function AdminPage() {
         : "YouTube session linked. Use Unlisted on YouTube.",
     );
     await load(data.event._id);
+  }
+
+  async function onUploadFileSelected(selected: File | null) {
+    if (!selected) {
+      setFile(null);
+      return;
+    }
+
+    if (uploadKind === "session_video" || !selected.type.startsWith("image/")) {
+      setFile(selected);
+      return;
+    }
+
+    setResizingFile(true);
+    try {
+      const resized = await resizeImageForUpload(selected);
+      setFile(resized);
+      if (resized.size < selected.size) {
+        setMessage(
+          `Resized ${selected.name} for upload (${formatFileSize(selected.size)} → ${formatFileSize(resized.size)}).`,
+        );
+      }
+    } catch {
+      setFile(selected);
+    } finally {
+      setResizingFile(false);
+    }
   }
 
   async function uploadMedia(event: FormEvent) {
@@ -1176,7 +1205,7 @@ export default function AdminPage() {
                 ? "image/*,video/mp4,video/webm,video/quicktime"
                 : "image/jpeg,image/png,image/webp,image/gif"
             }
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            onChange={(e) => void onUploadFileSelected(e.target.files?.[0] || null)}
             className="sr-only"
           />
           <label
@@ -1192,13 +1221,18 @@ export default function AdminPage() {
                   Selected: <strong className="text-ink">{file.name}</strong>
                 </>
               ) : (
-                "JPEG, PNG, WebP, or GIF · under 4MB on Vercel"
+                "JPEG, PNG, WebP, or GIF · large photos are auto-resized before upload"
               )}
             </span>
           </label>
 
-          <AdminButton type="submit" variant="primary" disabled={!file} className="w-full sm:w-auto">
-            {file ? `Upload ${file.name}` : "Choose a file first"}
+          <AdminButton
+            type="submit"
+            variant="primary"
+            disabled={!file || resizingFile}
+            className="w-full sm:w-auto"
+          >
+            {resizingFile ? "Preparing photo…" : file ? `Upload ${file.name}` : "Choose a file first"}
           </AdminButton>
         </form>
       </AdminPanel>

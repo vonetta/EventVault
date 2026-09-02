@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
 export type MediaItem = {
   id: string;
   title: string;
@@ -13,6 +17,40 @@ type MediaGridProps = {
   emptyMessage?: string;
   onRemove?: (id: string) => void;
 };
+
+function LazyImage({ src, alt, className }: { src: string; alt: string; className: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={className}>
+      {visible ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img className="h-full w-full object-cover" src={src} alt={alt} loading="lazy" decoding="async" />
+      ) : (
+        <div className="h-full w-full animate-pulse bg-mist" aria-hidden />
+      )}
+    </div>
+  );
+}
 
 export function MediaGrid({
   items,
@@ -42,6 +80,7 @@ export function MediaGrid({
                   className="h-full w-full"
                   src={item.embedUrl}
                   title={item.title}
+                  loading="lazy"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
@@ -74,10 +113,18 @@ export function MediaGrid({
           >
             <a href={item.url} target="_blank" rel="noreferrer" className="block">
               {item.contentType.startsWith("video/") ? (
-                <video className="aspect-video w-full bg-ink/90 object-cover" src={item.url} controls />
+                <video
+                  className="aspect-video w-full bg-ink/90 object-cover"
+                  src={item.url}
+                  controls
+                  preload="none"
+                />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="aspect-[4/3] w-full object-cover" src={item.url} alt={item.title} />
+                <LazyImage
+                  src={item.url}
+                  alt={item.title}
+                  className="aspect-[4/3] w-full"
+                />
               )}
               <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
             </a>

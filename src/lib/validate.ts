@@ -8,6 +8,15 @@ export const ticketLoginSchema = z.object({
   ticketCode: z.string().min(1).max(64),
 });
 
+export const resendTicketSchema = z.object({
+  email: z
+    .string()
+    .min(3)
+    .max(200)
+    .email()
+    .transform((value) => value.trim().toLowerCase()),
+});
+
 export const adminLoginSchema = z.object({
   password: z.string().min(1).max(200),
 });

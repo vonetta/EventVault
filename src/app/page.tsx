@@ -1,11 +1,24 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-export default function HomePage() {
+function HomePageContent() {
+  const searchParams = useSearchParams();
   const [ticketCode, setTicketCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showResend, setShowResend] = useState(false);
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendMessage, setResendMessage] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
+
+  useEffect(() => {
+    const fromQuery = searchParams.get("ticket");
+    if (fromQuery) {
+      setTicketCode(fromQuery.trim().toUpperCase());
+    }
+  }, [searchParams]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -29,6 +42,32 @@ export default function HomePage() {
       setError("Something went wrong. Try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onResend(event: FormEvent) {
+    event.preventDefault();
+    setResendLoading(true);
+    setResendMessage("");
+    setError("");
+
+    try {
+      const response = await fetch("/api/auth/resend-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resendEmail }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setResendMessage(data.error || "Could not send email");
+        return;
+      }
+      setResendMessage(data.message || "Check your inbox for your ticket code.");
+      setResendEmail("");
+    } catch {
+      setResendMessage("Something went wrong. Try again.");
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -88,7 +127,61 @@ export default function HomePage() {
           </button>
           {error ? <p className="text-sm text-red-700">{error}</p> : null}
         </form>
+
+        <div className="w-full max-w-md">
+          <button
+            type="button"
+            onClick={() => setShowResend((open) => !open)}
+            className="text-sm text-pine/80 underline-offset-4 hover:underline"
+          >
+            {showResend ? "Hide" : "Lost your ticket code?"}
+          </button>
+
+          {showResend ? (
+            <form onSubmit={onResend} className="mt-4 flex flex-col gap-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
+              <p className="text-sm text-pine/80">
+                Enter the email address on your guest list. We&apos;ll resend your ticket code.
+              </p>
+              <label className="text-sm font-medium text-pine" htmlFor="resend-email">
+                Email address
+              </label>
+              <input
+                id="resend-email"
+                type="email"
+                value={resendEmail}
+                onChange={(e) => setResendEmail(e.target.value)}
+                placeholder="you@email.com"
+                required
+                className="h-12 rounded-xl border border-[color:var(--line)] bg-white/80 px-4 text-ink outline-none ring-gold/40 focus:ring-2"
+              />
+              <button
+                type="submit"
+                disabled={resendLoading}
+                className="h-12 rounded-xl border border-pine/20 bg-mist/60 px-4 text-ink transition hover:bg-mist disabled:opacity-60"
+              >
+                {resendLoading ? "Sending…" : "Resend my code"}
+              </button>
+              {resendMessage ? (
+                <p className="text-sm text-pine">{resendMessage}</p>
+              ) : null}
+            </form>
+          ) : null}
+        </div>
       </section>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6">
+          <p className="text-pine/70">Loading…</p>
+        </main>
+      }
+    >
+      <HomePageContent />
+    </Suspense>
   );
 }

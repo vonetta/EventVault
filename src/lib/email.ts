@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
-import { requireProductionAppUrl } from "@/lib/env";
+import QRCode from "qrcode";
+import { vaultBaseUrl, vaultLoginUrl } from "@/lib/vault-url";
 
 export type EmailConfigStatus = {
   configured: boolean;
@@ -17,7 +18,7 @@ export function getEmailConfigStatus(): EmailConfigStatus {
   const gmailUser = process.env.GMAIL_USER?.trim() || null;
   return {
     configured: emailConfigured(),
-    appUrl: process.env.APP_URL?.trim() || "http://localhost:3000",
+    appUrl: vaultBaseUrl(),
     fromName: process.env.EMAIL_FROM_NAME?.trim() || "EventVault",
     gmailUser: gmailUser ? maskEmail(gmailUser) : null,
   };
@@ -36,19 +37,20 @@ function fromAddress() {
   return `${name} <${user}>`;
 }
 
-function vaultUrl() {
-  if (process.env.NODE_ENV === "production") {
-    return requireProductionAppUrl();
-  }
-  return process.env.APP_URL?.trim() || "http://localhost:3000";
+async function ticketQrDataUrl(loginUrl: string) {
+  return QRCode.toDataURL(loginUrl, {
+    width: 200,
+    margin: 1,
+    color: { dark: "#10241f", light: "#f4f1ea" },
+  });
 }
 
-function ticketEmailContent(opts: {
+async function ticketEmailContent(opts: {
   guestName: string;
   eventName: string;
   ticketCode: string;
   tier: "vip" | "standard";
-  vaultUrl: string;
+  loginUrl: string;
 }) {
   const access =
     opts.tier === "vip"
@@ -63,10 +65,12 @@ function ticketEmailContent(opts: {
     "",
     access,
     "",
-    `Open your vault: ${opts.vaultUrl}`,
+    `Open your vault: ${opts.loginUrl}`,
     "",
     "Keep this code private — it unlocks your media.",
   ].join("\n");
+
+  const qrDataUrl = await ticketQrDataUrl(opts.loginUrl);
 
   const html = `
     <div style="font-family: Georgia, 'Times New Roman', serif; color: #10241f; line-height: 1.6; max-width: 560px;">
@@ -75,11 +79,19 @@ function ticketEmailContent(opts: {
       <p style="margin: 0 0 8px; font-size: 14px; color: #3d5c52;">Your ticket code</p>
       <p style="margin: 0 0 20px; font-size: 28px; letter-spacing: 0.12em; font-family: ui-monospace, monospace;">${escapeHtml(opts.ticketCode)}</p>
       <p style="margin: 0 0 20px; color: #3d5c52;">${escapeHtml(access)}</p>
-      <p style="margin: 0 0 24px;">
-        <a href="${escapeHtml(opts.vaultUrl)}" style="display: inline-block; background: #10241f; color: #f4f1ea; text-decoration: none; padding: 12px 20px; border-radius: 999px; font-family: system-ui, sans-serif; font-size: 14px;">
-          Open my vault
-        </a>
-      </p>
+      <table cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 0 24px;">
+        <tr>
+          <td style="padding-right: 20px; vertical-align: top;">
+            <a href="${escapeHtml(opts.loginUrl)}" style="display: inline-block; background: #10241f; color: #f4f1ea; text-decoration: none; padding: 12px 20px; border-radius: 999px; font-family: system-ui, sans-serif; font-size: 14px;">
+              Open my vault
+            </a>
+          </td>
+          <td style="vertical-align: top;">
+            <img src="${qrDataUrl}" width="120" height="120" alt="Scan to open your vault" style="display: block; border-radius: 12px; border: 1px solid #d4cfc4;" />
+            <p style="margin: 6px 0 0; font-size: 11px; color: #3d5c52; text-align: center;">Scan to open</p>
+          </td>
+        </tr>
+      </table>
       <p style="margin: 0; font-size: 13px; color: #3d5c52;">Keep this code private — it unlocks your media.</p>
     </div>
   `.trim();
@@ -126,7 +138,7 @@ export async function sendTicketEmail(opts: {
   eventName: string;
   ticketCode: string;
   tier: "vip" | "standard";
-  vaultUrl?: string;
+  loginUrl?: string;
 }) {
   if (!emailConfigured()) {
     return {
@@ -135,13 +147,13 @@ export async function sendTicketEmail(opts: {
     };
   }
 
-  const url = opts.vaultUrl || vaultUrl();
-  const content = ticketEmailContent({
+  const loginUrl = opts.loginUrl || vaultLoginUrl(opts.ticketCode);
+  const content = await ticketEmailContent({
     guestName: opts.guestName,
     eventName: opts.eventName,
     ticketCode: opts.ticketCode,
     tier: opts.tier,
-    vaultUrl: url,
+    loginUrl,
   });
 
   try {
@@ -167,13 +179,13 @@ export async function sendTestEmail(to: string) {
     };
   }
 
-  const url = vaultUrl();
-  const content = ticketEmailContent({
+  const loginUrl = vaultLoginUrl("EV-TEST-CODE");
+  const content = await ticketEmailContent({
     guestName: "Test Guest",
     eventName: process.env.EMAIL_FROM_NAME?.trim() || "EventVault",
     ticketCode: "EV-TEST-CODE",
     tier: "vip",
-    vaultUrl: url,
+    loginUrl,
   });
 
   try {
