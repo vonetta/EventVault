@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type EventDoc = {
@@ -99,6 +99,7 @@ export default function AdminPage() {
   const [uploadGuestId, setUploadGuestId] = useState("");
   const [uploadSessionId, setUploadSessionId] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [youtubeTitle, setYoutubeTitle] = useState("");
   const [youtubeSessionId, setYoutubeSessionId] = useState("");
@@ -817,14 +818,18 @@ export default function AdminPage() {
           <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
             <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Upload photos</h2>
             <p className="text-sm text-pine/75">
-              Photos stay on EventVault/R2 (private). Prefer YouTube above for session videos to save
-              storage. Photos: JPEG/PNG/WebP/GIF up to 15MB. Personal photos are VIP-only in the vault.
+              <strong>Step 1:</strong> pick photo type · <strong>Step 2:</strong> tap the box below to
+              choose a file · <strong>Step 3:</strong> Upload. JPEG/PNG/WebP/GIF up to 15MB.
             </p>
             <form onSubmit={uploadMedia} className="grid gap-3 md:grid-cols-2">
               <select
                 value={uploadKind}
-                onChange={(e) => setUploadKind(e.target.value)}
-                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
+                onChange={(e) => {
+                  setUploadKind(e.target.value);
+                  setFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
               >
                 <option value="group_photo">Group gallery photo</option>
                 <option value="personal_photo">VIP personal photo</option>
@@ -836,7 +841,7 @@ export default function AdminPage() {
                   value={uploadGuestId}
                   onChange={(e) => setUploadGuestId(e.target.value)}
                   required
-                  className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
+                  className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
                 >
                   <option value="">Select VIP guest</option>
                   {vipGuests.map((guest) => (
@@ -852,7 +857,7 @@ export default function AdminPage() {
                   value={uploadSessionId}
                   onChange={(e) => setUploadSessionId(e.target.value)}
                   required
-                  className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
+                  className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3 md:col-span-2"
                 >
                   <option value="">Select session</option>
                   {data.sessions.map((session) => (
@@ -863,19 +868,43 @@ export default function AdminPage() {
                 </select>
               ) : null}
 
-              <input
-                type="file"
-                accept={
-                  uploadKind === "session_video"
-                    ? "image/*,video/mp4,video/webm,video/quicktime"
-                    : "image/jpeg,image/png,image/webp,image/gif"
-                }
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                required
-                className="md:col-span-2"
-              />
-              <button type="submit" className="h-11 rounded-xl bg-ink text-foam md:col-span-2">
-                Upload
+              <div className="md:col-span-2">
+                <input
+                  ref={fileInputRef}
+                  id="photo-upload-input"
+                  type="file"
+                  accept={
+                    uploadKind === "session_video"
+                      ? "image/*,video/mp4,video/webm,video/quicktime"
+                      : "image/jpeg,image/png,image/webp,image/gif"
+                  }
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  className="sr-only"
+                />
+                <label
+                  htmlFor="photo-upload-input"
+                  className="flex min-h-[8rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-pine/35 bg-mist/60 px-4 py-6 text-center transition hover:border-pine/60 hover:bg-mist"
+                >
+                  <span className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-foam">
+                    Choose photo from device
+                  </span>
+                  <span className="text-sm text-pine/80">
+                    {file ? (
+                      <>
+                        Selected: <strong className="text-ink">{file.name}</strong>
+                      </>
+                    ) : (
+                      "Tap here to browse — or drag a file onto this box"
+                    )}
+                  </span>
+                </label>
+              </div>
+              <button
+                type="submit"
+                disabled={!file}
+                className="h-12 rounded-xl bg-ink text-base font-medium text-foam md:col-span-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {file ? `Upload ${file.name}` : "Upload (choose a file first)"}
               </button>
             </form>
             <ul className="space-y-1 text-sm text-pine">
