@@ -73,6 +73,23 @@ npm run dev
 2. Add the same env vars (R2 required for production media)
 3. Do **not** rely on a public R2 bucket URL for guest photos
 
+### Gmail ticket emails (production)
+
+In Vercel → **Settings → Environment Variables**, add:
+
+| Variable | Example |
+| --- | --- |
+| `GMAIL_USER` | `you@gmail.com` |
+| `GMAIL_APP_PASSWORD` | 16-char Google App Password |
+| `APP_URL` | `https://your-app.vercel.app` |
+| `EMAIL_FROM_NAME` | `Salt & Light Retreat` |
+
+1. Enable **2-Step Verification** on the Google account
+2. Create an [App Password](https://myaccount.google.com/apppasswords) (not your normal password)
+3. Redeploy after saving env vars
+4. In **Admin → Ticket email**, send a test email to confirm delivery
+5. Import guests with **Email ticket codes on import** checked
+
 ## Stage 2 status
 
 - Ticket email via personal Gmail SMTP (import + per-guest send)

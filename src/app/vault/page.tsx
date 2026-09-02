@@ -146,6 +146,11 @@ export default function VaultPage() {
             {data.event.name}
             {isVip ? " · VIP access" : " · Group gallery access"}
           </p>
+          {data.event.description ? (
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine/75">
+              {data.event.description}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button

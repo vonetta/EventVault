@@ -52,6 +52,19 @@ type AdminData = {
   guests: GuestDoc[];
   media: MediaDoc[];
   emailConfigured?: boolean;
+  email?: {
+    configured: boolean;
+    appUrl: string;
+    fromName: string;
+    gmailUser: string | null;
+  };
+};
+
+const RETREAT_TEMPLATE = {
+  name: "Salt & Light Retreat 2026",
+  description:
+    "Your private vault for retreat photos and speaker sessions. VIP guests also receive personal photo galleries.",
+  dayLabels: ["Friday", "Saturday", "Sunday"],
 };
 
 function parseDayLabels(text: string, dayCount: number) {
@@ -166,6 +179,9 @@ export default function AdminPage() {
   const [savingEvent, setSavingEvent] = useState(false);
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all");
   const [previewingGuestId, setPreviewingGuestId] = useState("");
+  const [testEmailTo, setTestEmailTo] = useState("");
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
 
   const load = useCallback(
     async (eventId?: string) => {
@@ -188,7 +204,11 @@ export default function AdminPage() {
         guests: json.guests || [],
         media: json.media || [],
         emailConfigured: Boolean(json.emailConfigured),
+        email: json.email,
       });
+      if (json.emailConfigured) {
+        setSendEmailOnImport(true);
+      }
       if (json.event?._id) {
         setSelectedEventId(json.event._id);
         setEventNameEdit(json.event.name || "");
@@ -281,11 +301,11 @@ export default function AdminPage() {
 
   async function saveEventSettings(event?: FormEvent) {
     event?.preventDefault();
-    if (!data?.event) return;
+    if (!data?.event) return false;
     const name = eventNameEdit.trim();
     if (!name) {
       setMessage("Enter an event name before saving.");
-      return;
+      return false;
     }
     setSavingEvent(true);
     const json = await postAction({
@@ -297,9 +317,94 @@ export default function AdminPage() {
       endsOn: eventEndsOn.trim(),
     });
     setSavingEvent(false);
-    if (!json) return;
+    if (!json) return false;
+    return true;
+  }
+
+  async function applyRetreatTemplate() {
+    if (!data?.event) return;
+    if (
+      !confirm(
+        `Apply the retreat template?\n\n• ${RETREAT_TEMPLATE.name}\n• Day names: ${RETREAT_TEMPLATE.dayLabels.join(", ")}\n\nYou can still edit dates before saving.`,
+      )
+    ) {
+      return;
+    }
+
+    setApplyingTemplate(true);
+    setEventNameEdit(RETREAT_TEMPLATE.name);
+    setEventDescriptionEdit(RETREAT_TEMPLATE.description);
+
+    const nextDayLabels = { ...dayLabelEdits };
+    data.days.forEach((day, index) => {
+      const label = RETREAT_TEMPLATE.dayLabels[index];
+      if (label) nextDayLabels[day._id] = label;
+    });
+    setDayLabelEdits(nextDayLabels);
+
+    setSavingEvent(true);
+    const json = await postAction({
+      action: "update_event",
+      eventId: data.event._id,
+      name: RETREAT_TEMPLATE.name,
+      description: RETREAT_TEMPLATE.description,
+      startsOn: eventStartsOn.trim(),
+      endsOn: eventEndsOn.trim(),
+    });
+    setSavingEvent(false);
+    if (!json) {
+      setApplyingTemplate(false);
+      return;
+    }
+
+    for (const day of data.days) {
+      const label = nextDayLabels[day._id]?.trim();
+      if (!label || label === day.label) continue;
+      const json = await postAction({ action: "update_day", dayId: day._id, label });
+      if (!json) {
+        setApplyingTemplate(false);
+        return;
+      }
+    }
+
+    setApplyingTemplate(false);
+    setMessage("Retreat template applied. Adjust dates above if needed, then save again.");
+    await load(data.event._id);
+  }
+
+  async function saveEventSettingsAndNotify(event?: FormEvent) {
+    const saved = await saveEventSettings(event);
+    if (!saved || !data?.event) return;
     setMessage("Event settings saved.");
     await load(data.event._id);
+  }
+
+  async function sendTestEmail(event: FormEvent) {
+    event.preventDefault();
+    const to = testEmailTo.trim();
+    if (!to) {
+      setMessage("Enter an email address for the test.");
+      return;
+    }
+
+    setSendingTestEmail(true);
+    try {
+      const response = await fetch("/api/admin/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to }),
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        setMessage(json.error || "Test email failed");
+        return;
+      }
+      setMessage(`Test email sent to ${json.to}. Check your inbox (and spam).`);
+    } catch {
+      setMessage("Test email failed");
+    } finally {
+      setSendingTestEmail(false);
+    }
   }
 
   async function saveDayLabel(dayId: string) {
@@ -596,8 +701,94 @@ export default function AdminPage() {
             </p>
           </section>
 
+          <section className="space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Ticket email (Gmail)</h2>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  data.emailConfigured
+                    ? "bg-emerald-100 text-emerald-900"
+                    : "bg-amber-100 text-amber-900"
+                }`}
+              >
+                {data.emailConfigured ? "Configured" : "Not configured"}
+              </span>
+            </div>
+
+            {data.emailConfigured ? (
+              <div className="space-y-3 text-sm text-pine/80">
+                <p>
+                  Sending from <strong>{data.email?.fromName}</strong>
+                  {data.email?.gmailUser ? ` (${data.email.gmailUser})` : ""}. Links use{" "}
+                  <strong>{data.email?.appUrl}</strong>.
+                </p>
+                <p>
+                  Import guests with <strong>Email ticket codes on import</strong> checked, or tap
+                  <strong> Email</strong> on any guest row.
+                </p>
+                <form onSubmit={sendTestEmail} className="flex flex-wrap items-end gap-2">
+                  <label className="flex min-w-[14rem] flex-1 flex-col gap-1 text-sm text-pine">
+                    Send test email to
+                    <input
+                      type="email"
+                      value={testEmailTo}
+                      onChange={(e) => setTestEmailTo(e.target.value)}
+                      placeholder="you@gmail.com"
+                      className="h-11 rounded-xl border border-[color:var(--line)] bg-white px-3"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={sendingTestEmail}
+                    className="h-11 rounded-xl border border-[color:var(--line)] px-4"
+                  >
+                    {sendingTestEmail ? "Sending…" : "Send test"}
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div className="space-y-3 text-sm text-pine/80">
+                <p>Add these in <strong>Vercel → Project → Settings → Environment Variables</strong>, then redeploy:</p>
+                <pre className="overflow-x-auto rounded-xl bg-mist/80 p-3 font-mono text-xs text-ink">
+{`GMAIL_USER=vonettastevenson@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+APP_URL=https://event-vault-dusky.vercel.app
+EMAIL_FROM_NAME=Salt & Light Retreat`}
+                </pre>
+                <ol className="list-decimal space-y-2 pl-5">
+                  <li>
+                    Turn on <strong>2-Step Verification</strong> for the Google account.
+                  </li>
+                  <li>
+                    Create an App Password:{" "}
+                    <a
+                      href="https://myaccount.google.com/apppasswords"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      myaccount.google.com/apppasswords
+                    </a>
+                  </li>
+                  <li>Paste the 16-character password into <code>GMAIL_APP_PASSWORD</code> (spaces are fine).</li>
+                  <li>Redeploy Vercel, refresh this page, then send a test email.</li>
+                </ol>
+              </div>
+            )}
+          </section>
+
           <section className="relative z-10 space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
             <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Event settings</h2>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={applyRetreatTemplate}
+                disabled={applyingTemplate || savingEvent}
+                className="h-9 rounded-xl border border-[color:var(--line)] px-3 text-sm"
+              >
+                {applyingTemplate ? "Applying…" : "Apply Salt & Light retreat template"}
+              </button>
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               <input
                 value={eventNameEdit}
@@ -632,7 +823,7 @@ export default function AdminPage() {
               </label>
               <button
                 type="button"
-                onClick={() => saveEventSettings()}
+                onClick={() => saveEventSettingsAndNotify()}
                 disabled={savingEvent}
                 className="h-11 cursor-pointer rounded-xl bg-ink text-foam md:col-span-2 disabled:cursor-not-allowed disabled:opacity-60"
               >

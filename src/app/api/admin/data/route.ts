@@ -4,7 +4,7 @@ import { isAdminAuthenticated, unauthorized, assertSameOrigin } from "@/lib/auth
 import { Day, Event, Guest, Media, Session } from "@/lib/models";
 import { createTicketCode } from "@/lib/tickets";
 import { adminActionSchema } from "@/lib/validate";
-import { emailConfigured, sendTicketEmail } from "@/lib/email";
+import { emailConfigured, getEmailConfigStatus, sendTicketEmail } from "@/lib/email";
 import type { z } from "zod";
 
 type AdminAction = z.infer<typeof adminActionSchema>;
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
 
   const events = await Event.find().sort({ createdAt: -1 });
   if (!events.length) {
-    return NextResponse.json({ event: null, events: [], emailConfigured: emailConfigured() });
+    return NextResponse.json({ event: null, events: [], emailConfigured: emailConfigured(), email: getEmailConfigStatus() });
   }
 
   const event =
@@ -95,6 +95,7 @@ export async function GET(request: Request) {
       // storageKey intentionally omitted from admin list payloads
     })),
     emailConfigured: emailConfigured(),
+    email: getEmailConfigStatus(),
   });
 }
 
