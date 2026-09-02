@@ -41,10 +41,18 @@ export type GuestSession = {
   eventId: string;
   tier: "vip" | "standard";
   name: string;
+  adminPreview?: boolean;
 };
 
-export async function setGuestSession(session: GuestSession) {
-  const token = await new SignJWT(session)
+export async function setGuestSession(
+  session: GuestSession,
+  options?: { adminPreview?: boolean },
+) {
+  const payload: GuestSession = {
+    ...session,
+    adminPreview: options?.adminPreview ?? session.adminPreview,
+  };
+  const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("12h")

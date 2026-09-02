@@ -106,6 +106,8 @@ export async function GET(request: Request) {
     .filter((item) => isMediaAvailable(item.availableUntil))
     .map(mapFileMedia);
 
+  const preview = Boolean(session.adminPreview);
+
   if (tier === "standard") {
     return NextResponse.json({
       guest: { name: guest.name, tier },
@@ -113,6 +115,7 @@ export async function GET(request: Request) {
       groupGallery: group,
       personalPhotos: [],
       days: [],
+      preview,
     });
   }
 
@@ -173,5 +176,6 @@ export async function GET(request: Request) {
     groupGallery: group,
     personalPhotos: personal,
     days: dayPayload,
+    preview,
   });
 }

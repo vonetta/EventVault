@@ -2,16 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
-type MediaItem = {
-  id: string;
-  title: string;
-  contentType: string;
-  url: string;
-  provider?: "file" | "youtube";
-  embedUrl?: string;
-  availableUntil?: string | null;
-};
+import { MediaGrid, type MediaItem } from "@/components/MediaGrid";
 
 type SessionItem = {
   id: string;
@@ -35,68 +26,8 @@ type Library = {
   groupGallery: MediaItem[];
   personalPhotos: MediaItem[];
   days: DayItem[];
+  preview?: boolean;
 };
-
-function MediaGrid({ items }: { items: MediaItem[] }) {
-  if (!items.length) {
-    return <p className="text-sm text-pine/70">Nothing here yet.</p>;
-  }
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((item) => {
-        const isYouTube =
-          item.provider === "youtube" ||
-          item.contentType === "video/youtube" ||
-          item.contentType === "video/youtube-playlist";
-        if (isYouTube && item.embedUrl) {
-          return (
-            <div
-              key={item.id}
-              className="overflow-hidden rounded-2xl border border-[color:var(--line)] bg-white/70"
-            >
-              <div className="aspect-video w-full bg-ink/90">
-                <iframe
-                  className="h-full w-full"
-                  src={item.embedUrl}
-                  title={item.title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-              <div className="px-3 py-2 text-sm text-pine">
-                {item.title}
-                {item.availableUntil ? (
-                  <span className="mt-1 block text-xs text-pine/60">
-                    Available until {new Date(item.availableUntil).toLocaleDateString()}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          );
-        }
-
-        return (
-          <a
-            key={item.id}
-            href={item.url}
-            target="_blank"
-            rel="noreferrer"
-            className="overflow-hidden rounded-2xl border border-[color:var(--line)] bg-white/70 transition hover:-translate-y-0.5 hover:shadow-md"
-          >
-            {item.contentType.startsWith("video/") ? (
-              <video className="aspect-video w-full bg-ink/90 object-cover" src={item.url} controls />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img className="aspect-[4/3] w-full object-cover" src={item.url} alt={item.title} />
-            )}
-            <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
-          </a>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function VaultPage() {
   const router = useRouter();
@@ -123,6 +54,11 @@ export default function VaultPage() {
   }, [router]);
 
   async function logout() {
+    if (data?.preview) {
+      await fetch("/api/admin/exit-preview", { method: "POST" });
+      window.location.assign("/admin");
+      return;
+    }
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.assign("/");
   }
@@ -184,6 +120,22 @@ export default function VaultPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-8 md:px-10 md:py-12">
+      {data.preview ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/15 px-4 py-3 text-sm text-ink">
+          <span>
+            <strong>Admin preview</strong> — you are viewing the vault as{" "}
+            <strong>{data.guest.name}</strong> ({data.guest.tier.toUpperCase()})
+          </span>
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-full bg-ink px-4 py-2 text-foam"
+          >
+            Back to admin
+          </button>
+        </div>
+      ) : null}
+
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="font-[family-name:var(--font-fraunces)] text-3xl text-ink">EventVault</p>
@@ -211,7 +163,7 @@ export default function VaultPage() {
             onClick={logout}
             className="rounded-full border border-[color:var(--line)] bg-white/70 px-4 py-2 text-sm text-pine"
           >
-            Sign out
+            {data.preview ? "Back to admin" : "Sign out"}
           </button>
         </div>
       </header>

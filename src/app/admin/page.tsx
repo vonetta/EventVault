@@ -2,6 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MediaGrid, type MediaItem } from "@/components/MediaGrid";
+import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
 type EventDoc = {
   _id: string;
@@ -31,6 +33,7 @@ type MediaDoc = {
   kind: string;
   title?: string;
   filename: string;
+  contentType?: string;
   guestId?: string | null;
   sessionId?: string | null;
   storageProvider?: string;
@@ -38,6 +41,8 @@ type MediaDoc = {
   youtubePlaylistId?: string;
   availableUntil?: string | null;
 };
+
+type MediaFilter = "all" | "group_photo" | "personal_photo" | "session_video";
 
 type AdminData = {
   event: EventDoc | null;
@@ -74,6 +79,60 @@ function parseGuestLines(text: string) {
     .filter((row) => row.name);
 }
 
+function mediaKindLabel(kind: string) {
+  if (kind === "group_photo") return "Group gallery";
+  if (kind === "personal_photo") return "VIP personal";
+  if (kind === "session_video") return "Session";
+  return kind;
+}
+
+function mapAdminMediaItem(
+  item: MediaDoc,
+  guests: GuestDoc[],
+  sessions: SessionDoc[],
+): MediaItem | null {
+  const baseTitle = item.title || item.filename;
+
+  if (item.storageProvider === "youtube") {
+    if (item.youtubePlaylistId) {
+      const ref = { type: "playlist" as const, id: item.youtubePlaylistId };
+      return {
+        id: item._id,
+        title: baseTitle,
+        contentType: "video/youtube-playlist",
+        provider: "youtube",
+        url: youtubeOpenUrlForRef(ref),
+        embedUrl: youtubeEmbedForRef(ref),
+        availableUntil: item.availableUntil,
+      };
+    }
+    if (item.youtubeId) {
+      const ref = { type: "video" as const, id: item.youtubeId };
+      return {
+        id: item._id,
+        title: baseTitle,
+        contentType: "video/youtube",
+        provider: "youtube",
+        url: youtubeOpenUrlForRef(ref),
+        embedUrl: youtubeEmbedForRef(ref),
+        availableUntil: item.availableUntil,
+      };
+    }
+  }
+
+  const guest = guests.find((g) => g._id === item.guestId);
+  const session = sessions.find((s) => s._id === item.sessionId);
+  const suffix = guest ? ` · ${guest.name}` : session ? ` · ${session.title}` : "";
+
+  return {
+    id: item._id,
+    title: `${mediaKindLabel(item.kind)}${suffix ? suffix : ""}: ${baseTitle}`,
+    contentType: item.contentType || "image/jpeg",
+    url: `/api/media/${item._id}`,
+    availableUntil: item.availableUntil,
+  };
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [data, setData] = useState<AdminData | null>(null);
@@ -105,6 +164,8 @@ export default function AdminPage() {
   const [youtubeSessionId, setYoutubeSessionId] = useState("");
   const [youtubeUntil, setYoutubeUntil] = useState("");
   const [savingEvent, setSavingEvent] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all");
+  const [previewingGuestId, setPreviewingGuestId] = useState("");
 
   const load = useCallback(
     async (eventId?: string) => {
@@ -155,6 +216,15 @@ export default function AdminPage() {
     () => (data?.guests || []).filter((guest) => guest.tier === "vip"),
     [data],
   );
+
+  const filteredMediaItems = useMemo(() => {
+    if (!data) return [];
+    const items = data.media
+      .filter((item) => mediaFilter === "all" || item.kind === mediaFilter)
+      .map((item) => mapAdminMediaItem(item, data.guests, data.sessions))
+      .filter((item): item is MediaItem => Boolean(item));
+    return items;
+  }, [data, mediaFilter]);
 
   async function postAction(payload: Record<string, unknown>) {
     const response = await fetch("/api/admin/data", {
@@ -330,6 +400,27 @@ export default function AdminPage() {
     const json = await postAction({ action: "email_ticket", guestId });
     if (!json) return;
     setMessage("Ticket email sent.");
+  }
+
+  async function previewGuest(guestId: string) {
+    setPreviewingGuestId(guestId);
+    try {
+      const response = await fetch("/api/admin/preview-guest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guestId }),
+      });
+      const json = await response.json();
+      if (!response.ok) {
+        setMessage(json.error || "Could not open guest preview");
+        return;
+      }
+      window.location.assign("/vault");
+    } catch {
+      setMessage("Could not open guest preview");
+    } finally {
+      setPreviewingGuestId("");
+    }
   }
 
   async function deleteMedia(mediaId: string) {
@@ -680,7 +771,11 @@ export default function AdminPage() {
           </section>
 
           <section className="space-y-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Import guests</h2>
+            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Guests & preview</h2>
+            <p className="text-sm text-pine/75">
+              Use <strong>View vault</strong> to see exactly what that guest sees — group gallery,
+              personal photos (VIP), and sessions.
+            </p>
             <p className="text-sm text-pine/75">
               One per line: <code>Name, email, vip|standard</code>. Same email updates the existing
               guest. Ticket codes are auto-generated.
@@ -737,6 +832,14 @@ export default function AdminPage() {
                       <td>{guest.tier}</td>
                       <td className="font-mono tracking-wider">{guest.ticketCode}</td>
                       <td className="space-x-2 whitespace-nowrap py-2">
+                        <button
+                          type="button"
+                          className="rounded-full bg-ink px-3 py-1 text-xs text-foam"
+                          disabled={previewingGuestId === guest._id}
+                          onClick={() => previewGuest(guest._id)}
+                        >
+                          {previewingGuestId === guest._id ? "Opening…" : "View vault"}
+                        </button>
                         <button
                           type="button"
                           className="underline"
@@ -907,27 +1010,45 @@ export default function AdminPage() {
                 {file ? `Upload ${file.name}` : "Upload (choose a file first)"}
               </button>
             </form>
-            <ul className="space-y-1 text-sm text-pine">
-              {data.media.slice(0, 20).map((item) => (
-                <li key={item._id} className="flex flex-wrap items-center justify-between gap-2">
-                  <span>
-                    {item.kind}
-                    {item.storageProvider === "youtube"
-                      ? item.youtubePlaylistId
-                        ? " (YouTube playlist)"
-                        : " (YouTube)"
-                      : ""}
-                    : {item.title || item.filename}
-                    {item.availableUntil
-                      ? ` · until ${new Date(item.availableUntil).toLocaleDateString()}`
-                      : ""}
-                  </span>
-                  <button type="button" className="underline" onClick={() => deleteMedia(item._id)}>
-                    Remove
+          </section>
+
+          <section className="space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/70 p-5">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-[family-name:var(--font-fraunces)] text-2xl">Media library</h2>
+                <p className="mt-1 text-sm text-pine/75">
+                  {data.media.length} file{data.media.length === 1 ? "" : "s"} uploaded for this event.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["all", "All"],
+                    ["group_photo", "Group"],
+                    ["personal_photo", "VIP personal"],
+                    ["session_video", "Sessions"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setMediaFilter(value)}
+                    className={`rounded-full px-3 py-1 text-sm ${
+                      mediaFilter === value
+                        ? "bg-ink text-foam"
+                        : "border border-[color:var(--line)] text-pine"
+                    }`}
+                  >
+                    {label}
                   </button>
-                </li>
-              ))}
-            </ul>
+                ))}
+              </div>
+            </div>
+            <MediaGrid
+              items={filteredMediaItems}
+              emptyMessage="No media in this category yet."
+              onRemove={deleteMedia}
+            />
           </section>
         </>
       )}
