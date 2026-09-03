@@ -99,7 +99,7 @@ export default function VaultPage() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-16">
+      <main id="main" tabIndex={-1} className="mx-auto max-w-3xl px-6 py-16">
         <p className="text-red-700">{error}</p>
       </main>
     );
@@ -107,8 +107,8 @@ export default function VaultPage() {
 
   if (!data) {
     return (
-      <main className="mx-auto max-w-3xl px-6 py-16">
-        <p className="text-pine/70">Opening your vault…</p>
+      <main id="main" tabIndex={-1} className="mx-auto max-w-3xl px-6 py-16">
+        <p className="text-pine">Opening your vault…</p>
       </main>
     );
   }
@@ -119,7 +119,7 @@ export default function VaultPage() {
     data.personalPhotos.filter((item) => item.provider !== "youtube").length;
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-8 md:px-10 md:py-12">
+    <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-8 md:px-10 md:py-12">
       {data.preview ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border border-[color:var(--line)] bg-white px-4 py-3 text-sm text-ink">
           <span>
@@ -142,18 +142,19 @@ export default function VaultPage() {
           <h1 className="mt-3 font-[family-name:var(--font-fraunces)] text-4xl text-ink">
             Welcome, {data.guest.name}
           </h1>
-          <p className="mt-2 text-pine/80">
+          <p className="mt-2 text-pine">
             {data.event.name}
             {isVip ? " · VIP access" : " · Group gallery access"}
           </p>
           {data.event.description ? (
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine/75">
+            <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine">
               {data.event.description}
             </p>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
             onClick={downloadAll}
             disabled={downloading || photoCount === 0}
             className="rounded-full bg-ink px-4 py-2 text-sm text-foam disabled:cursor-not-allowed disabled:opacity-50"
@@ -165,6 +166,7 @@ export default function VaultPage() {
                 : "Download group gallery"}
           </button>
           <button
+            type="button"
             onClick={logout}
             className="rounded-full border border-[color:var(--line)] bg-white/70 px-4 py-2 text-sm text-pine"
           >
@@ -174,15 +176,17 @@ export default function VaultPage() {
       </header>
 
       {downloadMessage ? (
-        <p className="text-sm text-pine/80">{downloadMessage}</p>
+        <p role="status" aria-live="polite" className="text-sm text-pine">
+          {downloadMessage}
+        </p>
       ) : null}
 
       <details className="rounded-2xl border border-[color:var(--line)] bg-white/60 p-4">
         <summary className="cursor-pointer text-sm font-medium text-pine">My profile</summary>
-        <div className="mt-3 grid gap-2 text-sm text-pine/80">
+        <div className="mt-3 grid gap-2 text-sm text-pine">
           <p><strong className="text-ink">Name:</strong> {data.guest.name}</p>
           <p><strong className="text-ink">Tier:</strong> {data.guest.tier === "vip" ? "VIP" : "Standard"}</p>
-          <p className="text-xs text-pine/60">Contact the event organizer to update your details.</p>
+          <p className="text-xs text-pine">Contact the event organizer to update your details.</p>
         </div>
       </details>
 
@@ -214,11 +218,11 @@ export default function VaultPage() {
                       className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4"
                     >
                       <h4 className="text-lg text-ink">{session.title}</h4>
-                      <p className="text-sm text-pine/75">
+                      <p className="text-sm text-pine">
                         {[session.speaker, session.startsAt].filter(Boolean).join(" · ")}
                       </p>
                       {session.description ? (
-                        <p className="mt-2 text-sm text-pine/80">{session.description}</p>
+                        <p className="mt-2 text-sm text-pine">{session.description}</p>
                       ) : null}
                       <div className="mt-4">
                         <MediaGrid items={session.videos} />
@@ -226,7 +230,7 @@ export default function VaultPage() {
                     </article>
                   ))}
                   {!day.sessions.length ? (
-                    <p className="text-sm text-pine/70">Sessions coming soon.</p>
+                    <p className="text-sm text-pine">Sessions coming soon.</p>
                   ) : null}
                 </div>
               </div>
@@ -234,7 +238,7 @@ export default function VaultPage() {
           </section>
         </>
       ) : (
-        <section className="rounded-2xl border border-[color:var(--line)] bg-white/60 p-5 text-pine/80">
+        <section className="rounded-2xl border border-[color:var(--line)] bg-white/60 p-5 text-pine">
           Personal photos and full speaker sessions are included with VIP tickets.
         </section>
       )}

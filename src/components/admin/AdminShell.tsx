@@ -57,9 +57,9 @@ export function AdminShell({
                 href="/"
                 target="_blank"
                 rel="noreferrer"
-                className="hidden rounded-lg px-3 py-2 text-sm text-pine transition hover:bg-white hover:text-ink sm:inline-flex"
+                className="rounded-lg px-3 py-2 text-sm text-pine transition hover:bg-white hover:text-ink"
               >
-                Guest site
+                Guest site <span className="sr-only">(opens in a new tab)</span>
               </a>
               <button
                 type="button"
@@ -77,6 +77,7 @@ export function AdminShell({
                 key={tab.id}
                 type="button"
                 onClick={() => onTabChange(tab.id)}
+                aria-current={activeTab === tab.id ? "page" : undefined}
                 className={`shrink-0 border-b-2 px-3 py-2.5 text-sm transition ${
                   activeTab === tab.id
                     ? "border-ink font-medium text-ink"
@@ -92,14 +93,17 @@ export function AdminShell({
 
       {message ? (
         <div className="mx-auto w-full max-w-5xl px-5 pt-5 md:px-8">
-          <div className="flex items-start justify-between gap-3 border border-[color:var(--line)] bg-white px-4 py-3 text-sm text-ink">
+          <div
+            role="status"
+            className="flex items-start justify-between gap-3 border border-[color:var(--line)] bg-white px-4 py-3 text-sm text-ink"
+          >
             <p>{message}</p>
             {onDismissMessage ? (
               <button
                 type="button"
                 onClick={onDismissMessage}
                 className="shrink-0 text-pine hover:text-ink"
-                aria-label="Dismiss"
+                aria-label="Dismiss message"
               >
                 ✕
               </button>
@@ -108,7 +112,7 @@ export function AdminShell({
         </div>
       ) : null}
 
-      <main className="mx-auto w-full max-w-5xl px-5 py-8 md:px-8">
+      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl px-5 py-8 md:px-8">
         <div className="flex flex-col gap-10">{children}</div>
       </main>
     </div>

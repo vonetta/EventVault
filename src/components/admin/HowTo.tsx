@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 export function HowTo({
   title,
@@ -12,6 +12,7 @@ export function HowTo({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const panelId = useId();
 
   return (
     <div className="border-b border-[color:var(--line)] pb-6">
@@ -20,11 +21,16 @@ export function HowTo({
         onClick={() => setOpen((value) => !value)}
         className="flex w-full items-center justify-between gap-3 text-left"
         aria-expanded={open}
+        aria-controls={panelId}
       >
         <span className="text-sm text-pine">{title}</span>
-        <span className="text-xs text-pine/60">{open ? "Hide" : "Show"}</span>
+        <span className="text-xs text-pine">{open ? "Hide" : "Show"}</span>
       </button>
-      {open ? <div className="mt-3 space-y-2 text-sm leading-relaxed text-pine">{children}</div> : null}
+      {open ? (
+        <div id={panelId} className="mt-3 space-y-2 text-sm leading-relaxed text-pine">
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

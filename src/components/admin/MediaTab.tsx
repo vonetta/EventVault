@@ -187,7 +187,7 @@ export function MediaTab({
         description={`${data.media.length} file${data.media.length === 1 ? "" : "s"} for this event`}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter media">
               {(
                 [
                   ["all", "All"],
@@ -200,6 +200,7 @@ export function MediaTab({
                   key={value}
                   type="button"
                   onClick={() => { setMediaFilter(value); setSelectedMediaIds(new Set()); }}
+                  aria-pressed={mediaFilter === value}
                   className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                     mediaFilter === value ? "bg-ink text-foam" : "bg-mist text-pine"
                   }`}
@@ -330,7 +331,7 @@ export function MediaTab({
             className="flex min-h-[9rem] cursor-pointer flex-col items-center justify-center gap-2 border-2 border-dashed border-[color:var(--line)] bg-white px-4 py-6 text-center transition hover:border-ink/30"
           >
             <span className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-foam">Choose photo</span>
-            <span className="text-sm text-pine/80">
+            <span className="text-sm text-pine">
               {file ? (
                 <>Selected: <strong className="text-ink">{file.name}</strong></>
               ) : (

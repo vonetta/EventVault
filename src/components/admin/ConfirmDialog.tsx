@@ -1,5 +1,8 @@
 "use client";
 
+import { useId } from "react";
+import { useDialog } from "@/lib/use-dialog";
+
 type ConfirmDialogProps = {
   open: boolean;
   title: string;
@@ -19,13 +22,28 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useDialog(open, onCancel);
+  const titleId = useId();
+  const descId = useId();
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-sm rounded-2xl border border-[color:var(--line)] bg-foam p-6 shadow-xl">
-        <h3 className="font-[family-name:var(--font-fraunces)] text-lg text-ink">{title}</h3>
-        <p className="mt-2 text-sm text-pine/80">{message}</p>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={descId}
+        className="mx-4 w-full max-w-sm rounded-2xl border border-[color:var(--line)] bg-foam p-6 shadow-xl"
+      >
+        <h3 id={titleId} className="font-[family-name:var(--font-fraunces)] text-lg text-ink">
+          {title}
+        </h3>
+        <p id={descId} className="mt-2 text-sm text-pine">
+          {message}
+        </p>
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"

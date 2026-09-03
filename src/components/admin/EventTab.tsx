@@ -366,7 +366,7 @@ export function EventTab({
                 <li key={session._id} className="flex items-center justify-between gap-3 rounded-2xl px-1 py-3">
                   <div className="min-w-0">
                     <p className="font-medium text-ink">{session.title}</p>
-                    <p className="mt-0.5 text-sm text-pine/65">
+                    <p className="mt-0.5 text-sm text-pine">
                       {day?.label}
                       {day?.date ? ` · ${formatScheduleDate(day.date)}` : ""}
                       {session.speaker ? ` · ${session.speaker}` : ""}
@@ -404,15 +404,19 @@ export function EventTab({
             })}
           </ul>
         ) : (
-          <p className="mt-4 text-sm text-pine/70">No sessions yet.</p>
+          <p className="mt-4 text-sm text-pine">No sessions yet.</p>
         )}
       </AdminPanel>
 
       <details className="border-b border-[color:var(--line)] pb-6">
         <summary className="cursor-pointer text-sm text-pine">Add another event</summary>
         <form onSubmit={createEvent} className="mt-4 space-y-3">
-          <input value={newEventName} onChange={(e) => setNewEventName(e.target.value)} placeholder="New event name" className={inputClassName} />
-          <textarea value={newEventDescription} onChange={(e) => setNewEventDescription(e.target.value)} placeholder="Description (optional)" rows={2} className={textareaClassName} />
+          <AdminField label="Event name">
+            <input value={newEventName} onChange={(e) => setNewEventName(e.target.value)} placeholder="New event name" className={inputClassName} />
+          </AdminField>
+          <AdminField label="Description">
+            <textarea value={newEventDescription} onChange={(e) => setNewEventDescription(e.target.value)} placeholder="Description (optional)" rows={2} className={textareaClassName} />
+          </AdminField>
           <AdminButton type="submit">Add event</AdminButton>
         </form>
       </details>

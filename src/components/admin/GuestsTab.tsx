@@ -187,6 +187,7 @@ John Smith, john@email.com, standard`}
             value={guestCsv}
             onChange={(e) => setGuestCsv(e.target.value)}
             rows={6}
+            aria-label="Guest list, one person per line: name, email, vip or standard"
             className={`${textareaClassName} font-mono`}
           />
           <label className="flex items-center gap-2 text-sm text-pine">
@@ -218,7 +219,7 @@ John Smith, john@email.com, standard`}
         description="Preview what each guest sees with View vault."
         action={
           data.guests.length > 5 ? (
-            <AdminField label="" className="min-w-[14rem]">
+            <AdminField label="Search guests" className="min-w-[14rem]">
               <input
                 value={guestSearch}
                 onChange={(e) => setGuestSearch(e.target.value)}
@@ -231,12 +232,13 @@ John Smith, john@email.com, standard`}
       >
         <div className="overflow-x-auto">
           <table className="w-full min-w-[36rem] text-left text-sm">
+            <caption className="sr-only">Guest list</caption>
             <thead>
-              <tr className="border-b border-[color:var(--line)] text-xs uppercase tracking-wide text-pine/60">
-                <th className="py-3 pr-4">Guest</th>
-                <th className="py-3 pr-4">Tier</th>
-                <th className="py-3 pr-4">Ticket</th>
-                <th className="py-3">Actions</th>
+              <tr className="border-b border-[color:var(--line)] text-xs uppercase tracking-wide text-pine">
+                <th scope="col" className="py-3 pr-4">Guest</th>
+                <th scope="col" className="py-3 pr-4">Tier</th>
+                <th scope="col" className="py-3 pr-4">Ticket</th>
+                <th scope="col" className="py-3">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -246,7 +248,7 @@ John Smith, john@email.com, standard`}
                   <tr key={guest._id} className="border-b border-[color:var(--line)] last:border-0">
                     <td className="py-3 pr-4">
                       <p className="font-medium text-ink">{guest.name}</p>
-                      {guest.email ? <p className="text-xs text-pine/60">{guest.email}</p> : null}
+                      {guest.email ? <p className="text-xs text-pine">{guest.email}</p> : null}
                     </td>
                     <td className="py-3 pr-4">
                       <TierBadge tier={guest.tier} />
@@ -259,12 +261,14 @@ John Smith, john@email.com, standard`}
                           className="!h-8 !px-3 !text-xs"
                           disabled={previewingGuestId === guest._id}
                           onClick={() => previewGuest(guest._id)}
+                          aria-label={`View vault as ${guest.name}`}
                         >
-                          {previewingGuestId === guest._id ? "…" : "View vault"}
+                          {previewingGuestId === guest._id ? "Opening…" : "View vault"}
                         </AdminButton>
                         <AdminButton
                           className="!h-8 !px-2 !text-xs"
                           onClick={() => navigator.clipboard.writeText(guest.ticketCode)}
+                          aria-label={`Copy ticket code for ${guest.name}`}
                         >
                           Copy
                         </AdminButton>
@@ -272,16 +276,18 @@ John Smith, john@email.com, standard`}
                           className="!h-8 !px-2 !text-xs"
                           disabled={isLoading("regen")}
                           onClick={() => regenerateCode(guest._id)}
+                          aria-label={`Regenerate ticket code for ${guest.name}`}
                         >
-                          {isLoading("regen") ? "…" : "Regen"}
+                          {isLoading("regen") ? "Working…" : "Regen"}
                         </AdminButton>
                         {guest.email && data.emailConfigured ? (
                           <AdminButton
                             className="!h-8 !px-2 !text-xs"
                             disabled={isLoading("email")}
                             onClick={() => emailTicket(guest._id)}
+                            aria-label={`Email ticket code to ${guest.name}`}
                           >
-                            {isLoading("email") ? "…" : "Email"}
+                            {isLoading("email") ? "Sending…" : "Email"}
                           </AdminButton>
                         ) : null}
                         <AdminButton
@@ -289,8 +295,9 @@ John Smith, john@email.com, standard`}
                           className="!h-8 !px-2 !text-xs"
                           disabled={isLoading("delete")}
                           onClick={() => deleteGuest(guest._id)}
+                          aria-label={`Delete ${guest.name}`}
                         >
-                          {isLoading("delete") ? "…" : "Delete"}
+                          {isLoading("delete") ? "Deleting…" : "Delete"}
                         </AdminButton>
                       </div>
                     </td>
@@ -300,7 +307,7 @@ John Smith, john@email.com, standard`}
             </tbody>
           </table>
           {!filteredGuests.length ? (
-            <p className="py-6 text-center text-sm text-pine/70">
+            <p className="py-6 text-center text-sm text-pine">
               {guestSearch ? "No guests match your search." : "No guests imported yet."}
             </p>
           ) : null}

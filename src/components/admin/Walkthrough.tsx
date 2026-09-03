@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AdminTab } from "@/components/admin/AdminShell";
 import { AdminButton } from "@/components/admin/ui";
+import { useDialog } from "@/lib/use-dialog";
 
 const SLIDES: {
   title: string;
@@ -99,6 +100,7 @@ export function Walkthrough({
   onGoToTab: (tab: AdminTab) => void;
 }) {
   const [index, setIndex] = useState(0);
+  const dialogRef = useDialog(open, onClose);
   if (!open) return null;
 
   const slide = SLIDES[index];
@@ -107,6 +109,7 @@ export function Walkthrough({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="walkthrough-title"

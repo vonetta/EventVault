@@ -72,7 +72,7 @@ function HomePageContent() {
   }
 
   return (
-    <main className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-8 md:px-10">
+    <main id="main" tabIndex={-1} className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-8 md:px-10">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[70vh] opacity-80"
@@ -89,7 +89,7 @@ function HomePageContent() {
         </p>
         <a
           href="/admin/login"
-          className="text-sm text-pine/80 underline-offset-4 hover:underline"
+          className="text-sm text-pine underline-offset-4 hover:underline"
         >
           Admin
         </a>
@@ -100,11 +100,11 @@ function HomePageContent() {
           <h1 className="font-[family-name:var(--font-fraunces)] text-4xl leading-tight text-ink md:text-5xl">
             Your event media, unlocked by ticket.
           </h1>
-          <p className="max-w-md text-lg leading-relaxed text-pine/80">
+          <p className="max-w-md text-lg leading-relaxed text-pine">
             Enter the code you received to open your personal photos and the media
             included with your ticket.
           </p>
-          <details className="max-w-md rounded-2xl border border-[color:var(--line)] bg-white/60 px-4 py-3 text-sm text-pine/80">
+          <details className="max-w-md rounded-2xl border border-[color:var(--line)] bg-white/60 px-4 py-3 text-sm text-pine">
             <summary className="cursor-pointer font-medium text-ink">How this works</summary>
             <ol className="mt-2 list-decimal space-y-1 pl-5">
               <li>Use the ticket code from your email, or scan the QR code.</li>
@@ -125,7 +125,11 @@ function HomePageContent() {
             onChange={(e) => setTicketCode(e.target.value)}
             placeholder="EV-XXXXXXXX"
             autoComplete="off"
-            className="h-14 rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 tracking-[0.18em] text-ink outline-none ring-ink/20 placeholder:tracking-normal placeholder:text-pine/40 focus:ring-2"
+            autoCapitalize="characters"
+            spellCheck={false}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "ticket-error" : undefined}
+            className="h-14 rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 tracking-[0.18em] text-ink outline-none ring-ink/20 placeholder:tracking-normal placeholder:text-pine focus:ring-2"
           />
           <button
             type="submit"
@@ -134,21 +138,27 @@ function HomePageContent() {
           >
             {loading ? "Opening…" : "Open my vault"}
           </button>
-          {error ? <p className="text-sm text-red-700">{error}</p> : null}
+          {error ? (
+            <p id="ticket-error" role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
+          ) : null}
         </form>
 
         <div className="w-full max-w-md">
           <button
             type="button"
             onClick={() => setShowResend((open) => !open)}
-            className="text-sm text-pine/80 underline-offset-4 hover:underline"
+            className="text-sm text-pine underline-offset-4 hover:underline"
+            aria-expanded={showResend}
+            aria-controls="resend-form"
           >
             {showResend ? "Hide" : "Lost your ticket code?"}
           </button>
 
           {showResend ? (
-            <form onSubmit={onResend} className="mt-4 flex flex-col gap-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
-              <p className="text-sm text-pine/80">
+            <form id="resend-form" onSubmit={onResend} className="mt-4 flex flex-col gap-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
+              <p className="text-sm text-pine">
                 Enter the email address on your guest list. We&apos;ll resend your ticket code.
               </p>
               <label className="text-sm font-medium text-pine" htmlFor="resend-email">
@@ -161,6 +171,7 @@ function HomePageContent() {
                 onChange={(e) => setResendEmail(e.target.value)}
                 placeholder="you@email.com"
                 required
+                autoComplete="email"
                 className="h-12 rounded-xl border border-[color:var(--line)] bg-white/80 px-4 text-ink outline-none ring-ink/20 focus:ring-2"
               />
               <button
@@ -171,7 +182,9 @@ function HomePageContent() {
                 {resendLoading ? "Sending…" : "Resend my code"}
               </button>
               {resendMessage ? (
-                <p className="text-sm text-pine">{resendMessage}</p>
+                <p role="status" className="text-sm text-pine">
+                  {resendMessage}
+                </p>
               ) : null}
             </form>
           ) : null}
@@ -185,8 +198,8 @@ export default function HomePage() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6">
-          <p className="text-pine/70">Loading…</p>
+        <main id="main" tabIndex={-1} className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6">
+          <p className="text-pine">Loading…</p>
         </main>
       }
     >

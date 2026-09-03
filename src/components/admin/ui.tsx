@@ -44,7 +44,7 @@ export function AdminField({
     <label className={`flex flex-col gap-1.5 text-sm text-pine ${className}`}>
       <span className="text-xs font-medium uppercase tracking-[0.08em] text-pine">{label}</span>
       {children}
-      {hint ? <span className="text-xs text-pine/70">{hint}</span> : null}
+      {hint ? <span className="text-xs text-pine">{hint}</span> : null}
     </label>
   );
 }
@@ -108,7 +108,7 @@ export function TierBadge({ tier }: { tier: "vip" | "standard" }) {
 }
 
 export const inputClassName =
-  "h-11 w-full rounded-lg border border-[color:var(--line)] bg-white px-3 text-ink outline-none transition focus:border-ink/30";
+  "h-11 w-full rounded-lg border border-[color:var(--line)] bg-white px-3 text-ink outline-none transition focus-visible:border-ink";
 
 export const textareaClassName =
-  "w-full rounded-lg border border-[color:var(--line)] bg-white p-3 text-sm text-ink outline-none transition focus:border-ink/30";
+  "w-full rounded-lg border border-[color:var(--line)] bg-white p-3 text-sm text-ink outline-none transition focus-visible:border-ink";

@@ -132,18 +132,18 @@ export default function AdminPage() {
 
   if (!data) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6">
-        <p className="text-pine/70">Loading admin…</p>
+      <main id="main" tabIndex={-1} className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6">
+        <p className="text-pine">Loading admin…</p>
       </main>
     );
   }
 
   if (!data.event) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-6 py-12">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-pine/60">EventVault Admin</p>
+      <main id="main" tabIndex={-1} className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center px-6 py-12">
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-pine">EventVault Admin</p>
         <h1 className="mt-2 font-[family-name:var(--font-fraunces)] text-4xl text-ink">Create your event</h1>
-        <p className="mt-2 text-pine/75">Set up Koinonia Retreat or any ticketed event.</p>
+        <p className="mt-2 text-pine">Set up Koinonia Retreat or any ticketed event.</p>
 
         <div className="mt-6 border border-[color:var(--line)] bg-white p-4 text-sm text-pine">
           <p className="font-medium text-ink">Getting started</p>
@@ -159,7 +159,7 @@ export default function AdminPage() {
         </div>
 
         {message ? (
-          <p className="mt-4 border border-[color:var(--line)] bg-white px-4 py-3 text-sm text-ink">{message}</p>
+          <p role="status" className="mt-4 border border-[color:var(--line)] bg-white px-4 py-3 text-sm text-ink">{message}</p>
         ) : null}
 
         <form onSubmit={bootstrap} className="mt-8 space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/90 p-6 shadow-sm">

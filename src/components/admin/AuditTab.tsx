@@ -75,7 +75,7 @@ export function AuditTab() {
       {loading ? (
         <p className="text-sm text-pine">Loading…</p>
       ) : error ? (
-        <p className="text-sm text-red-700">{error}</p>
+        <p role="alert" className="text-sm text-red-700">{error}</p>
       ) : !logs.length ? (
         <p className="text-sm text-pine">
           No activity yet. New changes will show up here after you save sessions, link videos, import guests, or upload photos.

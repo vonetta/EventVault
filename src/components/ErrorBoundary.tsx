@@ -19,11 +19,11 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
       return (
-        <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center gap-4 px-6 text-center" id="main" tabIndex={-1} role="main">
           <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
             Something went wrong
           </h2>
-          <p className="text-sm text-pine/80">
+          <p className="text-sm text-pine">
             {this.state.error?.message || "An unexpected error occurred."}
           </p>
           <button

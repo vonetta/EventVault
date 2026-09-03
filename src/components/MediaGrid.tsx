@@ -67,7 +67,7 @@ export function MediaGrid({
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   if (!items.length) {
-    return <p className="text-sm text-pine/70">{emptyMessage}</p>;
+    return <p className="text-sm text-pine">{emptyMessage}</p>;
   }
 
   const imageItems = items
@@ -96,7 +96,13 @@ export function MediaGrid({
               >
                 {selectable && onToggleSelect ? (
                   <label className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 shadow">
-                    <input type="checkbox" checked={!!isSelected} onChange={() => onToggleSelect(item.id)} className="h-4 w-4" />
+                    <input
+                      type="checkbox"
+                      checked={!!isSelected}
+                      onChange={() => onToggleSelect(item.id)}
+                      className="h-4 w-4"
+                      aria-label={`Select ${item.title}`}
+                    />
                   </label>
                 ) : null}
                 <div className="aspect-video w-full bg-ink/90">
@@ -112,7 +118,7 @@ export function MediaGrid({
                 <div className="px-3 py-2 text-sm text-pine">
                   {item.title}
                   {item.availableUntil ? (
-                    <span className="mt-1 block text-xs text-pine/60">
+                    <span className="mt-1 block text-xs text-pine">
                       Available until {new Date(item.availableUntil).toLocaleDateString()}
                     </span>
                   ) : null}
@@ -122,6 +128,7 @@ export function MediaGrid({
                     type="button"
                     onClick={() => onRemove(item.id)}
                     className="absolute right-2 top-2 rounded-full bg-ink/80 px-2 py-1 text-xs text-foam"
+                    aria-label={`Remove ${item.title}`}
                   >
                     Remove
                   </button>
@@ -144,20 +151,27 @@ export function MediaGrid({
             >
               {selectable && onToggleSelect ? (
                 <label className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 shadow">
-                  <input type="checkbox" checked={!!isSelected} onChange={() => onToggleSelect(item.id)} className="h-4 w-4" />
+                  <input
+                    type="checkbox"
+                    checked={!!isSelected}
+                    onChange={() => onToggleSelect(item.id)}
+                    className="h-4 w-4"
+                    aria-label={`Select ${item.title}`}
+                  />
                 </label>
               ) : null}
               {isImage ? (
                 <button
                   type="button"
                   className="block w-full text-left"
+                  aria-label={`View larger: ${item.title}`}
                   onClick={() => {
                     if (lightboxPosition >= 0) setLightboxIndex(lightboxPosition);
                   }}
                 >
                   <LazyImage
                     src={item.url}
-                    alt={item.title}
+                    alt=""
                     className="aspect-[4/3] w-full"
                   />
                   <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
@@ -170,6 +184,7 @@ export function MediaGrid({
                       src={item.url}
                       controls
                       preload="none"
+                      aria-label={item.title}
                     />
                   ) : (
                     <LazyImage
@@ -178,7 +193,10 @@ export function MediaGrid({
                       className="aspect-[4/3] w-full"
                     />
                   )}
-                  <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
+                  <div className="px-3 py-2 text-sm text-pine">
+                    {item.title}
+                    <span className="sr-only"> (opens in a new tab)</span>
+                  </div>
                 </a>
               )}
               {onRemove ? (
@@ -186,6 +204,7 @@ export function MediaGrid({
                   type="button"
                   onClick={() => onRemove(item.id)}
                   className="absolute right-2 top-2 rounded-full bg-ink/80 px-2 py-1 text-xs text-foam"
+                  aria-label={`Remove ${item.title}`}
                 >
                   Remove
                 </button>

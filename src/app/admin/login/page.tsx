@@ -29,10 +29,10 @@ export default function AdminLoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
+    <main id="main" tabIndex={-1} className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
       <p className="font-[family-name:var(--font-fraunces)] text-3xl text-ink">EventVault</p>
       <h1 className="mt-4 font-[family-name:var(--font-fraunces)] text-4xl text-ink">Admin</h1>
-      <p className="mt-2 text-pine/75">Manage guests, ticket codes, and media.</p>
+      <p className="mt-2 text-pine">Manage guests, ticket codes, and media.</p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-3">
         <label className="text-sm font-medium text-pine" htmlFor="password">
@@ -40,9 +40,14 @@ export default function AdminLoginPage() {
         </label>
         <input
           id="password"
+          name="password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          required
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? "admin-login-error" : undefined}
           className="h-12 w-full rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 outline-none focus:ring-2 focus:ring-ink/20"
         />
         <button
@@ -52,7 +57,11 @@ export default function AdminLoginPage() {
         >
           {loading ? "Checking…" : "Continue"}
         </button>
-        {error ? <p className="text-sm text-red-700">{error}</p> : null}
+        {error ? (
+          <p id="admin-login-error" role="alert" className="text-sm text-red-700">
+            {error}
+          </p>
+        ) : null}
       </form>
     </main>
   );

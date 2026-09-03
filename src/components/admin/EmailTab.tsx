@@ -62,7 +62,7 @@ export function EmailTab({
       }
     >
       {data.emailConfigured ? (
-        <div className="space-y-4 text-sm text-pine/80">
+        <div className="space-y-4 text-sm text-pine">
           <p>
             Sending as <strong>{data.email?.fromName}</strong>
             {data.email?.gmailUser ? ` (${data.email.gmailUser})` : ""} · Links use{" "}
@@ -84,7 +84,7 @@ export function EmailTab({
           </form>
         </div>
       ) : (
-        <div className="space-y-4 text-sm text-pine/80">
+        <div className="space-y-4 text-sm text-pine">
           <p>Add these in <strong>Vercel → Settings → Environment Variables</strong>, then redeploy:</p>
           <pre className="overflow-x-auto rounded-xl bg-mist/80 p-4 font-mono text-xs text-ink">
 {`GMAIL_USER=vonettastevenson@gmail.com
@@ -98,6 +98,7 @@ EMAIL_FROM_NAME=Koinonia Retreat`}
               Create an App Password at{" "}
               <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="underline">
                 myaccount.google.com/apppasswords
+                <span className="sr-only"> (opens in a new tab)</span>
               </a>
             </li>
             <li>Redeploy Vercel, refresh this page, then send a test email.</li>

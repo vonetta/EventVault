@@ -36,7 +36,7 @@ export function SetupChecklist({
             >
               <div className="min-w-0">
                 <p className={`text-sm ${step.done ? "text-pine" : "text-ink"}`}>
-                  <span className="mr-2 text-pine/50">{index + 1}.</span>
+                  <span className="mr-2 text-pine">{index + 1}.</span>
                   {step.title}
                   {step.done ? <span className="ml-2 text-xs text-pine">Done</span> : null}
                 </p>
