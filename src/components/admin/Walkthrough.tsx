@@ -105,12 +105,12 @@ export function Walkthrough({
   const last = index === SLIDES.length - 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/65 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-[6px]">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="walkthrough-title"
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-[color:var(--line)] bg-foam shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-[color:var(--line)] bg-foam shadow-xl"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] px-5 py-4">
           <div>

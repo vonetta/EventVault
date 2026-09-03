@@ -10,7 +10,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "guests", label: "Guests" },
   { id: "media", label: "Media" },
   { id: "email", label: "Email" },
-  { id: "audit", label: "Audit log" },
+  { id: "audit", label: "Activity" },
 ];
 
 export function AdminShell({
@@ -50,7 +50,7 @@ export function AdminShell({
                 <button
                   type="button"
                   onClick={onOpenGuide}
-                  className="rounded-full bg-ink px-4 py-2 text-sm text-foam transition hover:bg-pine"
+                  className="rounded-full border border-[color:var(--line)] bg-white/80 px-4 py-2 text-sm text-pine transition hover:bg-white"
                 >
                   How to use
                 </button>
@@ -97,7 +97,7 @@ export function AdminShell({
 
       {message ? (
         <div className="mx-auto w-full max-w-6xl px-4 pt-4 md:px-8">
-          <div className="flex items-start justify-between gap-3 rounded-2xl border border-gold/30 bg-gold/10 px-4 py-3 text-sm text-ink">
+          <div className="flex items-start justify-between gap-3 rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 py-3 text-sm text-ink">
             <p>{message}</p>
             {onDismissMessage ? (
               <button

@@ -19,66 +19,67 @@ export function SetupChecklist({
 
   return (
     <AdminPanel
-      title="Setup unlock"
-      description="Complete these steps so guests can open their vault. Anyone on the admin team can follow this list."
+      title="Setup"
+      description="Work through these in order. Anyone on the admin team can pick up where you left off."
       action={
-        <AdminButton onClick={onOpenWalkthrough}>
-          Start walkthrough
+        <AdminButton onClick={onOpenWalkthrough} className="!h-9">
+          Walkthrough
         </AdminButton>
       }
     >
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-sm text-pine">
+      <div className="mb-5">
+        <div className="flex items-center justify-between text-sm text-pine/70">
           <span>
             {progress.allRequiredDone
               ? "Required setup is complete"
-              : `${progress.completed} of ${progress.total} required steps unlocked`}
+              : `${progress.completed} of ${progress.total} complete`}
           </span>
-          <span className="font-medium text-ink">{percent}%</span>
+          <span className="tabular-nums text-ink">{percent}%</span>
         </div>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-mist">
-          <div
-            className="h-full rounded-full bg-ink transition-all"
-            style={{ width: `${percent}%` }}
-          />
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-mist">
+          <div className="h-full rounded-full bg-pine transition-all" style={{ width: `${percent}%` }} />
         </div>
       </div>
 
-      <ol className="space-y-2">
-        {progress.steps.map((step, index) => (
-          <li
-            key={step.id}
-            className={`flex flex-wrap items-start justify-between gap-3 rounded-xl border px-3 py-3 ${
-              step.done
-                ? "border-emerald-200 bg-emerald-50/70"
-                : progress.next?.id === step.id
-                  ? "border-gold/40 bg-gold/10"
-                  : "border-[color:var(--line)] bg-white/70"
-            }`}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-ink">
-                <span className="mr-2 text-pine/50">{index + 1}.</span>
-                {step.done ? "Unlocked · " : ""}
-                {step.title}
-              </p>
-              <p className="mt-1 text-sm text-pine/75">{step.detail}</p>
-            </div>
-            {step.done ? (
-              <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-900">
-                Done
-              </span>
-            ) : (
-              <AdminButton
-                variant={progress.next?.id === step.id ? "primary" : "secondary"}
-                className="!h-9 shrink-0"
-                onClick={() => onGoToTab(step.tab)}
-              >
-                {step.actionLabel}
-              </AdminButton>
-            )}
-          </li>
-        ))}
+      <ol className="space-y-1">
+        {progress.steps.map((step, index) => {
+          const isNext = !step.done && progress.next?.id === step.id;
+          return (
+            <li
+              key={step.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-xl px-2 py-2.5"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span
+                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
+                    step.done
+                      ? "bg-pine text-foam"
+                      : isNext
+                        ? "bg-ink text-foam"
+                        : "bg-mist text-pine/60"
+                  }`}
+                >
+                  {step.done ? "✓" : index + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className={`text-sm ${step.done ? "text-pine/60" : "font-medium text-ink"}`}>
+                    {step.title}
+                  </p>
+                  {!step.done ? <p className="mt-0.5 text-sm text-pine/65">{step.detail}</p> : null}
+                </div>
+              </div>
+              {!step.done ? (
+                <AdminButton
+                  variant={isNext ? "primary" : "ghost"}
+                  className="!h-8 shrink-0 !px-3 !text-xs"
+                  onClick={() => onGoToTab(step.tab)}
+                >
+                  {step.actionLabel}
+                </AdminButton>
+              ) : null}
+            </li>
+          );
+        })}
       </ol>
     </AdminPanel>
   );

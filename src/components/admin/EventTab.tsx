@@ -287,7 +287,7 @@ export function EventTab({
           </AdminButton>
         </form>
         {data.sessions.length ? (
-          <ul className="mt-4 space-y-2">
+          <ul className="mt-4 divide-y divide-[color:var(--line)]">
             {data.sessions.map((session) => {
               const day = data.days.find((d) => d._id === session.dayId);
               const isEditing = editingSessionId === session._id;
@@ -342,14 +342,17 @@ export function EventTab({
               }
 
               return (
-                <li key={session._id} className="flex items-center justify-between gap-2 rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-pine">
-                  <div>
-                    <span className="font-medium text-ink">{session.title}</span>
-                    <span className="text-pine/70"> · {day?.label}{session.speaker ? ` · ${session.speaker}` : ""}</span>
+                <li key={session._id} className="flex items-center justify-between gap-3 rounded-2xl px-1 py-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-ink">{session.title}</p>
+                    <p className="mt-0.5 text-sm text-pine/65">
+                      {day?.label}{session.speaker ? ` · ${session.speaker}` : ""}
+                    </p>
                   </div>
-                  <div className="flex shrink-0 gap-1.5">
+                  <div className="flex shrink-0 gap-1">
                     <AdminButton
-                      className="!h-7 !px-2 !text-xs"
+                      variant="ghost"
+                      className="!h-8 !px-3 !text-xs"
                       onClick={() => {
                         setEditingSessionId(session._id);
                         setEditTitle(session.title);
@@ -360,8 +363,8 @@ export function EventTab({
                       Edit
                     </AdminButton>
                     <AdminButton
-                      variant="danger"
-                      className="!h-7 !px-2 !text-xs"
+                      variant="ghost"
+                      className="!h-8 !px-3 !text-xs text-red-800 hover:bg-red-50"
                       onClick={async () => {
                         if (!confirm(`Delete session "${session.title}"? Associated media will also be removed.`)) return;
                         const json = await actions.postAction({ action: "delete_session", sessionId: session._id });
