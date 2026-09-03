@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { setAdminSession, secureEqual, assertSameOrigin } from "@/lib/auth";
 import { assertProductionSecrets } from "@/lib/env";
 import { adminLoginSchema } from "@/lib/validate";
+import { z } from "zod";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     await setAdminSession();
     return NextResponse.json({ ok: true });
   } catch (error) {
-    if (error && typeof error === "object" && "issues" in error) {
+    if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
     return NextResponse.json({ error: "Login failed" }, { status: 500 });

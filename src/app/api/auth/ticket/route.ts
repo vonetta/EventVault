@@ -5,6 +5,7 @@ import { setGuestSession, assertSameOrigin } from "@/lib/auth";
 import { guestSessionPayload } from "@/lib/guest-session";
 import { normalizeTicketCode } from "@/lib/tickets";
 import { ticketLoginSchema } from "@/lib/validate";
+import { z } from "zod";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
       name: guest.name,
     });
   } catch (error) {
-    if (error && typeof error === "object" && "issues" in error) {
+    if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
     return NextResponse.json({ error: "Login failed" }, { status: 500 });

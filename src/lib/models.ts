@@ -95,6 +95,10 @@ const MediaSchema = new Schema(
   { timestamps: true },
 );
 
+GuestSchema.index({ eventId: 1, email: 1 });
+MediaSchema.index({ eventId: 1, kind: 1 });
+MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
+
 export type EventDoc = InferSchemaType<typeof EventSchema> & { _id: mongoose.Types.ObjectId };
 export type DayDoc = InferSchemaType<typeof DaySchema> & { _id: mongoose.Types.ObjectId };
 export type SessionDoc = InferSchemaType<typeof SessionSchema> & { _id: mongoose.Types.ObjectId };

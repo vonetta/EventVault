@@ -4,6 +4,7 @@ import { Event, Guest } from "@/lib/models";
 import { assertSameOrigin } from "@/lib/auth";
 import { sendTicketEmail } from "@/lib/email";
 import { resendTicketSchema } from "@/lib/validate";
+import { z } from "zod";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 const GENERIC_OK = {
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(GENERIC_OK);
   } catch (error) {
-    if (error && typeof error === "object" && "issues" in error) {
+    if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
     }
     return NextResponse.json({ error: "Could not process request" }, { status: 500 });
