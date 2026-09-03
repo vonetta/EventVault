@@ -23,8 +23,8 @@ const SLIDES: {
     body: [
       "Open the Event tab.",
       "Confirm the event name and the guest-facing description.",
-      "In Retreat schedule, keep one row per day (Day 1, Day 2, Day 3).",
-      "Click Save schedule if you change days.",
+      "Set Starts on and Ends on. The retreat schedule becomes Day 1, Day 2, Day 3… for those dates.",
+      "Click Save changes so the schedule is applied.",
     ],
     tab: "event",
     actionLabel: "Go to Event",

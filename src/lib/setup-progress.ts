@@ -40,7 +40,7 @@ export function getSetupProgress(data: AdminData) {
     {
       id: "days",
       title: "Set the retreat days",
-      detail: "Name each day guests will see, such as Day 1, Day 2, Day 3.",
+      detail: "Set Starts on and Ends on. The schedule becomes Day 1, Day 2, Day 3… for that range.",
       done: data.days.length > 0,
       tab: "event",
       actionLabel: "Open Event",

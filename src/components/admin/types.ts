@@ -7,7 +7,7 @@ export type EventDoc = {
   endsOn?: string;
 };
 
-export type DayDoc = { _id: string; label: string; sortOrder: number };
+export type DayDoc = { _id: string; label: string; sortOrder: number; date?: string };
 
 export type SessionDoc = {
   _id: string;

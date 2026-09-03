@@ -287,14 +287,20 @@ export async function POST(request: Request) {
     // Safe to mutate — all validations passed
     for (let index = 0; index < labels.length; index++) {
       const label = labels[index];
+      const date =
+        body.dates?.[index]?.trim() && /^\d{4}-\d{2}-\d{2}$/.test(body.dates[index].trim())
+          ? body.dates[index].trim()
+          : "";
       if (existing[index]) {
         existing[index].label = label;
         existing[index].sortOrder = index;
+        existing[index].date = date;
         await existing[index].save();
       } else {
         await Day.create({
           eventId: event._id,
           label,
+          date,
           sortOrder: index,
         });
       }

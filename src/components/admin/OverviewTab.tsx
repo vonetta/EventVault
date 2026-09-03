@@ -5,12 +5,12 @@ import { SetupChecklist } from "@/components/admin/SetupChecklist";
 import { AdminButton, AdminPanel, StatCard, StatusBadge } from "@/components/admin/ui";
 import type { AdminActions, AdminData } from "@/components/admin/types";
 import { inputClassName } from "@/components/admin/ui";
+import { daysFromDateRange } from "@/lib/schedule-days";
 
 const RETREAT_TEMPLATE = {
   name: "Koinonia Retreat 2026",
   description:
     "Your private vault for Koinonia Retreat photos and speaker sessions. VIP guests also receive personal photo galleries.",
-  dayLabels: ["Thursday", "Friday", "Saturday", "Sunday", "Monday"],
 };
 
 export function OverviewTab({
@@ -48,14 +48,13 @@ export function OverviewTab({
     if (!data.event) return;
     if (
       !confirm(
-        `Apply the Koinonia template?\n\n• ${RETREAT_TEMPLATE.name}\n• ${RETREAT_TEMPLATE.dayLabels.length} days: ${RETREAT_TEMPLATE.dayLabels.join(", ")}`,
+        `Apply the Koinonia template?\n\n• ${RETREAT_TEMPLATE.name}\n• Schedule follows Starts on / Ends on (Day 1, Day 2…)`,
       )
     )
       return;
 
     setEventNameEdit(RETREAT_TEMPLATE.name);
     setEventDescriptionEdit(RETREAT_TEMPLATE.description);
-    setScheduleLabels([...RETREAT_TEMPLATE.dayLabels]);
 
     const eventJson = await actions.postAction({
       action: "update_event",
@@ -67,14 +66,20 @@ export function OverviewTab({
     });
     if (!eventJson) return;
 
-    const daysJson = await actions.postAction({
-      action: "sync_days",
-      eventId: data.event._id,
-      days: RETREAT_TEMPLATE.dayLabels,
-    });
-    if (!daysJson) return;
-
-    actions.setMessage("Koinonia template applied. Adjust dates in Event settings if needed.");
+    const range = daysFromDateRange(eventStartsOn, eventEndsOn);
+    if (range.ok) {
+      setScheduleLabels(range.days.map((day) => day.label));
+      const daysJson = await actions.postAction({
+        action: "sync_days",
+        eventId: data.event._id,
+        days: range.days.map((day) => day.label),
+        dates: range.days.map((day) => day.date),
+      });
+      if (!daysJson) return;
+      actions.setMessage("Koinonia template applied. Schedule follows your dates.");
+    } else {
+      actions.setMessage("Koinonia template applied. Set Starts on and Ends on in Event to build the Day 1… schedule.");
+    }
     await actions.load(data.event._id);
   }
 

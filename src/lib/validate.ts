@@ -76,6 +76,7 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     action: z.literal("sync_days"),
     eventId: objectIdSchema,
     days: z.array(z.string().min(1).max(40)).min(1).max(14),
+    dates: z.array(z.string().max(40)).max(14).optional(),
   }),
   z.object({
     action: z.literal("add_session"),

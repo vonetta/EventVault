@@ -1,15 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName, textareaClassName } from "@/components/admin/ui";
 import type { AdminActions, AdminData } from "@/components/admin/types";
+import { daysFromDateRange, formatScheduleDate } from "@/lib/schedule-days";
 
 const RETREAT_TEMPLATE = {
   name: "Koinonia Retreat 2026",
   description:
     "Your private vault for Koinonia Retreat photos and speaker sessions. VIP guests also receive personal photo galleries.",
-  dayLabels: ["Thursday", "Friday", "Saturday", "Sunday", "Monday"],
 };
 
 export function EventTab({
@@ -56,7 +56,6 @@ export function EventTab({
   actions: AdminActions;
 }) {
   const [savingEvent, setSavingEvent] = useState(false);
-  const [savingSchedule, setSavingSchedule] = useState(false);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [sessionTitle, setSessionTitle] = useState("");
   const [sessionSpeaker, setSessionSpeaker] = useState("");
@@ -68,10 +67,31 @@ export function EventTab({
   const [editDayId, setEditDayId] = useState("");
   const [savingSession, setSavingSession] = useState(false);
 
+  const rangeSchedule = useMemo(
+    () => daysFromDateRange(eventStartsOn, eventEndsOn),
+    [eventStartsOn, eventEndsOn],
+  );
+
   function parseDayLabels(text: string, dayCount: number) {
     const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
     if (lines.length) return lines;
     return Array.from({ length: dayCount }, (_, index) => `Day ${index + 1}`);
+  }
+
+  async function syncScheduleFromRange(eventId: string) {
+    const range = daysFromDateRange(eventStartsOn, eventEndsOn);
+    if (!range.ok) {
+      actions.setMessage(range.error);
+      return false;
+    }
+    setScheduleLabels(range.days.map((day) => day.label));
+    const json = await actions.postAction({
+      action: "sync_days",
+      eventId,
+      days: range.days.map((day) => day.label),
+      dates: range.days.map((day) => day.date),
+    });
+    return Boolean(json);
   }
 
   async function saveEventSettings(event?: FormEvent) {
@@ -82,6 +102,15 @@ export function EventTab({
       actions.setMessage("Enter an event name before saving.");
       return;
     }
+
+    if (eventStartsOn.trim() || eventEndsOn.trim()) {
+      const range = daysFromDateRange(eventStartsOn, eventEndsOn);
+      if (!range.ok) {
+        actions.setMessage(range.error);
+        return;
+      }
+    }
+
     setSavingEvent(true);
     const json = await actions.postAction({
       action: "update_event",
@@ -91,64 +120,52 @@ export function EventTab({
       startsOn: eventStartsOn.trim(),
       endsOn: eventEndsOn.trim(),
     });
-    setSavingEvent(false);
-    if (!json) return;
-    actions.setMessage("Event settings saved.");
+    if (!json) {
+      setSavingEvent(false);
+      return;
+    }
+
+    if (eventStartsOn.trim() && eventEndsOn.trim()) {
+      const synced = await syncScheduleFromRange(data.event._id);
+      setSavingEvent(false);
+      if (!synced) return;
+      actions.setMessage("Event saved. Retreat schedule updated from the start and end dates.");
+    } else {
+      setSavingEvent(false);
+      actions.setMessage("Event settings saved. Set start and end dates to build the retreat schedule.");
+    }
     await actions.load(data.event._id);
   }
 
   async function applyRetreatTemplate() {
     if (!data.event) return;
-    if (!confirm(`Apply the Koinonia template?\n\n• ${RETREAT_TEMPLATE.name}\n• ${RETREAT_TEMPLATE.dayLabels.length} days: ${RETREAT_TEMPLATE.dayLabels.join(", ")}`)) return;
+    if (
+      !confirm(
+        `Apply the Koinonia template?\n\n• ${RETREAT_TEMPLATE.name}\n• Then set Starts on / Ends on so the Day 1… schedule matches your dates.`,
+      )
+    ) {
+      return;
+    }
     setApplyingTemplate(true);
     setEventNameEdit(RETREAT_TEMPLATE.name);
     setEventDescriptionEdit(RETREAT_TEMPLATE.description);
-    setScheduleLabels([...RETREAT_TEMPLATE.dayLabels]);
-    await actions.postAction({ action: "update_event", eventId: data.event._id, name: RETREAT_TEMPLATE.name, description: RETREAT_TEMPLATE.description, startsOn: eventStartsOn.trim(), endsOn: eventEndsOn.trim() });
-    await actions.postAction({ action: "sync_days", eventId: data.event._id, days: RETREAT_TEMPLATE.dayLabels });
-    setApplyingTemplate(false);
-    actions.setMessage("Koinonia template applied.");
-    await actions.load(data.event._id);
-  }
-
-  function addScheduleDay() {
-    if (scheduleLabels.length >= 14) {
-      actions.setMessage("Maximum 14 days per event.");
-      return;
-    }
-    setScheduleLabels((prev) => [...prev, `Day ${prev.length + 1}`]);
-  }
-
-  function removeScheduleDay(index: number) {
-    if (scheduleLabels.length <= 1) {
-      actions.setMessage("Keep at least one day.");
-      return;
-    }
-    setScheduleLabels((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function moveScheduleDay(index: number, direction: -1 | 1) {
-    const nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= scheduleLabels.length) return;
-    setScheduleLabels((prev) => {
-      const copy = [...prev];
-      [copy[index], copy[nextIndex]] = [copy[nextIndex], copy[index]];
-      return copy;
+    await actions.postAction({
+      action: "update_event",
+      eventId: data.event._id,
+      name: RETREAT_TEMPLATE.name,
+      description: RETREAT_TEMPLATE.description,
+      startsOn: eventStartsOn.trim(),
+      endsOn: eventEndsOn.trim(),
     });
-  }
-
-  async function saveDaySchedule() {
-    if (!data.event) return;
-    const labels = scheduleLabels.map((l) => l.trim()).filter(Boolean);
-    if (!labels.length || labels.length !== scheduleLabels.length) {
-      actions.setMessage("Each day needs a name.");
-      return;
+    if (eventStartsOn.trim() && eventEndsOn.trim()) {
+      await syncScheduleFromRange(data.event._id);
     }
-    setSavingSchedule(true);
-    const json = await actions.postAction({ action: "sync_days", eventId: data.event._id, days: labels });
-    setSavingSchedule(false);
-    if (!json) return;
-    actions.setMessage("Day schedule saved.");
+    setApplyingTemplate(false);
+    actions.setMessage(
+      eventStartsOn.trim() && eventEndsOn.trim()
+        ? "Koinonia template applied. Schedule follows your dates."
+        : "Koinonia template applied. Set Starts on and Ends on to build Day 1… days.",
+    );
     await actions.load(data.event._id);
   }
 
@@ -193,7 +210,7 @@ export function EventTab({
     <>
       <AdminPanel
         title="Event details"
-        description="Name and description guests see when they open their vault."
+        description="Name, description, and dates. The retreat schedule is built from Starts on and Ends on."
         action={
           <AdminButton onClick={applyRetreatTemplate} disabled={applyingTemplate || savingEvent}>
             {applyingTemplate ? "Applying…" : "Koinonia template"}
@@ -208,11 +225,21 @@ export function EventTab({
             <textarea value={eventDescriptionEdit} onChange={(e) => setEventDescriptionEdit(e.target.value)} rows={3} className={textareaClassName} />
           </AdminField>
           <div className="grid gap-4 sm:grid-cols-2">
-            <AdminField label="Starts on">
-              <input type="date" value={eventStartsOn} onChange={(e) => setEventStartsOn(e.target.value)} className={inputClassName} />
+            <AdminField label="Starts on" hint="First day of the retreat">
+              <input
+                type="date"
+                value={eventStartsOn}
+                onChange={(e) => setEventStartsOn(e.target.value)}
+                className={inputClassName}
+              />
             </AdminField>
-            <AdminField label="Ends on">
-              <input type="date" value={eventEndsOn} onChange={(e) => setEventEndsOn(e.target.value)} className={inputClassName} />
+            <AdminField label="Ends on" hint="Last day — schedule fills Day 1 through the last day">
+              <input
+                type="date"
+                value={eventEndsOn}
+                onChange={(e) => setEventEndsOn(e.target.value)}
+                className={inputClassName}
+              />
             </AdminField>
           </div>
           <AdminButton variant="primary" onClick={() => saveEventSettings()} disabled={savingEvent} className="w-full sm:w-auto">
@@ -223,43 +250,38 @@ export function EventTab({
 
       <AdminPanel
         title="Retreat schedule"
-        description="Add, rename, reorder, or remove days — then save once."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <AdminButton onClick={() => setScheduleLabels([...RETREAT_TEMPLATE.dayLabels])}>Koinonia preset</AdminButton>
-            <AdminButton onClick={addScheduleDay}>Add day</AdminButton>
-          </div>
-        }
+        description="This list follows Starts on and Ends on. Save event details to apply it."
       >
-        <ul className="space-y-2">
-          {scheduleLabels.map((label, index) => (
-            <li key={`${index}-${label}`} className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--line)] bg-mist/30 p-2">
-              <span className="w-6 shrink-0 text-center text-xs font-medium text-pine/60">{index + 1}</span>
-              <input
-                value={label}
-                onChange={(e) => setScheduleLabels((prev) => prev.map((item, i) => (i === index ? e.target.value : item)))}
-                placeholder={`Day ${index + 1}`}
-                className={`${inputClassName} min-w-[10rem] flex-1`}
-              />
-              <div className="flex gap-1">
-                <AdminButton className="!h-9 !w-9 !px-0" onClick={() => moveScheduleDay(index, -1)} disabled={index === 0} aria-label="Move up">↑</AdminButton>
-                <AdminButton className="!h-9 !w-9 !px-0" onClick={() => moveScheduleDay(index, 1)} disabled={index === scheduleLabels.length - 1} aria-label="Move down">↓</AdminButton>
-                <AdminButton variant="danger" className="!h-9 !px-3" onClick={() => removeScheduleDay(index)} disabled={scheduleLabels.length <= 1}>Remove</AdminButton>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <AdminButton variant="primary" onClick={saveDaySchedule} disabled={savingSchedule}>
-            {savingSchedule ? "Saving schedule…" : "Save schedule"}
-          </AdminButton>
-        </div>
+        {!eventStartsOn.trim() || !eventEndsOn.trim() ? (
+          <p className="text-sm text-pine/70">
+            Set both <strong>Starts on</strong> and <strong>Ends on</strong> above, then save. Days will appear as Day 1, Day 2, Day 3…
+          </p>
+        ) : !rangeSchedule.ok ? (
+          <p className="text-sm text-red-700">{rangeSchedule.error}</p>
+        ) : (
+          <ul className="divide-y divide-[color:var(--line)]">
+            {rangeSchedule.days.map((day, index) => (
+              <li key={day.date} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <div>
+                  <p className="font-medium text-ink">{day.label}</p>
+                  <p className="mt-0.5 text-sm text-pine/65">{formatScheduleDate(day.date)}</p>
+                </div>
+                <span className="text-xs text-pine/45">{index + 1}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {rangeSchedule.ok && scheduleLabels.length > 0 && scheduleLabels.length !== rangeSchedule.days.length ? (
+          <p className="mt-3 text-sm text-pine/70">
+            Saved schedule has {scheduleLabels.length} day{scheduleLabels.length === 1 ? "" : "s"}. Click <strong>Save changes</strong> above to match these dates.
+          </p>
+        ) : null}
       </AdminPanel>
 
       <HowTo title="How speaker sessions work" defaultOpen={!data.sessions.length}>
         <p>Create <strong>one session per talk</strong>, usually 2–3 per day. This is only the label guests will see.</p>
         <ol className="list-decimal space-y-1 pl-5">
-          <li>Choose the <strong>Day</strong> (Day 1, Day 2, …).</li>
+          <li>Choose the <strong>Day</strong> (Day 1, Day 2, … from your start and end dates).</li>
           <li>Type the talk title, then the speaker name.</li>
           <li>Click <strong>Add session</strong>. Repeat for every talk.</li>
           <li>Next, go to <strong>Media → YouTube sessions</strong> and paste each video URL.</li>
@@ -272,7 +294,9 @@ export function EventTab({
           <AdminField label="Day">
             <select value={sessionDayId} onChange={(e) => setSessionDayId(e.target.value)} className={inputClassName}>
               {data.days.map((day) => (
-                <option key={day._id} value={day._id}>{day.label}</option>
+                <option key={day._id} value={day._id}>
+                  {day.label}{day.date ? ` · ${formatScheduleDate(day.date)}` : ""}
+                </option>
               ))}
             </select>
           </AdminField>
@@ -299,7 +323,9 @@ export function EventTab({
                       <AdminField label="Day">
                         <select value={editDayId} onChange={(e) => setEditDayId(e.target.value)} className={inputClassName}>
                           {data.days.map((item) => (
-                            <option key={item._id} value={item._id}>{item.label}</option>
+                            <option key={item._id} value={item._id}>
+                              {item.label}{item.date ? ` · ${formatScheduleDate(item.date)}` : ""}
+                            </option>
                           ))}
                         </select>
                       </AdminField>
@@ -346,7 +372,9 @@ export function EventTab({
                   <div className="min-w-0">
                     <p className="font-medium text-ink">{session.title}</p>
                     <p className="mt-0.5 text-sm text-pine/65">
-                      {day?.label}{session.speaker ? ` · ${session.speaker}` : ""}
+                      {day?.label}
+                      {day?.date ? ` · ${formatScheduleDate(day.date)}` : ""}
+                      {session.speaker ? ` · ${session.speaker}` : ""}
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-1">
