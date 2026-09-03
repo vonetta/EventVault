@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName, textareaClassName } from "@/components/admin/ui";
 import type { AdminActions, AdminData } from "@/components/admin/types";
 
@@ -250,7 +251,18 @@ export function EventTab({
         </div>
       </AdminPanel>
 
-      <AdminPanel title="Speaker sessions" description="Create sessions before linking YouTube videos.">
+      <HowTo title="How speaker sessions work" defaultOpen={!data.sessions.length}>
+        <p>Create <strong>one session per talk</strong>, usually 2–3 per day. This is only the label guests will see.</p>
+        <ol className="list-decimal space-y-1 pl-5">
+          <li>Choose the <strong>Day</strong> (Friday, Saturday, …).</li>
+          <li>Type the talk title, then the speaker name.</li>
+          <li>Click <strong>Add session</strong>. Repeat for every talk.</li>
+          <li>Next, go to <strong>Media → YouTube sessions</strong> and paste each video URL.</li>
+        </ol>
+        <p>Do not paste YouTube links on this page.</p>
+      </HowTo>
+
+      <AdminPanel title="Speaker sessions" description="Create one session per talk before linking YouTube videos in Media.">
         <form onSubmit={addSession} className="grid gap-3 sm:grid-cols-2">
           <AdminField label="Day">
             <select value={sessionDayId} onChange={(e) => setSessionDayId(e.target.value)} className={inputClassName}>

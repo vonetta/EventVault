@@ -10,6 +10,7 @@ import { GuestsTab } from "@/components/admin/GuestsTab";
 import { MediaTab } from "@/components/admin/MediaTab";
 import { EmailTab } from "@/components/admin/EmailTab";
 import { AuditTab } from "@/components/admin/AuditTab";
+import { Walkthrough } from "@/components/admin/Walkthrough";
 import type { AdminActions, AdminData, DayDoc } from "@/components/admin/types";
 
 function parseDayLabels(text: string, dayCount: number) {
@@ -35,6 +36,7 @@ export default function AdminPage() {
   const [eventEndsOn, setEventEndsOn] = useState("");
   const [scheduleLabels, setScheduleLabels] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
   const load = useCallback(
     async (eventId?: string) => {
@@ -74,6 +76,17 @@ export default function AdminPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!data?.event) return;
+    try {
+      if (localStorage.getItem("ev_seen_walkthrough") === "1") return;
+      localStorage.setItem("ev_seen_walkthrough", "1");
+      setShowWalkthrough(true);
+    } catch {
+      // ignore storage errors
+    }
+  }, [data?.event]);
 
   async function postAction(payload: Record<string, unknown>) {
     const response = await fetch("/api/admin/data", {
@@ -134,13 +147,15 @@ export default function AdminPage() {
 
         <div className="mt-6 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-sm text-pine/80">
           <p className="font-medium text-ink">Getting started</p>
-          <ol className="mt-2 list-inside list-decimal space-y-1">
-            <li>Create your event below (name, days, description)</li>
-            <li>Import guests with their names, emails, and tiers</li>
-            <li>Upload group photos and VIP personal photos</li>
-            <li>Link YouTube sessions for speaker content</li>
-            <li>Set up Gmail and email ticket codes to guests</li>
+          <ol className="mt-2 list-decimal space-y-2 pl-5">
+            <li>Create the event below (name, days, description).</li>
+            <li>On <strong>Event</strong>, add one speaker session per talk (2–3 a day).</li>
+            <li>On <strong>Media → YouTube sessions</strong>, paste each talk’s video URL.</li>
+            <li>On <strong>Guests</strong>, import names, emails, and vip/standard.</li>
+            <li>On <strong>Media</strong>, upload group and VIP photos.</li>
+            <li>On <strong>Email</strong>, set up Gmail if you want ticket codes sent automatically.</li>
           </ol>
+          <p className="mt-3 text-xs text-pine/70">After you create the event, use <strong>How to use</strong> in the header for a step-by-step walkthrough.</p>
         </div>
 
         {message ? (
@@ -188,6 +203,7 @@ export default function AdminPage() {
         setEventNameEdit={setEventNameEdit}
         setEventDescriptionEdit={setEventDescriptionEdit}
         setScheduleLabels={setScheduleLabels}
+        onOpenWalkthrough={() => setShowWalkthrough(true)}
       />
     ),
     event: (
@@ -228,8 +244,17 @@ export default function AdminPage() {
       message={message}
       onDismissMessage={() => setMessage("")}
       onSignOut={logout}
+      onOpenGuide={() => setShowWalkthrough(true)}
     >
       {tabContent}
+      <Walkthrough
+        open={showWalkthrough}
+        onClose={() => setShowWalkthrough(false)}
+        onGoToTab={(tab) => {
+          setActiveTab(tab);
+          setShowWalkthrough(false);
+        }}
+      />
     </AdminShell>
   );
 }

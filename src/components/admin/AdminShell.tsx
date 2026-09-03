@@ -20,6 +20,7 @@ export function AdminShell({
   message,
   onDismissMessage,
   onSignOut,
+  onOpenGuide,
   children,
 }: {
   eventName?: string;
@@ -28,6 +29,7 @@ export function AdminShell({
   message?: string;
   onDismissMessage?: () => void;
   onSignOut: () => void;
+  onOpenGuide?: () => void;
   children: ReactNode;
 }) {
   return (
@@ -44,6 +46,15 @@ export function AdminShell({
               </h1>
             </div>
             <div className="flex items-center gap-2">
+              {onOpenGuide ? (
+                <button
+                  type="button"
+                  onClick={onOpenGuide}
+                  className="rounded-full bg-ink px-4 py-2 text-sm text-foam transition hover:bg-pine"
+                >
+                  How to use
+                </button>
+              ) : null}
               <a
                 href="/"
                 target="_blank"

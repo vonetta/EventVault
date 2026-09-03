@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useRef, useState } from "react";
 import { MediaGrid, type MediaItem } from "@/components/MediaGrid";
+import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName } from "@/components/admin/ui";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
 import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
@@ -344,7 +345,18 @@ export function MediaTab({
         </form>
       </AdminPanel>
 
-      <AdminPanel title="YouTube sessions" description="Upload to YouTube as Unlisted, then paste a video or playlist link.">
+      <HowTo title="Where to paste YouTube URLs" defaultOpen={!data.media.some((item) => item.storageProvider === "youtube")}>
+        <p>Paste URLs here, not on the Event tab. Use <strong>one video per speaker session</strong> so talks stay grouped by day.</p>
+        <ol className="list-decimal space-y-1 pl-5">
+          <li>If the Session dropdown is empty, go to <strong>Event</strong> and add speaker sessions first.</li>
+          <li>Select the talk (for example “Morning worship”).</li>
+          <li>Paste that speaker’s single video URL, such as <code>https://youtu.be/…</code>.</li>
+          <li>Click <strong>Link YouTube</strong>, then repeat for the next talk.</li>
+        </ol>
+        <p>Set videos to <strong>Unlisted</strong> on YouTube. Do not paste a full playlist if you want 2–3 separate talks per day.</p>
+      </HowTo>
+
+      <AdminPanel title="YouTube sessions" description="Pick a speaker session, then paste that talk’s Unlisted YouTube video URL.">
         <form onSubmit={addYoutubeSession} className="grid gap-4 sm:grid-cols-2">
           <AdminField label="Session">
             <select value={youtubeSessionId} onChange={(e) => setYoutubeSessionId(e.target.value)} required className={inputClassName}>

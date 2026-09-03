@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import type { AdminTab } from "@/components/admin/AdminShell";
 import { AdminButton, AdminField, AdminPanel, TierBadge, inputClassName, textareaClassName } from "@/components/admin/ui";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
+import { HowTo } from "@/components/admin/HowTo";
 import type { AdminActions, AdminData } from "@/components/admin/types";
 
 function parseGuestLines(text: string) {
@@ -167,6 +168,15 @@ export function GuestsTab({
           setPendingImport(null);
         }}
       />
+
+      <HowTo title="How to import guests" defaultOpen={!data.guests.length}>
+        <p>Paste one person per line, then click <strong>Import guests</strong>.</p>
+        <pre className="overflow-x-auto rounded-xl bg-white/80 p-3 font-mono text-xs text-ink">
+{`Jane Doe, jane@email.com, vip
+John Smith, john@email.com, standard`}
+        </pre>
+        <p>VIP guests see personal photos and speaker sessions. Standard guests see the group gallery only. Use <strong>View vault</strong> to check what someone will see.</p>
+      </HowTo>
 
       <AdminPanel
         title="Import guests"

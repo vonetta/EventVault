@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, StatusBadge, inputClassName } from "@/components/admin/ui";
 import type { AdminData } from "@/components/admin/types";
 
@@ -42,6 +43,15 @@ export function EmailTab({
   }
 
   return (
+    <>
+    <HowTo title="How ticket email works" defaultOpen={!data.emailConfigured}>
+      <p>Email is optional, but needed if you want guests to receive ticket codes automatically.</p>
+      <ol className="list-decimal space-y-1 pl-5">
+        <li>Add Gmail env vars in Vercel, then redeploy.</li>
+        <li>Send a test email from this page.</li>
+        <li>Import guests with <strong>Email ticket codes on import</strong>, or click Email next to one guest.</li>
+      </ol>
+    </HowTo>
     <AdminPanel
       title="Ticket email (Gmail)"
       description="Automatically email ticket codes when you import guests."
@@ -95,5 +105,6 @@ EMAIL_FROM_NAME=Koinonia Retreat`}
         </div>
       )}
     </AdminPanel>
+    </>
   );
 }

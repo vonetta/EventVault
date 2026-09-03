@@ -1,6 +1,7 @@
 "use client";
 
 import type { AdminTab } from "@/components/admin/AdminShell";
+import { SetupChecklist } from "@/components/admin/SetupChecklist";
 import { AdminButton, AdminPanel, StatCard, StatusBadge } from "@/components/admin/ui";
 import type { AdminActions, AdminData } from "@/components/admin/types";
 import { inputClassName } from "@/components/admin/ui";
@@ -26,6 +27,7 @@ export function OverviewTab({
   setEventNameEdit,
   setEventDescriptionEdit,
   setScheduleLabels,
+  onOpenWalkthrough,
 }: {
   data: AdminData;
   selectedEventId: string;
@@ -40,6 +42,7 @@ export function OverviewTab({
   setEventNameEdit: (v: string) => void;
   setEventDescriptionEdit: (v: string) => void;
   setScheduleLabels: (v: string[]) => void;
+  onOpenWalkthrough: () => void;
 }) {
   async function applyRetreatTemplate() {
     if (!data.event) return;
@@ -77,6 +80,12 @@ export function OverviewTab({
 
   return (
     <>
+      <SetupChecklist
+        data={data}
+        onGoToTab={setActiveTab}
+        onOpenWalkthrough={onOpenWalkthrough}
+      />
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Guests" value={data.guests.length} />
         <StatCard label="Media files" value={data.media.length} />

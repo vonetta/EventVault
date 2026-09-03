@@ -104,6 +104,15 @@ function HomePageContent() {
             Enter the code you received to open your personal photos and the media
             included with your ticket.
           </p>
+          <details className="max-w-md rounded-2xl border border-[color:var(--line)] bg-white/60 px-4 py-3 text-sm text-pine/80">
+            <summary className="cursor-pointer font-medium text-ink">How this works</summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-5">
+              <li>Use the ticket code from your email, or scan the QR code.</li>
+              <li>Click <strong>Open my vault</strong>.</li>
+              <li>VIP guests see personal photos and speaker sessions. Standard guests see the group gallery.</li>
+              <li>Lost your code? Use the link below and enter the email on the guest list.</li>
+            </ol>
+          </details>
         </div>
 
         <form onSubmit={onSubmit} className="flex w-full max-w-md flex-col gap-3">
