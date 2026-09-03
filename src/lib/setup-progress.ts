@@ -25,7 +25,7 @@ export function getSetupProgress(data: AdminData) {
       (item.storageProvider === "youtube" || item.youtubeId || item.youtubePlaylistId),
   );
   const photosUploaded = data.media.some(
-    (item) => item.kind === "group_photo" || item.kind === "personal_photo",
+    (item) => item.kind === "group_photo" || item.kind === "event_photo" || item.kind === "personal_photo",
   );
   const sessionsWithoutVideo = data.sessions.filter(
     (session) =>
@@ -75,7 +75,7 @@ export function getSetupProgress(data: AdminData) {
     {
       id: "photos",
       title: "Upload photos",
-      detail: "Group gallery for everyone. VIP personal photos go to one guest only.",
+      detail: "Event gallery for everyone. Group photos if you want them separate. VIP personal photos go to one guest.",
       done: photosUploaded,
       tab: "media",
       actionLabel: "Upload photos",

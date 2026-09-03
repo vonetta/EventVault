@@ -39,7 +39,7 @@ export type MediaDoc = {
   availableUntil?: string | null;
 };
 
-export type MediaFilter = "all" | "group_photo" | "personal_photo" | "session_video";
+export type MediaFilter = "all" | "event_photo" | "group_photo" | "personal_photo" | "session_video";
 
 export type AdminData = {
   event: EventDoc | null;

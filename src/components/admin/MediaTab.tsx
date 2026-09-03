@@ -9,6 +9,7 @@ import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 import type { AdminActions, AdminData, GuestDoc, MediaDoc, MediaFilter, SessionDoc } from "@/components/admin/types";
 
 function mediaKindLabel(kind: string) {
+  if (kind === "event_photo") return "Event gallery";
   if (kind === "group_photo") return "Group gallery";
   if (kind === "personal_photo") return "VIP personal";
   if (kind === "session_video") return "Session";
@@ -72,7 +73,7 @@ export function MediaTab({
   actions: AdminActions;
 }) {
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>("all");
-  const [uploadKind, setUploadKind] = useState("group_photo");
+  const [uploadKind, setUploadKind] = useState("event_photo");
   const [uploadGuestId, setUploadGuestId] = useState("");
   const [uploadSessionId, setUploadSessionId] = useState(() => data.sessions[0]?._id || "");
   const [file, setFile] = useState<File | null>(null);
@@ -191,6 +192,7 @@ export function MediaTab({
               {(
                 [
                   ["all", "All"],
+                  ["event_photo", "Event"],
                   ["group_photo", "Group"],
                   ["personal_photo", "VIP"],
                   ["session_video", "Sessions"],
@@ -274,7 +276,7 @@ export function MediaTab({
         />
       </AdminPanel>
 
-      <AdminPanel title="Upload photos" description="Group gallery for everyone. VIP personal photos go to one guest only.">
+      <AdminPanel title="Upload photos" description="Event gallery is for everyone and is not assigned to a VIP guest or the group album.">
         <form onSubmit={uploadMedia} className="grid gap-4">
           <AdminField label="Photo type">
             <select
@@ -286,6 +288,7 @@ export function MediaTab({
               }}
               className={inputClassName}
             >
+              <option value="event_photo">Event gallery photo (everyone)</option>
               <option value="group_photo">Group gallery photo</option>
               <option value="personal_photo">VIP personal photo</option>
               <option value="session_video">Session file (fallback)</option>

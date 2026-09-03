@@ -175,7 +175,7 @@ export function GuestsTab({
 {`Jane Doe, jane@email.com, vip
 John Smith, john@email.com, standard`}
         </pre>
-        <p>VIP guests see personal photos and speaker sessions. Standard guests see the group gallery only. Use <strong>View vault</strong> to check what someone will see.</p>
+        <p>VIP guests see personal photos and speaker sessions. Every guest sees the event gallery and group gallery. Use <strong>View vault</strong> to check what someone will see.</p>
       </HowTo>
 
       <AdminPanel

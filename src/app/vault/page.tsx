@@ -24,6 +24,7 @@ type Library = {
   guest: { name: string; tier: "vip" | "standard" };
   event: { name: string; description?: string };
   groupGallery: MediaItem[];
+  eventGallery: MediaItem[];
   personalPhotos: MediaItem[];
   days: DayItem[];
   preview?: boolean;
@@ -125,11 +126,12 @@ export default function VaultPage() {
 
   const isVip = data.guest.tier === "vip";
   const personalCount = photoCount(data.personalPhotos);
+  const eventCount = photoCount(data.eventGallery || []);
   const groupCount = photoCount(data.groupGallery);
-  const zipCount = personalCount + groupCount;
+  const zipCount = personalCount + eventCount + groupCount;
   const firstName = data.guest.name.trim().split(/\s+/)[0] || data.guest.name;
   const sessionCount = data.days.reduce((sum, day) => sum + day.sessions.length, 0);
-  const showJumpNav = isVip && (personalCount > 0 || groupCount > 0 || sessionCount > 0);
+  const showJumpNav = personalCount > 0 || eventCount > 0 || groupCount > 0 || sessionCount > 0;
 
   return (
     <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-8 md:px-10 md:py-12">
@@ -157,7 +159,7 @@ export default function VaultPage() {
           </h1>
           <p className="mt-2 text-pine">
             {data.event.name}
-            {isVip ? " · Your photos, sessions, and the group gallery" : " · Group gallery"}
+            {isVip ? " · Your photos, sessions, and galleries" : " · Event and group galleries"}
           </p>
           {data.event.description ? (
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine">
@@ -206,6 +208,9 @@ export default function VaultPage() {
               Sessions
             </a>
           ) : null}
+          <a href="#event-gallery" className="underline-offset-4 hover:underline">
+            Event gallery{eventCount ? ` (${eventCount})` : ""}
+          </a>
           <a href="#group-gallery" className="underline-offset-4 hover:underline">
             Group gallery{groupCount ? ` (${groupCount})` : ""}
           </a>
@@ -266,6 +271,20 @@ export default function VaultPage() {
         </section>
       ) : null}
 
+      <section id="event-gallery" className="space-y-4 scroll-mt-6">
+        <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
+          Event gallery
+          {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
+        </h2>
+        <p className="text-sm text-pine">Photos from the event for every guest. Not assigned to VIP or the group album.</p>
+        <MediaGrid
+          items={data.eventGallery || []}
+          showDownload
+          showCaptions={false}
+          emptyMessage="Event gallery photos will appear here after they’re uploaded."
+        />
+      </section>
+
       <section id="group-gallery" className="space-y-4 scroll-mt-6">
         <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
           Group gallery
@@ -281,7 +300,7 @@ export default function VaultPage() {
 
       {!isVip ? (
         <p className="text-sm text-pine">
-          This ticket includes the group gallery. Personal photos and speaker sessions are part of VIP access.
+          This ticket includes the event gallery and group gallery. Personal photos and speaker sessions are part of VIP access.
         </p>
       ) : null}
 

@@ -97,7 +97,16 @@ export async function GET(request: Request) {
     kind: "group_photo",
   }).sort({ createdAt: -1 });
 
+  const eventPhotos = await Media.find({
+    eventId: guest.eventId,
+    kind: "event_photo",
+  }).sort({ createdAt: -1 });
+
   const group = groupPhotos
+    .filter((item) => isMediaAvailable(item.availableUntil))
+    .map(mapFileMedia);
+
+  const eventGallery = eventPhotos
     .filter((item) => isMediaAvailable(item.availableUntil))
     .map(mapFileMedia);
 
@@ -108,6 +117,7 @@ export async function GET(request: Request) {
       guest: { name: guest.name, tier },
       event: { name: event.name, description: event.description },
       groupGallery: group,
+      eventGallery,
       personalPhotos: [],
       days: [],
       preview,
@@ -169,6 +179,7 @@ export async function GET(request: Request) {
     guest: { name: guest.name, tier },
     event: { name: event.name, description: event.description },
     groupGallery: group,
+    eventGallery,
     personalPhotos: personal,
     days: dayPayload,
     preview,

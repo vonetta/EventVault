@@ -69,7 +69,7 @@ const MediaSchema = new Schema(
     eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
     kind: {
       type: String,
-      enum: ["personal_photo", "group_photo", "session_video"],
+      enum: ["personal_photo", "group_photo", "event_photo", "session_video"],
       required: true,
       index: true,
     },

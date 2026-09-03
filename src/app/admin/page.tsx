@@ -152,7 +152,7 @@ export default function AdminPage() {
             <li>On <strong>Event</strong>, add one speaker session per talk (2–3 a day).</li>
             <li>On <strong>Media → YouTube sessions</strong>, paste each talk’s video URL.</li>
             <li>On <strong>Guests</strong>, import names, emails, and vip/standard.</li>
-            <li>On <strong>Media</strong>, upload group and VIP photos.</li>
+            <li>On <strong>Media</strong>, upload event gallery photos (and VIP photos if needed).</li>
             <li>On <strong>Email</strong>, set up Gmail if you want ticket codes sent automatically.</li>
           </ol>
           <p className="mt-3 text-xs text-pine">After you create the event, use <strong>Guide</strong> in the header for a step-by-step walkthrough.</p>

@@ -54,8 +54,8 @@ async function ticketEmailContent(opts: {
 }) {
   const access =
     opts.tier === "vip"
-      ? "VIP access: personal photos, speaker sessions, and the group gallery."
-      : "Standard access: group gallery.";
+      ? "VIP access: personal photos, speaker sessions, and the event galleries."
+      : "Standard access: event gallery and group gallery.";
 
   const text = [
     `Hi ${opts.guestName},`,

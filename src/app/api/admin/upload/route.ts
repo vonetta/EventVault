@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid eventId" }, { status: 400 });
   }
 
-  const allowedKinds = ["personal_photo", "group_photo", "session_video"] as const;
+  const allowedKinds = ["personal_photo", "group_photo", "event_photo", "session_video"] as const;
   type MediaKind = (typeof allowedKinds)[number];
   if (!allowedKinds.includes(kindRaw as MediaKind)) {
     return NextResponse.json({ error: "Invalid media kind" }, { status: 400 });

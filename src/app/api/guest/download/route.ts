@@ -106,6 +106,11 @@ export async function GET(request: Request) {
     kind: "group_photo",
   }).sort({ createdAt: -1 });
 
+  const eventPhotos = await Media.find({
+    eventId: guest.eventId,
+    kind: "event_photo",
+  }).sort({ createdAt: -1 });
+
   const personalPhotos =
     guest.tier === "vip"
       ? await Media.find({
@@ -117,6 +122,7 @@ export async function GET(request: Request) {
 
   const used = new Set<string>();
   const entries: ZipEntry[] = [];
+  await collectZipEntries(eventPhotos, "event-gallery", used, entries);
   await collectZipEntries(groupPhotos, "group-gallery", used, entries);
   await collectZipEntries(personalPhotos, "personal", used, entries);
 

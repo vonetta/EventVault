@@ -15,8 +15,8 @@ const SLIDES: {
     title: "What EventVault is",
     body: [
       "Guests open a private media vault with a ticket code. No passwords for guests.",
-      "VIP guests see personal photos, speaker sessions, and the group gallery.",
-      "Standard guests see the group gallery only.",
+      "VIP guests see personal photos, speaker sessions, and the galleries.",
+      "Standard guests see the event gallery and group gallery.",
     ],
   },
   {
@@ -70,7 +70,8 @@ const SLIDES: {
     title: "5. Upload photos",
     body: [
       "On Media, use Upload photos.",
-      "Group gallery photo: everyone can see it.",
+      "Event gallery photo: everyone can see it. It is not assigned to a VIP guest or the group album.",
+      "Group gallery photo: optional second shared album, if you want group shots kept separate.",
       "VIP personal photo: choose one VIP guest first, then upload.",
       "Large photos are resized automatically before upload.",
     ],
