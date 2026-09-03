@@ -18,6 +18,25 @@ function loadEnv() {
 const env = loadEnv();
 const uri = env.MONGODB_URI || "mongodb://127.0.0.1:27017/eventvault";
 
+if (process.env.NODE_ENV === "production") {
+  console.error("Refusing to seed demo data in production.");
+  process.exit(1);
+}
+
+if (/mongodb\.net|\.mongodb\./i.test(uri) && process.env.ALLOW_DEMO_SEED !== "1") {
+  console.error("Refusing to seed against Atlas. Set ALLOW_DEMO_SEED=1 if you mean it.");
+  process.exit(1);
+}
+
+function demoTicketCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "EV-";
+  for (let i = 0; i < 8; i++) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return code;
+}
+
 const EventSchema = new mongoose.Schema({
   name: String,
   slug: { type: String, unique: true },
@@ -78,14 +97,14 @@ const guests = await Guest.insertMany([
     name: "Jane Doe",
     email: "jane@email.com",
     tier: "vip",
-    ticketCode: "EV-DEMO-VIP",
+    ticketCode: demoTicketCode(),
   },
   {
     eventId: event._id,
     name: "John Smith",
     email: "john@email.com",
     tier: "standard",
-    ticketCode: "EV-DEMO-STD",
+    ticketCode: demoTicketCode(),
   },
 ]);
 

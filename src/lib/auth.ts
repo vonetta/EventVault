@@ -2,9 +2,10 @@ import { timingSafeEqual } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { ADMIN_COOKIE, adminPasswordStamp, isAdminJwtPayload } from "@/lib/admin-token";
 
 export const GUEST_COOKIE = "ev_guest";
-export const ADMIN_COOKIE = "ev_admin";
+export { ADMIN_COOKIE };
 
 function requireSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
@@ -25,7 +26,15 @@ export function secretKey() {
   return requireSessionSecret();
 }
 
-/** Constant-time string compare for passwords. */
+function cookieBase() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  };
+}
+
 export function secureEqual(a: string, b: string) {
   const aBuf = Buffer.from(a);
   const bBuf = Buffer.from(b);
@@ -54,25 +63,23 @@ export async function setGuestSession(
     sv: session.sv ?? 0,
     adminPreview: options?.adminPreview ?? session.adminPreview,
   };
+  const preview = options?.adminPreview ?? session.adminPreview;
   const token = await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("12h")
+    .setExpirationTime(preview ? "30m" : "12h")
     .sign(secretKey());
 
   const jar = await cookies();
   jar.set(GUEST_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 12,
+    ...cookieBase(),
+    maxAge: preview ? 60 * 30 : 60 * 60 * 12,
   });
 }
 
 export async function clearGuestSession() {
   const jar = await cookies();
-  jar.delete(GUEST_COOKIE);
+  jar.set(GUEST_COOKIE, "", { ...cookieBase(), maxAge: 0 });
 }
 
 export async function getGuestSession(): Promise<GuestSession | null> {
@@ -89,7 +96,7 @@ export async function getGuestSession(): Promise<GuestSession | null> {
 }
 
 export async function setAdminSession() {
-  const token = await new SignJWT({ role: "admin" })
+  const token = await new SignJWT({ role: "admin", pv: await adminPasswordStamp() })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("8h")
@@ -97,17 +104,19 @@ export async function setAdminSession() {
 
   const jar = await cookies();
   jar.set(ADMIN_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
+    ...cookieBase(),
     maxAge: 60 * 60 * 8,
   });
 }
 
 export async function clearAdminSession() {
   const jar = await cookies();
-  jar.delete(ADMIN_COOKIE);
+  jar.set(ADMIN_COOKIE, "", { ...cookieBase(), maxAge: 0 });
+}
+
+export async function clearAllSessions() {
+  await clearGuestSession();
+  await clearAdminSession();
 }
 
 export async function isAdminAuthenticated() {
@@ -117,14 +126,21 @@ export async function isAdminAuthenticated() {
 
   try {
     const { payload } = await jwtVerify(token, secretKey());
-    return payload.role === "admin";
+    return await isAdminJwtPayload(payload);
   } catch {
     return false;
   }
 }
 
 export function unauthorized(message = "Unauthorized") {
-  return NextResponse.json({ error: message }, { status: 401 });
+  return NextResponse.json(message ? { error: message } : { error: "Unauthorized" }, {
+    status: 401,
+    headers: {
+      "Cache-Control": "private, no-store, no-cache, must-revalidate",
+      Pragma: "no-cache",
+      Vary: "Cookie",
+    },
+  });
 }
 
 function hostsMatch(requestHost: string, candidate: string) {
@@ -138,7 +154,9 @@ function hostsMatch(requestHost: string, candidate: string) {
 /** Reject cross-site POSTs that still send cookies (defense in depth). */
 export function assertSameOrigin(request: Request) {
   const host = request.headers.get("host");
-  if (!host) return;
+  if (!host) {
+    throw new Error("Cross-origin request blocked");
+  }
 
   const origin = request.headers.get("origin");
   if (origin) {

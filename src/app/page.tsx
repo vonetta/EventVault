@@ -1,17 +1,30 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 function normalizeTicketInput(value: string) {
   return value.toUpperCase().replace(/\s+/g, "");
 }
 
-function HomePageContent() {
-  const searchParams = useSearchParams();
+function ticketFromAddressBar() {
+  const params = new URLSearchParams(window.location.search);
+  const fromQuery = params.get("ticket");
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const fromHash = new URLSearchParams(hash).get("t");
+  return fromHash || fromQuery || "";
+}
+
+function stripTicketFromAddressBar() {
+  window.history.replaceState(null, "", window.location.pathname);
+}
+
+export default function HomePage() {
   const [ticketCode, setTicketCode] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(() => Boolean(searchParams.get("ticket")));
+  const [loading, setLoading] = useState(false);
+  const [openingFromLink, setOpeningFromLink] = useState(false);
   const [showResend, setShowResend] = useState(false);
   const [resendEmail, setResendEmail] = useState("");
   const [resendMessage, setResendMessage] = useState("");
@@ -53,14 +66,22 @@ function HomePageContent() {
   }
 
   useEffect(() => {
-    const fromQuery = searchParams.get("ticket");
-    if (!fromQuery) return;
-    const normalized = normalizeTicketInput(fromQuery);
-    setTicketCode(normalized);
     if (autoTried.current) return;
+    const raw = ticketFromAddressBar();
+    if (!raw) return;
     autoTried.current = true;
-    void openVault(normalized);
-  }, [searchParams]);
+    stripTicketFromAddressBar();
+    let decoded = raw;
+    try {
+      decoded = decodeURIComponent(raw);
+    } catch {
+      decoded = raw;
+    }
+    const normalized = normalizeTicketInput(decoded);
+    setTicketCode(normalized);
+    setOpeningFromLink(true);
+    void openVault(normalized).finally(() => setOpeningFromLink(false));
+  }, []);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -93,7 +114,7 @@ function HomePageContent() {
     }
   }
 
-  const openingFromLink = Boolean(searchParams.get("ticket")) && loading && !error;
+  const openingFromLinkAndBusy = openingFromLink && loading && !error;
 
   return (
     <main id="main" tabIndex={-1} className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-8 md:px-10">
@@ -129,7 +150,7 @@ function HomePageContent() {
           </p>
         </div>
 
-        {openingFromLink ? (
+        {openingFromLinkAndBusy ? (
           <p role="status" className="text-lg text-pine">
             Opening your vault…
           </p>
@@ -214,19 +235,5 @@ function HomePageContent() {
         )}
       </section>
     </main>
-  );
-}
-
-export default function HomePage() {
-  return (
-    <Suspense
-      fallback={
-        <main id="main" tabIndex={-1} className="mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6">
-          <p className="text-pine">Loading…</p>
-        </main>
-      }
-    >
-      <HomePageContent />
-    </Suspense>
   );
 }

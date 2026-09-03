@@ -44,7 +44,9 @@ export async function GET(request: Request, { params }: Params) {
     const headers: Record<string, string> = {
       "Content-Type": contentType || media.contentType || "application/octet-stream",
       "Content-Disposition": `${asDownload ? "attachment" : "inline"}; filename="${encodeURIComponent(media.filename)}"`,
-      "Cache-Control": "private, max-age=300",
+      "Cache-Control": "private, no-store, no-cache, must-revalidate",
+      Pragma: "no-cache",
+      Vary: "Cookie",
       "X-Content-Type-Options": "nosniff",
     };
     if (contentLength) {

@@ -37,6 +37,26 @@ export async function POST(request: Request) {
     );
   }
 
+  const vercelLimit = 4.5 * 1024 * 1024;
+  if (file.size <= 0) {
+    return NextResponse.json({ error: "File is empty" }, { status: 400 });
+  }
+  if (process.env.VERCEL && file.size > vercelLimit) {
+    return NextResponse.json(
+      {
+        error:
+          "This file is too large for direct upload on Vercel (max ~4.5MB). Resize or compress the photo, then try again.",
+      },
+      { status: 400 },
+    );
+  }
+  if (file.size > MAX_VIDEO_BYTES) {
+    return NextResponse.json(
+      { error: `File too large (max ${Math.round(MAX_VIDEO_BYTES / (1024 * 1024))}MB)` },
+      { status: 400 },
+    );
+  }
+
   const eventId = objectIdSchema.safeParse(eventIdRaw);
   if (!eventId.success) {
     return NextResponse.json({ error: "Invalid eventId" }, { status: 400 });
@@ -80,22 +100,10 @@ export async function POST(request: Request) {
   }
 
   const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
-  if (file.size <= 0 || file.size > maxBytes) {
+  if (file.size > maxBytes) {
     return NextResponse.json(
       {
         error: `File too large (max ${Math.round(maxBytes / (1024 * 1024))}MB)`,
-      },
-      { status: 400 },
-    );
-  }
-
-  // Vercel serverless request body limit is ~4.5MB on most plans.
-  const vercelLimit = 4.5 * 1024 * 1024;
-  if (process.env.VERCEL && file.size > vercelLimit) {
-    return NextResponse.json(
-      {
-        error:
-          "This file is too large for direct upload on Vercel (max ~4.5MB). Resize or compress the photo, then try again.",
       },
       { status: 400 },
     );
@@ -198,6 +206,9 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === "production" ? "Upload failed" : message },
+      { status: 500 },
+    );
   }
 }

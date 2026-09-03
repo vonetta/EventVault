@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { setAdminSession, secureEqual, assertSameOrigin } from "@/lib/auth";
+import { setAdminSession, clearGuestSession, secureEqual, assertSameOrigin } from "@/lib/auth";
 import { assertProductionSecrets } from "@/lib/env";
 import { adminLoginSchema } from "@/lib/validate";
 import { z } from "zod";
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: message }, { status: 500 });
     }
 
+    await clearGuestSession();
     await setAdminSession();
     return NextResponse.json({ ok: true });
   } catch (error) {

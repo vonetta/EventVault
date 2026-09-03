@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Guest } from "@/lib/models";
-import { setGuestSession, assertSameOrigin } from "@/lib/auth";
+import { setGuestSession, clearAdminSession, assertSameOrigin } from "@/lib/auth";
 import { guestSessionPayload } from "@/lib/guest-session";
 import { normalizeTicketCode } from "@/lib/tickets";
 import { ticketLoginSchema } from "@/lib/validate";
@@ -43,6 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid ticket code" }, { status: 401 });
     }
 
+    await clearAdminSession();
     await setGuestSession(guestSessionPayload(guest));
 
     return NextResponse.json({

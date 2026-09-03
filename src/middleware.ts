@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
-
-const ADMIN_COOKIE = "ev_admin";
+import { ADMIN_COOKIE, isAdminJwtPayload } from "@/lib/admin-token";
 
 async function verifyAdminToken(token: string) {
   const secret = process.env.SESSION_SECRET?.trim();
@@ -10,7 +9,7 @@ async function verifyAdminToken(token: string) {
 
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
-    return payload.role === "admin";
+    return isAdminJwtPayload(payload);
   } catch {
     return false;
   }

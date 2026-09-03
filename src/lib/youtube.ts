@@ -123,6 +123,6 @@ export function youtubeOpenUrlForRef(ref: YouTubeRef) {
 export function isMediaAvailable(availableUntil?: Date | string | null) {
   if (!availableUntil) return true;
   const end = availableUntil instanceof Date ? availableUntil : new Date(availableUntil);
-  if (Number.isNaN(end.getTime())) return true;
+  if (Number.isNaN(end.getTime())) return false;
   return end.getTime() > Date.now();
 }

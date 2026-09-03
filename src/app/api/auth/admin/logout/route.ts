@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { assertSameOrigin, clearAdminSession } from "@/lib/auth";
+import { assertSameOrigin, clearAllSessions } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
@@ -8,6 +8,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await clearAdminSession();
+  await clearAllSessions();
   return NextResponse.json({ ok: true });
 }

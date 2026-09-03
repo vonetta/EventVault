@@ -47,22 +47,20 @@ export async function POST(request: Request) {
     await connectDB();
     const guest = await Guest.findOne({ email: body.email });
 
-    if (!guest) {
-      return NextResponse.json(GENERIC_OK);
+    if (guest) {
+      const event = await Event.findById(guest.eventId);
+      if (event && guest.email) {
+        void sendTicketEmail({
+          to: guest.email,
+          guestName: guest.name,
+          eventName: event.name,
+          ticketCode: guest.ticketCode,
+          tier: guest.tier,
+        }).catch(() => {
+          // Same generic response either way — do not leak send failures.
+        });
+      }
     }
-
-    const event = await Event.findById(guest.eventId);
-    if (!event) {
-      return NextResponse.json(GENERIC_OK);
-    }
-
-    await sendTicketEmail({
-      to: guest.email,
-      guestName: guest.name,
-      eventName: event.name,
-      ticketCode: guest.ticketCode,
-      tier: guest.tier,
-    });
 
     return NextResponse.json(GENERIC_OK);
   } catch (error) {

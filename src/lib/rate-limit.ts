@@ -30,21 +30,28 @@ async function rateLimitMongo(key: string, limit: number, windowMs: number) {
   const now = new Date();
   const resetAt = new Date(now.getTime() + windowMs);
 
-  // Reset expired buckets atomically
+  try {
+    await RateLimitBucket.updateOne(
+      { key },
+      { $setOnInsert: { key, count: 0, resetAt } },
+      { upsert: true },
+    );
+  } catch {
+    // Unique-key race: the bucket already exists.
+  }
+
   await RateLimitBucket.updateOne(
     { key, resetAt: { $lte: now } },
     { $set: { count: 0, resetAt } },
   );
 
-  // Single atomic increment — only succeeds if count < limit
   const result = await RateLimitBucket.findOneAndUpdate(
     { key, count: { $lt: limit } },
-    { $inc: { count: 1 }, $setOnInsert: { resetAt } },
-    { upsert: true, new: true },
+    { $inc: { count: 1 } },
+    { new: true },
   );
 
   if (!result) {
-    // findOneAndUpdate returned null — bucket is full
     const bucket = await RateLimitBucket.findOne({ key });
     const retryMs = bucket ? bucket.resetAt.getTime() - now.getTime() : windowMs;
     return {
@@ -53,19 +60,22 @@ async function rateLimitMongo(key: string, limit: number, windowMs: number) {
     };
   }
 
-  return { ok: true as const, remaining: limit - result.count };
+  return { ok: true as const, remaining: Math.max(0, limit - result.count) };
 }
 
 /**
- * Rate limiter — uses MongoDB when available (shared across Vercel instances),
- * falls back to per-instance memory in local dev.
+ * Rate limiter — uses MongoDB when available (shared across Vercel instances).
+ * In production, Mongo errors fail closed (429) instead of falling back to
+ * a per-lambda memory map that attackers can bypass.
  */
 export async function rateLimit(key: string, limit: number, windowMs: number) {
   if (process.env.MONGODB_URI) {
     try {
       return await rateLimitMongo(key, limit, windowMs);
     } catch {
-      // Fall through to memory limiter
+      if (process.env.NODE_ENV === "production") {
+        return { ok: false as const, retryAfterSec: 30 };
+      }
     }
   }
   return rateLimitMemory(key, limit, windowMs);

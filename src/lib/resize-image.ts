@@ -43,18 +43,12 @@ function scaledDimensions(width: number, height: number, maxDim: number) {
 }
 
 /**
- * Resize/compress photos before admin upload. GIFs and non-images are returned unchanged.
+ * Resize/compress photos before admin upload, and always re-encode stills so
+ * EXIF/GPS is stripped. GIFs and non-images are returned unchanged.
  */
 export async function resizeImageForUpload(file: File): Promise<File> {
   if (!file.type.startsWith("image/") || file.type === "image/gif") {
     return file;
-  }
-
-  if (file.size <= MAX_BYTES) {
-    const img = await loadImage(file);
-    if (img.width <= MAX_DIMENSION && img.height <= MAX_DIMENSION) {
-      return file;
-    }
   }
 
   const img = await loadImage(file);
