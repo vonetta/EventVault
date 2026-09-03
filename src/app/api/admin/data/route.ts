@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { isAdminAuthenticated, unauthorized, assertSameOrigin } from "@/lib/auth";
 import { logAdminAction } from "@/lib/audit";
-import { Day, Event, Guest, Media, Session } from "@/lib/models";
+import { AuditLog, Day, Event, Guest, Media, Session } from "@/lib/models";
 import { createTicketCode } from "@/lib/tickets";
 import { adminActionSchema } from "@/lib/validate";
 import { emailConfigured, getEmailConfigStatus, sendTicketEmail } from "@/lib/email";
@@ -59,6 +59,15 @@ export async function GET(request: Request) {
 
   await connectDB();
   const { searchParams } = new URL(request.url);
+
+  if (searchParams.get("auditLog") === "1") {
+    const logs = await AuditLog.find()
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+    return NextResponse.json({ logs });
+  }
+
   const eventId = searchParams.get("eventId");
 
   const events = await Event.find().sort({ createdAt: -1 });
@@ -527,6 +536,71 @@ export async function POST(request: Request) {
         sessionId: media.sessionId,
       },
     });
+  }
+
+  if (body.action === "delete_session") {
+    const session = await Session.findById(body.sessionId);
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+    // Remove associated media (YouTube links)
+    const sessionMedia = await Media.find({ sessionId: session._id });
+    for (const m of sessionMedia) {
+      if (m.storageKey && (m.storageProvider === "r2" || m.storageProvider === "local")) {
+        try { await deleteStoredObject(m.storageKey, m.storageProvider); } catch { /* continue */ }
+      }
+    }
+    await Media.deleteMany({ sessionId: session._id });
+    await Session.deleteOne({ _id: session._id });
+    await logAdminAction(request, "delete_session", { sessionId: body.sessionId });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "update_session") {
+    const session = await Session.findById(body.sessionId);
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+    if (body.title !== undefined) session.title = body.title.trim();
+    if (body.speaker !== undefined) session.speaker = body.speaker.trim();
+    if (body.startsAt !== undefined) session.startsAt = body.startsAt.trim();
+    if (body.description !== undefined) session.description = body.description.trim();
+    await session.save();
+    return NextResponse.json({ session });
+  }
+
+  if (body.action === "delete_event") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    // Remove all associated data
+    const eventMedia = await Media.find({ eventId: event._id });
+    for (const m of eventMedia) {
+      if (m.storageKey && (m.storageProvider === "r2" || m.storageProvider === "local")) {
+        try { await deleteStoredObject(m.storageKey, m.storageProvider); } catch { /* continue */ }
+      }
+    }
+    await Media.deleteMany({ eventId: event._id });
+    await Session.deleteMany({ eventId: event._id });
+    await Day.deleteMany({ eventId: event._id });
+    await Guest.deleteMany({ eventId: event._id });
+    await Event.deleteOne({ _id: event._id });
+    await logAdminAction(request, "delete_event", { eventId: body.eventId, eventName: event.name });
+    return NextResponse.json({ ok: true, deleted: event.name });
+  }
+
+  if (body.action === "bulk_delete_media") {
+    const mediaList = await Media.find({ _id: { $in: body.mediaIds } });
+    for (const m of mediaList) {
+      if (m.storageKey && (m.storageProvider === "r2" || m.storageProvider === "local")) {
+        try { await deleteStoredObject(m.storageKey, m.storageProvider); } catch { /* continue */ }
+      }
+    }
+    await Media.deleteMany({ _id: { $in: body.mediaIds } });
+    await logAdminAction(request, "bulk_delete_media", { count: mediaList.length });
+    return NextResponse.json({ ok: true, deleted: mediaList.length });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

@@ -177,6 +177,15 @@ export default function VaultPage() {
         <p className="text-sm text-pine/80">{downloadMessage}</p>
       ) : null}
 
+      <details className="rounded-2xl border border-[color:var(--line)] bg-white/60 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-pine">My profile</summary>
+        <div className="mt-3 grid gap-2 text-sm text-pine/80">
+          <p><strong className="text-ink">Name:</strong> {data.guest.name}</p>
+          <p><strong className="text-ink">Tier:</strong> {data.guest.tier === "vip" ? "VIP" : "Standard"}</p>
+          <p className="text-xs text-pine/60">Contact the event organizer to update your details.</p>
+        </div>
+      </details>
+
       <section className="space-y-4">
         <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">Group gallery</h2>
         <MediaGrid items={data.groupGallery} />

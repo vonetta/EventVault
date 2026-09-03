@@ -17,6 +17,9 @@ type MediaGridProps = {
   items: MediaItem[];
   emptyMessage?: string;
   onRemove?: (id: string) => void;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 };
 
 function LazyImage({ src, alt, className }: { src: string; alt: string; className: string }) {
@@ -57,6 +60,9 @@ export function MediaGrid({
   items,
   emptyMessage = "Nothing here yet.",
   onRemove,
+  selectable,
+  selectedIds,
+  onToggleSelect,
 }: MediaGridProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -82,11 +88,17 @@ export function MediaGrid({
             item.contentType === "video/youtube-playlist";
 
           if (isYouTube && item.embedUrl) {
+            const isSelected = selectable && selectedIds?.has(item.id);
             return (
               <div
                 key={item.id}
-                className="relative overflow-hidden rounded-2xl border border-[color:var(--line)] bg-white/70"
+                className={`relative overflow-hidden rounded-2xl border bg-white/70 ${isSelected ? "border-ink ring-2 ring-gold/40" : "border-[color:var(--line)]"}`}
               >
+                {selectable && onToggleSelect ? (
+                  <label className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 shadow">
+                    <input type="checkbox" checked={!!isSelected} onChange={() => onToggleSelect(item.id)} className="h-4 w-4" />
+                  </label>
+                ) : null}
                 <div className="aspect-video w-full bg-ink/90">
                   <iframe
                     className="h-full w-full"
@@ -123,12 +135,18 @@ export function MediaGrid({
           const lightboxPosition = isImage
             ? imageItems.findIndex((entry) => entry.idx === idx)
             : -1;
+          const isSelected = selectable && selectedIds?.has(item.id);
 
           return (
             <div
               key={item.id}
-              className="relative overflow-hidden rounded-2xl border border-[color:var(--line)] bg-white/70 transition hover:-translate-y-0.5 hover:shadow-md"
+              className={`relative overflow-hidden rounded-2xl border bg-white/70 transition hover:-translate-y-0.5 hover:shadow-md ${isSelected ? "border-ink ring-2 ring-gold/40" : "border-[color:var(--line)]"}`}
             >
+              {selectable && onToggleSelect ? (
+                <label className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 shadow">
+                  <input type="checkbox" checked={!!isSelected} onChange={() => onToggleSelect(item.id)} className="h-4 w-4" />
+                </label>
+              ) : null}
               {isImage ? (
                 <button
                   type="button"

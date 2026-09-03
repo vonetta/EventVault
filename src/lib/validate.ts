@@ -115,7 +115,27 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     sessionId: objectIdSchema,
     youtubeUrl: z.string().min(5).max(500),
     title: z.string().max(200).optional(),
-    availableUntil: z.string().max(40).optional(), // ISO date YYYY-MM-DD or datetime
+    availableUntil: z.string().max(40).optional(),
+  }),
+  z.object({
+    action: z.literal("delete_session"),
+    sessionId: objectIdSchema,
+  }),
+  z.object({
+    action: z.literal("update_session"),
+    sessionId: objectIdSchema,
+    title: z.string().min(1).max(200).optional(),
+    speaker: z.string().max(120).optional(),
+    startsAt: z.string().max(80).optional(),
+    description: z.string().max(1000).optional(),
+  }),
+  z.object({
+    action: z.literal("delete_event"),
+    eventId: objectIdSchema,
+  }),
+  z.object({
+    action: z.literal("bulk_delete_media"),
+    mediaIds: z.array(objectIdSchema).min(1).max(200),
   }),
 ]);
 

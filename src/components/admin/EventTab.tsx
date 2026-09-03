@@ -274,9 +274,24 @@ export function EventTab({
             {data.sessions.map((session) => {
               const day = data.days.find((d) => d._id === session.dayId);
               return (
-                <li key={session._id} className="rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-pine">
-                  <span className="font-medium text-ink">{session.title}</span>
-                  <span className="text-pine/70"> · {day?.label}{session.speaker ? ` · ${session.speaker}` : ""}</span>
+                <li key={session._id} className="flex items-center justify-between gap-2 rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-pine">
+                  <div>
+                    <span className="font-medium text-ink">{session.title}</span>
+                    <span className="text-pine/70"> · {day?.label}{session.speaker ? ` · ${session.speaker}` : ""}</span>
+                  </div>
+                  <AdminButton
+                    variant="danger"
+                    className="!h-7 !px-2 !text-xs shrink-0"
+                    onClick={async () => {
+                      if (!confirm(`Delete session "${session.title}"? Associated media will also be removed.`)) return;
+                      const json = await actions.postAction({ action: "delete_session", sessionId: session._id });
+                      if (!json) return;
+                      actions.setMessage("Session deleted.");
+                      if (data.event) await actions.load(data.event._id);
+                    }}
+                  >
+                    Delete
+                  </AdminButton>
                 </li>
               );
             })}
@@ -294,6 +309,29 @@ export function EventTab({
           <AdminButton type="submit">Add event</AdminButton>
         </form>
       </details>
+
+      {data.events.length > 1 && data.event ? (
+        <details className="rounded-2xl border border-red-200 bg-red-50/50 p-4">
+          <summary className="cursor-pointer text-sm font-medium text-red-800">Delete this event</summary>
+          <p className="mt-2 text-sm text-red-700">
+            This will permanently delete <strong>{data.event.name}</strong> and all its days, sessions, guests, and media.
+          </p>
+          <AdminButton
+            variant="danger"
+            className="mt-3"
+            onClick={async () => {
+              if (!data.event) return;
+              if (!confirm(`PERMANENTLY delete "${data.event.name}" and ALL its data? This cannot be undone.`)) return;
+              const json = await actions.postAction({ action: "delete_event", eventId: data.event._id });
+              if (!json) return;
+              actions.setMessage(`Deleted event "${(json as { deleted: string }).deleted}".`);
+              await actions.load();
+            }}
+          >
+            Delete event permanently
+          </AdminButton>
+        </details>
+      ) : null}
     </>
   );
 }

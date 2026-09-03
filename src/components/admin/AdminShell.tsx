@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-export type AdminTab = "overview" | "event" | "guests" | "media" | "email";
+export type AdminTab = "overview" | "event" | "guests" | "media" | "email" | "audit";
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -10,6 +10,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "guests", label: "Guests" },
   { id: "media", label: "Media" },
   { id: "email", label: "Email" },
+  { id: "audit", label: "Audit log" },
 ];
 
 export function AdminShell({

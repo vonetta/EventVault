@@ -9,6 +9,7 @@ import { EventTab } from "@/components/admin/EventTab";
 import { GuestsTab } from "@/components/admin/GuestsTab";
 import { MediaTab } from "@/components/admin/MediaTab";
 import { EmailTab } from "@/components/admin/EmailTab";
+import { AuditTab } from "@/components/admin/AuditTab";
 import type { AdminActions, AdminData, DayDoc } from "@/components/admin/types";
 
 function parseDayLabels(text: string, dayCount: number) {
@@ -131,6 +132,17 @@ export default function AdminPage() {
         <h1 className="mt-2 font-[family-name:var(--font-fraunces)] text-4xl text-ink">Create your event</h1>
         <p className="mt-2 text-pine/75">Set up Koinonia Retreat or any ticketed event.</p>
 
+        <div className="mt-6 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-sm text-pine/80">
+          <p className="font-medium text-ink">Getting started</p>
+          <ol className="mt-2 list-inside list-decimal space-y-1">
+            <li>Create your event below (name, days, description)</li>
+            <li>Import guests with their names, emails, and tiers</li>
+            <li>Upload group photos and VIP personal photos</li>
+            <li>Link YouTube sessions for speaker content</li>
+            <li>Set up Gmail and email ticket codes to guests</li>
+          </ol>
+        </div>
+
         {message ? (
           <p className="mt-4 rounded-2xl border border-gold/30 bg-gold/10 px-4 py-3 text-sm text-ink">{message}</p>
         ) : null}
@@ -205,6 +217,7 @@ export default function AdminPage() {
     guests: <GuestsTab data={data} selectedEventId={selectedEventId} actions={actions} setActiveTab={setActiveTab} />,
     media: <MediaTab data={data} selectedEventId={selectedEventId} actions={actions} />,
     email: <EmailTab data={data} setMessage={setMessage} />,
+    audit: <AuditTab />,
   }[activeTab];
 
   return (

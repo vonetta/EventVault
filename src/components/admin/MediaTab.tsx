@@ -83,6 +83,8 @@ export function MediaTab({
   const [youtubeSessionId, setYoutubeSessionId] = useState(() => data.sessions[0]?._id || "");
   const [youtubeUntil, setYoutubeUntil] = useState("");
   const [linkingYoutube, setLinkingYoutube] = useState(false);
+  const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const vipGuests = useMemo(
     () => data.guests.filter((guest) => guest.tier === "vip"),
@@ -183,33 +185,90 @@ export function MediaTab({
         title="Media library"
         description={`${data.media.length} file${data.media.length === 1 ? "" : "s"} for this event`}
         action={
-          <div className="flex flex-wrap gap-1.5">
-            {(
-              [
-                ["all", "All"],
-                ["group_photo", "Group"],
-                ["personal_photo", "VIP"],
-                ["session_video", "Sessions"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMediaFilter(value)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  mediaFilter === value ? "bg-ink text-foam" : "bg-mist text-pine"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["all", "All"],
+                  ["group_photo", "Group"],
+                  ["personal_photo", "VIP"],
+                  ["session_video", "Sessions"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => { setMediaFilter(value); setSelectedMediaIds(new Set()); }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    mediaFilter === value ? "bg-ink text-foam" : "bg-mist text-pine"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {filteredMediaItems.length > 1 ? (
+              <label className="flex items-center gap-1.5 text-xs text-pine">
+                <input
+                  type="checkbox"
+                  checked={selectedMediaIds.size === filteredMediaItems.length && filteredMediaItems.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedMediaIds(new Set(filteredMediaItems.map((m) => m.id)));
+                    } else {
+                      setSelectedMediaIds(new Set());
+                    }
+                  }}
+                  className="h-3.5 w-3.5"
+                />
+                Select all
+              </label>
+            ) : null}
           </div>
         }
       >
+        {selectedMediaIds.size > 0 ? (
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50/80 px-4 py-2">
+            <span className="text-sm text-red-800">{selectedMediaIds.size} selected</span>
+            <AdminButton
+              variant="danger"
+              className="!h-8 !px-3 !text-xs"
+              disabled={bulkDeleting}
+              onClick={async () => {
+                if (!confirm(`Delete ${selectedMediaIds.size} media file(s)?`)) return;
+                setBulkDeleting(true);
+                const json = await actions.postAction({
+                  action: "bulk_delete_media",
+                  mediaIds: [...selectedMediaIds],
+                });
+                setBulkDeleting(false);
+                if (!json) return;
+                setSelectedMediaIds(new Set());
+                actions.setMessage(`Deleted ${(json as { deleted: number }).deleted} file(s).`);
+                await actions.load(selectedEventId);
+              }}
+            >
+              {bulkDeleting ? "Deleting…" : `Delete ${selectedMediaIds.size}`}
+            </AdminButton>
+            <button type="button" onClick={() => setSelectedMediaIds(new Set())} className="text-xs text-pine underline">
+              Clear
+            </button>
+          </div>
+        ) : null}
         <MediaGrid
           items={filteredMediaItems}
           emptyMessage="No media yet — upload photos below."
           onRemove={deleteMedia}
+          selectable
+          selectedIds={selectedMediaIds}
+          onToggleSelect={(id) => {
+            setSelectedMediaIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }}
         />
       </AdminPanel>
 
