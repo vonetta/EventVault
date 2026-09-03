@@ -9,6 +9,10 @@ type LightboxProps = {
   onClose: () => void;
 };
 
+function downloadUrl(src: string) {
+  return `${src}${src.includes("?") ? "&" : "?"}download=1`;
+}
+
 export function Lightbox({ images, startIndex = 0, onClose }: LightboxProps) {
   const [index, setIndex] = useState(startIndex);
   const image = images[index];
@@ -66,7 +70,7 @@ export function Lightbox({ images, startIndex = 0, onClose }: LightboxProps) {
           className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain"
         />
 
-        <div className="mt-3 flex items-center gap-4 text-foam">
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-foam">
           {images.length > 1 ? (
             <>
               <button
@@ -90,6 +94,12 @@ export function Lightbox({ images, startIndex = 0, onClose }: LightboxProps) {
               </button>
             </>
           ) : null}
+          <a
+            href={downloadUrl(image.src)}
+            className="rounded-full bg-white/15 px-4 py-2 text-sm transition hover:bg-white/25"
+          >
+            Download photo
+          </a>
         </div>
       </div>
     </div>

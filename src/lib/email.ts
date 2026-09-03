@@ -67,6 +67,8 @@ async function ticketEmailContent(opts: {
     "",
     `Open your vault: ${opts.loginUrl}`,
     "",
+    "Works on your phone — tap the link or scan the QR code in the email.",
+    "",
     "Keep this code private — it unlocks your media.",
   ].join("\n");
 
@@ -92,6 +94,7 @@ async function ticketEmailContent(opts: {
           </td>
         </tr>
       </table>
+      <p style="margin: 0 0 8px; font-size: 13px; color: #57534e;">Works on your phone — tap the button or scan the code.</p>
       <p style="margin: 0; font-size: 13px; color: #57534e;">Keep this code private — it unlocks your media.</p>
     </div>
   `.trim();

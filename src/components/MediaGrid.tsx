@@ -20,7 +20,13 @@ type MediaGridProps = {
   selectable?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
+  showDownload?: boolean;
+  showCaptions?: boolean;
 };
+
+function downloadUrl(src: string) {
+  return `${src}${src.includes("?") ? "&" : "?"}download=1`;
+}
 
 function LazyImage({ src, alt, className }: { src: string; alt: string; className: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -63,6 +69,8 @@ export function MediaGrid({
   selectable,
   selectedIds,
   onToggleSelect,
+  showDownload = false,
+  showCaptions = true,
 }: MediaGridProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -115,14 +123,16 @@ export function MediaGrid({
                     allowFullScreen
                   />
                 </div>
-                <div className="px-3 py-2 text-sm text-pine">
-                  {item.title}
-                  {item.availableUntil ? (
-                    <span className="mt-1 block text-xs text-pine">
-                      Available until {new Date(item.availableUntil).toLocaleDateString()}
-                    </span>
-                  ) : null}
-                </div>
+                {showCaptions || item.availableUntil ? (
+                  <div className="px-3 py-2 text-sm text-pine">
+                    {showCaptions ? item.title : null}
+                    {item.availableUntil ? (
+                      <span className="mt-1 block text-xs text-pine">
+                        Available until {new Date(item.availableUntil).toLocaleDateString()}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
                 {onRemove ? (
                   <button
                     type="button"
@@ -161,21 +171,35 @@ export function MediaGrid({
                 </label>
               ) : null}
               {isImage ? (
-                <button
-                  type="button"
-                  className="block w-full text-left"
-                  aria-label={`View larger: ${item.title}`}
-                  onClick={() => {
-                    if (lightboxPosition >= 0) setLightboxIndex(lightboxPosition);
-                  }}
-                >
-                  <LazyImage
-                    src={item.url}
-                    alt=""
-                    className="aspect-[4/3] w-full"
-                  />
-                  <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="block w-full text-left"
+                    aria-label={`View larger: ${item.title}`}
+                    onClick={() => {
+                      if (lightboxPosition >= 0) setLightboxIndex(lightboxPosition);
+                    }}
+                  >
+                    <LazyImage
+                      src={item.url}
+                      alt=""
+                      className="aspect-[4/3] w-full"
+                    />
+                    {showCaptions ? (
+                      <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
+                    ) : null}
+                  </button>
+                  {showDownload ? (
+                    <a
+                      href={downloadUrl(item.url)}
+                      className="absolute bottom-2 right-2 rounded-full bg-ink/80 px-3 py-1 text-xs text-foam"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Download ${item.title}`}
+                    >
+                      Download
+                    </a>
+                  ) : null}
+                </>
               ) : (
                 <a href={item.url} target="_blank" rel="noreferrer" className="block">
                   {item.contentType.startsWith("video/") ? (

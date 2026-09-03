@@ -7,8 +7,9 @@ import { Readable } from "node:stream";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(request: Request, { params }: Params) {
   const { id } = await params;
+  const asDownload = new URL(request.url).searchParams.get("download") === "1";
   if (!/^[a-f\d]{24}$/i.test(id)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -42,7 +43,7 @@ export async function GET(_request: Request, { params }: Params) {
 
     const headers: Record<string, string> = {
       "Content-Type": contentType || media.contentType || "application/octet-stream",
-      "Content-Disposition": `inline; filename="${encodeURIComponent(media.filename)}"`,
+      "Content-Disposition": `${asDownload ? "attachment" : "inline"}; filename="${encodeURIComponent(media.filename)}"`,
       "Cache-Control": "private, max-age=300",
       "X-Content-Type-Options": "nosniff",
     };

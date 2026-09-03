@@ -29,6 +29,10 @@ type Library = {
   preview?: boolean;
 };
 
+function photoCount(items: MediaItem[]) {
+  return items.filter((item) => item.provider !== "youtube").length;
+}
+
 export default function VaultPage() {
   const router = useRouter();
   const [data, setData] = useState<Library | null>(null);
@@ -65,7 +69,7 @@ export default function VaultPage() {
 
   async function downloadAll() {
     setDownloading(true);
-    setDownloadMessage("");
+    setDownloadMessage("Preparing a ZIP of your photos…");
     try {
       const response = await fetch("/api/guest/download");
       if (response.status === 401) {
@@ -89,7 +93,7 @@ export default function VaultPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      setDownloadMessage("Download started.");
+      setDownloadMessage("Saved to your downloads folder.");
     } catch {
       setDownloadMessage("Could not prepare your download");
     } finally {
@@ -107,16 +111,25 @@ export default function VaultPage() {
 
   if (!data) {
     return (
-      <main id="main" tabIndex={-1} className="mx-auto max-w-3xl px-6 py-16">
-        <p className="text-pine">Opening your vault…</p>
+      <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-8 md:px-10 md:py-12">
+        <p className="font-[family-name:var(--font-fraunces)] text-3xl text-ink">EventVault</p>
+        <p role="status" className="text-pine">Opening your vault…</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="aspect-[4/3] animate-pulse rounded-2xl bg-white" />
+          ))}
+        </div>
       </main>
     );
   }
 
   const isVip = data.guest.tier === "vip";
-  const photoCount =
-    data.groupGallery.filter((item) => item.provider !== "youtube").length +
-    data.personalPhotos.filter((item) => item.provider !== "youtube").length;
+  const personalCount = photoCount(data.personalPhotos);
+  const groupCount = photoCount(data.groupGallery);
+  const zipCount = personalCount + groupCount;
+  const firstName = data.guest.name.trim().split(/\s+/)[0] || data.guest.name;
+  const sessionCount = data.days.reduce((sum, day) => sum + day.sessions.length, 0);
+  const showJumpNav = isVip && (personalCount > 0 || groupCount > 0 || sessionCount > 0);
 
   return (
     <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-8 md:px-10 md:py-12">
@@ -140,11 +153,11 @@ export default function VaultPage() {
         <div>
           <p className="font-[family-name:var(--font-fraunces)] text-3xl text-ink">EventVault</p>
           <h1 className="mt-3 font-[family-name:var(--font-fraunces)] text-4xl text-ink">
-            Welcome, {data.guest.name}
+            Welcome, {firstName}
           </h1>
           <p className="mt-2 text-pine">
             {data.event.name}
-            {isVip ? " · VIP access" : " · Group gallery access"}
+            {isVip ? " · Your photos, sessions, and the group gallery" : " · Group gallery"}
           </p>
           {data.event.description ? (
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine">
@@ -156,14 +169,16 @@ export default function VaultPage() {
           <button
             type="button"
             onClick={downloadAll}
-            disabled={downloading || photoCount === 0}
+            disabled={downloading || zipCount === 0}
             className="rounded-full bg-ink px-4 py-2 text-sm text-foam disabled:cursor-not-allowed disabled:opacity-50"
           >
             {downloading
               ? "Preparing ZIP…"
-              : isVip
-                ? "Download all photos"
-                : "Download group gallery"}
+              : zipCount === 0
+                ? "Photos coming soon"
+                : isVip
+                  ? `Download all ${zipCount} photos`
+                  : `Download gallery (${zipCount})`}
           </button>
           <button
             type="button"
@@ -175,73 +190,109 @@ export default function VaultPage() {
         </div>
       </header>
 
-      {downloadMessage ? (
-        <p role="status" aria-live="polite" className="text-sm text-pine">
-          {downloadMessage}
+      <p role="status" aria-live="polite" className={downloadMessage ? "text-sm text-pine" : "sr-only"}>
+        {downloadMessage}
+      </p>
+
+      {showJumpNav ? (
+        <nav aria-label="Vault sections" className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-pine">
+          {isVip ? (
+            <a href="#personal-photos" className="underline-offset-4 hover:underline">
+              Your photos{personalCount ? ` (${personalCount})` : ""}
+            </a>
+          ) : null}
+          {isVip && sessionCount ? (
+            <a href="#speaker-sessions" className="underline-offset-4 hover:underline">
+              Sessions
+            </a>
+          ) : null}
+          <a href="#group-gallery" className="underline-offset-4 hover:underline">
+            Group gallery{groupCount ? ` (${groupCount})` : ""}
+          </a>
+        </nav>
+      ) : null}
+
+      {isVip ? (
+        <section id="personal-photos" className="space-y-4 scroll-mt-6">
+          <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
+            Your photos
+            {personalCount ? <span className="ml-2 text-lg text-pine">{personalCount}</span> : null}
+          </h2>
+          <p className="text-sm text-pine">Tap a photo to view it larger, or download one at a time.</p>
+          <MediaGrid
+            items={data.personalPhotos}
+            showDownload
+            showCaptions={false}
+            emptyMessage="Your personal photos will appear here when they’re ready."
+          />
+        </section>
+      ) : null}
+
+      {isVip && data.days.length ? (
+        <section id="speaker-sessions" className="space-y-8 scroll-mt-6">
+          <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
+            Speaker sessions
+          </h2>
+          {data.days.map((day) => (
+            <div key={day.id} className="space-y-4">
+              <h3 className="text-lg font-semibold text-pine">{day.label}</h3>
+              <div className="space-y-4">
+                {day.sessions.map((session) => (
+                  <article
+                    key={session.id}
+                    className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4"
+                  >
+                    <h4 className="text-lg text-ink">{session.title}</h4>
+                    <p className="text-sm text-pine">
+                      {[session.speaker, session.startsAt].filter(Boolean).join(" · ")}
+                    </p>
+                    {session.description ? (
+                      <p className="mt-2 text-sm text-pine">{session.description}</p>
+                    ) : null}
+                    <div className="mt-4">
+                      <MediaGrid
+                        items={session.videos}
+                        emptyMessage="This session’s video will appear here when it’s linked."
+                      />
+                    </div>
+                  </article>
+                ))}
+                {!day.sessions.length ? (
+                  <p className="text-sm text-pine">Sessions for this day will appear here.</p>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
+      <section id="group-gallery" className="space-y-4 scroll-mt-6">
+        <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
+          Group gallery
+          {groupCount ? <span className="ml-2 text-lg text-pine">{groupCount}</span> : null}
+        </h2>
+        <MediaGrid
+          items={data.groupGallery}
+          showDownload
+          showCaptions={false}
+          emptyMessage="The group gallery will appear here after photos are uploaded."
+        />
+      </section>
+
+      {!isVip ? (
+        <p className="text-sm text-pine">
+          This ticket includes the group gallery. Personal photos and speaker sessions are part of VIP access.
         </p>
       ) : null}
 
-      <details className="rounded-2xl border border-[color:var(--line)] bg-white/60 p-4">
-        <summary className="cursor-pointer text-sm font-medium text-pine">My profile</summary>
+      <details className="border-t border-[color:var(--line)] pt-6">
+        <summary className="cursor-pointer text-sm font-medium text-pine">Account details</summary>
         <div className="mt-3 grid gap-2 text-sm text-pine">
           <p><strong className="text-ink">Name:</strong> {data.guest.name}</p>
-          <p><strong className="text-ink">Tier:</strong> {data.guest.tier === "vip" ? "VIP" : "Standard"}</p>
+          <p><strong className="text-ink">Access:</strong> {data.guest.tier === "vip" ? "VIP" : "Standard"}</p>
           <p className="text-xs text-pine">Contact the event organizer to update your details.</p>
         </div>
       </details>
-
-      <section className="space-y-4">
-        <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">Group gallery</h2>
-        <MediaGrid items={data.groupGallery} />
-      </section>
-
-      {isVip ? (
-        <>
-          <section className="space-y-4">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
-              Your personal photos
-            </h2>
-            <MediaGrid items={data.personalPhotos} />
-          </section>
-
-          <section className="space-y-8">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
-              Speaker sessions
-            </h2>
-            {data.days.map((day) => (
-              <div key={day.id} className="space-y-4">
-                <h3 className="text-lg font-semibold text-pine">{day.label}</h3>
-                <div className="space-y-4">
-                  {day.sessions.map((session) => (
-                    <article
-                      key={session.id}
-                      className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4"
-                    >
-                      <h4 className="text-lg text-ink">{session.title}</h4>
-                      <p className="text-sm text-pine">
-                        {[session.speaker, session.startsAt].filter(Boolean).join(" · ")}
-                      </p>
-                      {session.description ? (
-                        <p className="mt-2 text-sm text-pine">{session.description}</p>
-                      ) : null}
-                      <div className="mt-4">
-                        <MediaGrid items={session.videos} />
-                      </div>
-                    </article>
-                  ))}
-                  {!day.sessions.length ? (
-                    <p className="text-sm text-pine">Sessions coming soon.</p>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </section>
-        </>
-      ) : (
-        <section className="rounded-2xl border border-[color:var(--line)] bg-white/60 p-5 text-pine">
-          Personal photos and full speaker sessions are included with VIP tickets.
-        </section>
-      )}
     </main>
   );
 }
