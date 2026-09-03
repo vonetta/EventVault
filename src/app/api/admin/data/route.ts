@@ -61,11 +61,24 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
   if (searchParams.get("auditLog") === "1") {
-    const logs = await AuditLog.find()
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean();
-    return NextResponse.json({ logs });
+    try {
+      const logs = await AuditLog.find()
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean();
+      return NextResponse.json({
+        logs: logs.map((entry) => ({
+          _id: String(entry._id),
+          action: entry.action,
+          details: entry.details || {},
+          ip: entry.ip || "",
+          createdAt: entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString(),
+        })),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load audit log";
+      return NextResponse.json({ error: message, logs: [] }, { status: 500 });
+    }
   }
 
   const eventId = searchParams.get("eventId");
@@ -176,6 +189,7 @@ export async function POST(request: Request) {
       })),
     );
 
+    await logAdminAction(request, body.action, { eventName: event.name, dayCount: days.length });
     return NextResponse.json({ event, days, created: true });
   }
 
@@ -190,7 +204,7 @@ export async function POST(request: Request) {
     if (body.startsOn !== undefined) event.startsOn = body.startsOn.trim();
     if (body.endsOn !== undefined) event.endsOn = body.endsOn.trim();
     await event.save();
-
+    await logAdminAction(request, "update_event", { eventId: body.eventId, name: event.name });
     return NextResponse.json({ event });
   }
 
@@ -310,6 +324,10 @@ export async function POST(request: Request) {
       startsAt: body.startsAt || "",
       description: body.description || "",
       sortOrder: Number(body.sortOrder || 0),
+    });
+    await logAdminAction(request, "add_session", {
+      title: session.title,
+      speaker: session.speaker,
     });
     return NextResponse.json({ session });
   }
@@ -445,6 +463,7 @@ export async function POST(request: Request) {
     if (!result.sent) {
       return NextResponse.json({ error: result.reason }, { status: 400 });
     }
+    await logAdminAction(request, "email_ticket", { guestName: guest.name });
     return NextResponse.json({ ok: true });
   }
 
@@ -522,6 +541,10 @@ export async function POST(request: Request) {
       guestId: null,
     });
 
+    await logAdminAction(request, "add_youtube_session", {
+      title: label,
+      sessionTitle: session.title,
+    });
     return NextResponse.json({
       media: {
         _id: media._id,
@@ -573,6 +596,7 @@ export async function POST(request: Request) {
     if (body.startsAt !== undefined) session.startsAt = body.startsAt.trim();
     if (body.description !== undefined) session.description = body.description.trim();
     await session.save();
+    await logAdminAction(request, "update_session", { title: session.title, speaker: session.speaker });
     return NextResponse.json({ session });
   }
 

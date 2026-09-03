@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { isAdminAuthenticated, unauthorized, assertSameOrigin } from "@/lib/auth";
 import { Event, Guest, Media, Session } from "@/lib/models";
+import { logAdminAction } from "@/lib/audit";
 import { storeFile } from "@/lib/storage";
 import { assertFileMatchesMime } from "@/lib/file-sniff";
 import {
@@ -162,6 +163,10 @@ export async function POST(request: Request) {
       sessionId,
     });
 
+    await logAdminAction(request, "upload_media", {
+      kind: media.kind,
+      title: media.title,
+    });
     return NextResponse.json({
       media: {
         _id: media._id,
