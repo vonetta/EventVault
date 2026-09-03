@@ -23,7 +23,7 @@ const SLIDES: {
     body: [
       "Open the Event tab.",
       "Confirm the event name and the guest-facing description.",
-      "In Retreat schedule, keep one row per day (Thursday–Monday works for Koinonia).",
+      "In Retreat schedule, keep one row per day (Day 1, Day 2, Day 3).",
       "Click Save schedule if you change days.",
     ],
     tab: "event",
@@ -35,7 +35,7 @@ const SLIDES: {
       "Still on Event, scroll to Speaker sessions.",
       "Add one session for each talk — usually 2–3 per day.",
       "Choose the Day, type the talk title, then the speaker name.",
-      "Example: Friday · Morning worship · Jane Doe.",
+      "Example: Day 1 · Morning worship · Jane Doe.",
       "Do not paste YouTube links here. This step only creates the labels guests will see.",
     ],
     tab: "event",

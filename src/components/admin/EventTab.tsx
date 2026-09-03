@@ -259,7 +259,7 @@ export function EventTab({
       <HowTo title="How speaker sessions work" defaultOpen={!data.sessions.length}>
         <p>Create <strong>one session per talk</strong>, usually 2–3 per day. This is only the label guests will see.</p>
         <ol className="list-decimal space-y-1 pl-5">
-          <li>Choose the <strong>Day</strong> (Friday, Saturday, …).</li>
+          <li>Choose the <strong>Day</strong> (Day 1, Day 2, …).</li>
           <li>Type the talk title, then the speaker name.</li>
           <li>Click <strong>Add session</strong>. Repeat for every talk.</li>
           <li>Next, go to <strong>Media → YouTube sessions</strong> and paste each video URL.</li>

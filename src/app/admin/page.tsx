@@ -178,7 +178,7 @@ export default function AdminPage() {
               </select>
             </AdminField>
             <AdminField label="Custom day names" hint="One per line (optional)">
-              <textarea value={newEventDayLabels} onChange={(e) => setNewEventDayLabels(e.target.value)} placeholder={"Thursday\nFriday\nSaturday\nSunday\nMonday"} rows={3} className={`${textareaClassName} font-mono`} />
+              <textarea value={newEventDayLabels} onChange={(e) => setNewEventDayLabels(e.target.value)} placeholder={"Day 1\nDay 2\nDay 3\nDay 4\nDay 5"} rows={3} className={`${textareaClassName} font-mono`} />
             </AdminField>
           </div>
           <AdminButton type="submit" variant="primary" className="h-11 w-full">Create event</AdminButton>
