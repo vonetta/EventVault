@@ -209,15 +209,15 @@ export function EventTab({
   return (
     <>
       <AdminPanel
-        title="Event details"
-        description="Name, description, and dates. The retreat schedule is built from Starts on and Ends on."
+        title="Event"
+        description="Name, dates, and schedule. Days are Day 1, Day 2… from Starts on through Ends on."
         action={
-          <AdminButton onClick={applyRetreatTemplate} disabled={applyingTemplate || savingEvent}>
+          <AdminButton onClick={applyRetreatTemplate} disabled={applyingTemplate || savingEvent} className="!h-9">
             {applyingTemplate ? "Applying…" : "Koinonia template"}
           </AdminButton>
         }
       >
-        <div className="grid gap-4">
+        <div className="grid gap-5">
           <AdminField label="Event name">
             <input value={eventNameEdit} onChange={(e) => setEventNameEdit(e.target.value)} className={inputClassName} />
           </AdminField>
@@ -225,7 +225,7 @@ export function EventTab({
             <textarea value={eventDescriptionEdit} onChange={(e) => setEventDescriptionEdit(e.target.value)} rows={3} className={textareaClassName} />
           </AdminField>
           <div className="grid gap-4 sm:grid-cols-2">
-            <AdminField label="Starts on" hint="First day of the retreat">
+            <AdminField label="Starts on">
               <input
                 type="date"
                 value={eventStartsOn}
@@ -233,7 +233,7 @@ export function EventTab({
                 className={inputClassName}
               />
             </AdminField>
-            <AdminField label="Ends on" hint="Last day — schedule fills Day 1 through the last day">
+            <AdminField label="Ends on">
               <input
                 type="date"
                 value={eventEndsOn}
@@ -242,54 +242,49 @@ export function EventTab({
               />
             </AdminField>
           </div>
+
+          <div>
+            <p className="mb-3 text-xs font-medium uppercase tracking-[0.08em] text-pine">Schedule</p>
+            {!eventStartsOn.trim() || !eventEndsOn.trim() ? (
+              <p className="text-sm text-pine">Set both dates, then save.</p>
+            ) : !rangeSchedule.ok ? (
+              <p className="text-sm text-red-700">{rangeSchedule.error}</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {rangeSchedule.days.map((day) => (
+                  <div
+                    key={day.date}
+                    className="min-w-[7.5rem] border border-[color:var(--line)] bg-white px-3 py-2.5"
+                  >
+                    <p className="text-sm font-medium text-ink">{day.label}</p>
+                    <p className="mt-0.5 text-xs text-pine">{formatScheduleDate(day.date)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {rangeSchedule.ok && scheduleLabels.length > 0 && scheduleLabels.length !== rangeSchedule.days.length ? (
+              <p className="mt-3 text-sm text-pine">
+                Saved schedule still has {scheduleLabels.length} days. Save changes to update it.
+              </p>
+            ) : null}
+          </div>
+
           <AdminButton variant="primary" onClick={() => saveEventSettings()} disabled={savingEvent} className="w-full sm:w-auto">
             {savingEvent ? "Saving…" : "Save changes"}
           </AdminButton>
         </div>
       </AdminPanel>
 
-      <AdminPanel
-        title="Retreat schedule"
-        description="This list follows Starts on and Ends on. Save event details to apply it."
-      >
-        {!eventStartsOn.trim() || !eventEndsOn.trim() ? (
-          <p className="text-sm text-pine/70">
-            Set both <strong>Starts on</strong> and <strong>Ends on</strong> above, then save. Days will appear as Day 1, Day 2, Day 3…
-          </p>
-        ) : !rangeSchedule.ok ? (
-          <p className="text-sm text-red-700">{rangeSchedule.error}</p>
-        ) : (
-          <ul className="divide-y divide-[color:var(--line)]">
-            {rangeSchedule.days.map((day, index) => (
-              <li key={day.date} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                <div>
-                  <p className="font-medium text-ink">{day.label}</p>
-                  <p className="mt-0.5 text-sm text-pine/65">{formatScheduleDate(day.date)}</p>
-                </div>
-                <span className="text-xs text-pine/45">{index + 1}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {rangeSchedule.ok && scheduleLabels.length > 0 && scheduleLabels.length !== rangeSchedule.days.length ? (
-          <p className="mt-3 text-sm text-pine/70">
-            Saved schedule has {scheduleLabels.length} day{scheduleLabels.length === 1 ? "" : "s"}. Click <strong>Save changes</strong> above to match these dates.
-          </p>
-        ) : null}
-      </AdminPanel>
-
       <HowTo title="How speaker sessions work" defaultOpen={!data.sessions.length}>
-        <p>Create <strong>one session per talk</strong>, usually 2–3 per day. This is only the label guests will see.</p>
+        <p>Create one session per talk (usually 2–3 per day), then paste each YouTube URL under Media.</p>
         <ol className="list-decimal space-y-1 pl-5">
-          <li>Choose the <strong>Day</strong> (Day 1, Day 2, … from your start and end dates).</li>
-          <li>Type the talk title, then the speaker name.</li>
-          <li>Click <strong>Add session</strong>. Repeat for every talk.</li>
-          <li>Next, go to <strong>Media → YouTube sessions</strong> and paste each video URL.</li>
+          <li>Choose Day 1, Day 2, …</li>
+          <li>Add the talk title and speaker</li>
+          <li>Link the video in Media → YouTube sessions</li>
         </ol>
-        <p>Do not paste YouTube links on this page.</p>
       </HowTo>
 
-      <AdminPanel title="Speaker sessions" description="Create one session per talk before linking YouTube videos in Media.">
+      <AdminPanel title="Speaker sessions" description="One session per talk before linking YouTube videos.">
         <form onSubmit={addSession} className="grid gap-3 sm:grid-cols-2">
           <AdminField label="Day">
             <select value={sessionDayId} onChange={(e) => setSessionDayId(e.target.value)} className={inputClassName}>
@@ -413,8 +408,8 @@ export function EventTab({
         )}
       </AdminPanel>
 
-      <details className="rounded-2xl border border-[color:var(--line)] bg-white/60 p-4">
-        <summary className="cursor-pointer text-sm font-medium text-pine">Add another event (advanced)</summary>
+      <details className="border-b border-[color:var(--line)] pb-6">
+        <summary className="cursor-pointer text-sm text-pine">Add another event</summary>
         <form onSubmit={createEvent} className="mt-4 space-y-3">
           <input value={newEventName} onChange={(e) => setNewEventName(e.target.value)} placeholder="New event name" className={inputClassName} />
           <textarea value={newEventDescription} onChange={(e) => setNewEventDescription(e.target.value)} placeholder="Description (optional)" rows={2} className={textareaClassName} />
@@ -423,10 +418,10 @@ export function EventTab({
       </details>
 
       {data.events.length > 1 && data.event ? (
-        <details className="rounded-2xl border border-red-200 bg-red-50/50 p-4">
-          <summary className="cursor-pointer text-sm font-medium text-red-800">Delete this event</summary>
-          <p className="mt-2 text-sm text-red-700">
-            This will permanently delete <strong>{data.event.name}</strong> and all its days, sessions, guests, and media.
+        <details className="pb-2">
+          <summary className="cursor-pointer text-sm text-red-800">Delete this event</summary>
+          <p className="mt-2 text-sm text-pine">
+            Permanently deletes <strong>{data.event.name}</strong> and all days, sessions, guests, and media.
           </p>
           <AdminButton
             variant="danger"
@@ -440,7 +435,7 @@ export function EventTab({
               await actions.load();
             }}
           >
-            Delete event permanently
+            Delete permanently
           </AdminButton>
         </details>
       ) : null}

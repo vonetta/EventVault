@@ -14,7 +14,7 @@ export function HowTo({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="rounded-2xl border border-[color:var(--line)] bg-white/70 px-4 py-3">
+    <div className="border-b border-[color:var(--line)] pb-6">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -22,13 +22,9 @@ export function HowTo({
         aria-expanded={open}
       >
         <span className="text-sm text-pine">{title}</span>
-        <span className="text-xs text-pine/50">{open ? "Hide" : "Show"}</span>
+        <span className="text-xs text-pine/60">{open ? "Hide" : "Show"}</span>
       </button>
-      {open ? (
-        <div className="mt-3 space-y-2 border-t border-[color:var(--line)] pt-3 text-sm leading-relaxed text-pine/80">
-          {children}
-        </div>
-      ) : null}
+      {open ? <div className="mt-3 space-y-2 text-sm leading-relaxed text-pine">{children}</div> : null}
     </div>
   );
 }

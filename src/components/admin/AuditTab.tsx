@@ -46,13 +46,13 @@ export function AuditTab() {
       const response = await fetch("/api/admin/data?auditLog=1");
       const json = await response.json();
       if (!response.ok) {
-        setError(json.error || "Could not load audit log");
+        setError(json.error || "Could not load activity");
         setLogs([]);
         return;
       }
       setLogs(json.logs || []);
     } catch {
-      setError("Could not load audit log");
+      setError("Could not load activity");
     } finally {
       setLoading(false);
     }
@@ -65,7 +65,7 @@ export function AuditTab() {
   return (
     <AdminPanel
       title="Activity"
-      description="Recent changes in this admin account."
+      description="Recent admin changes."
       action={
         <AdminButton onClick={load} disabled={loading} className="!h-9">
           {loading ? "Refreshing…" : "Refresh"}
@@ -73,30 +73,27 @@ export function AuditTab() {
       }
     >
       {loading ? (
-        <p className="text-sm text-pine/60">Loading…</p>
+        <p className="text-sm text-pine">Loading…</p>
       ) : error ? (
         <p className="text-sm text-red-700">{error}</p>
       ) : !logs.length ? (
-        <div className="rounded-2xl border border-dashed border-[color:var(--line)] bg-mist/30 px-5 py-10 text-center">
-          <p className="font-[family-name:var(--font-fraunces)] text-lg text-ink">No activity yet</p>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-pine/70">
-            New changes will show up here — sessions, YouTube links, guest imports, uploads, and emails.
-          </p>
-        </div>
+        <p className="text-sm text-pine">
+          No activity yet. New changes will show up here after you save sessions, link videos, import guests, or upload photos.
+        </p>
       ) : (
-        <ul className="divide-y divide-[color:var(--line)]">
+        <ul>
           {logs.map((entry) => {
             const when = formatWhen(entry.createdAt);
             const detail = formatDetails(entry.details);
             return (
-              <li key={entry._id} className="flex gap-4 py-3.5 first:pt-0 last:pb-0">
-                <div className="w-16 shrink-0 pt-0.5 text-right">
-                  <p className="text-xs font-medium text-ink">{when.day}</p>
-                  <p className="text-[11px] text-pine/55">{when.time}</p>
+              <li key={entry._id} className="flex gap-4 border-b border-[color:var(--line)] py-3 last:border-b-0">
+                <div className="w-16 shrink-0 text-right">
+                  <p className="text-xs text-ink">{when.day}</p>
+                  <p className="text-[11px] text-pine">{when.time}</p>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-ink">{formatAction(entry.action)}</p>
-                  {detail ? <p className="mt-0.5 truncate text-sm text-pine/70">{detail}</p> : null}
+                  <p className="text-sm text-ink">{formatAction(entry.action)}</p>
+                  {detail ? <p className="mt-0.5 truncate text-sm text-pine">{detail}</p> : null}
                 </div>
               </li>
             );

@@ -33,59 +33,54 @@ export function AdminShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-[color:var(--line)] bg-foam/90 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 md:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="min-h-screen bg-[#f3f5f3]">
+      <header className="sticky top-0 z-20 border-b border-[color:var(--line)] bg-[#f3f5f3]/95 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-5 py-5 md:px-8">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-pine/60">
-                EventVault Admin
-              </p>
-              <h1 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink md:text-3xl">
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-pine">Admin</p>
+              <h1 className="mt-1 font-[family-name:var(--font-fraunces)] text-3xl tracking-tight text-ink">
                 {eventName || "Dashboard"}
               </h1>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1">
               {onOpenGuide ? (
                 <button
                   type="button"
                   onClick={onOpenGuide}
-                  className="rounded-full border border-[color:var(--line)] bg-white/80 px-4 py-2 text-sm text-pine transition hover:bg-white"
+                  className="rounded-lg px-3 py-2 text-sm text-pine transition hover:bg-white hover:text-ink"
                 >
-                  How to use
+                  Guide
                 </button>
               ) : null}
               <a
                 href="/"
                 target="_blank"
                 rel="noreferrer"
-                className="hidden rounded-full border border-[color:var(--line)] bg-white/80 px-4 py-2 text-sm text-pine transition hover:bg-white sm:inline-flex"
+                className="hidden rounded-lg px-3 py-2 text-sm text-pine transition hover:bg-white hover:text-ink sm:inline-flex"
               >
-                Open guest site
+                Guest site
               </a>
               <button
                 type="button"
                 onClick={onSignOut}
-                className="rounded-full border border-[color:var(--line)] bg-white/80 px-4 py-2 text-sm text-pine transition hover:bg-white"
+                className="rounded-lg px-3 py-2 text-sm text-pine transition hover:bg-white hover:text-ink"
               >
                 Sign out
               </button>
             </div>
           </div>
 
-          <nav
-            aria-label="Admin sections"
-            className="-mx-1 flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]"
-          >
+          <nav aria-label="Admin sections" className="-mx-1 flex gap-0 overflow-x-auto border-b border-[color:var(--line)] [scrollbar-width:none]">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => onTabChange(tab.id)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition ${
+                className={`shrink-0 border-b-2 px-3 py-2.5 text-sm transition ${
                   activeTab === tab.id
-                    ? "bg-ink text-foam shadow-sm"
-                    : "text-pine hover:bg-white/80"
+                    ? "border-ink font-medium text-ink"
+                    : "border-transparent text-pine hover:text-ink"
                 }`}
               >
                 {tab.label}
@@ -96,14 +91,14 @@ export function AdminShell({
       </header>
 
       {message ? (
-        <div className="mx-auto w-full max-w-6xl px-4 pt-4 md:px-8">
-          <div className="flex items-start justify-between gap-3 rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 py-3 text-sm text-ink">
+        <div className="mx-auto w-full max-w-5xl px-5 pt-5 md:px-8">
+          <div className="flex items-start justify-between gap-3 border border-[color:var(--line)] bg-white px-4 py-3 text-sm text-ink">
             <p>{message}</p>
             {onDismissMessage ? (
               <button
                 type="button"
                 onClick={onDismissMessage}
-                className="shrink-0 text-pine/70 hover:text-ink"
+                className="shrink-0 text-pine hover:text-ink"
                 aria-label="Dismiss"
               >
                 ✕
@@ -113,8 +108,8 @@ export function AdminShell({
         </div>
       ) : null}
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">
-        <div className="flex flex-col gap-6">{children}</div>
+      <main className="mx-auto w-full max-w-5xl px-5 py-8 md:px-8">
+        <div className="flex flex-col gap-10">{children}</div>
       </main>
     </div>
   );

@@ -105,26 +105,26 @@ export function Walkthrough({
   const last = index === SLIDES.length - 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-[6px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="walkthrough-title"
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-[color:var(--line)] bg-foam shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden border border-[color:var(--line)] bg-white"
       >
         <div className="flex items-start justify-between gap-3 border-b border-[color:var(--line)] px-5 py-4">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-pine/60">
-              Admin walkthrough · {index + 1} of {SLIDES.length}
+            <p className="text-xs uppercase tracking-[0.1em] text-pine">
+              Guide · {index + 1} of {SLIDES.length}
             </p>
-            <h2 id="walkthrough-title" className="mt-1 font-[family-name:var(--font-fraunces)] text-2xl text-ink">
+            <h2 id="walkthrough-title" className="mt-1 font-[family-name:var(--font-fraunces)] text-2xl tracking-tight text-ink">
               {slide.title}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full px-2 text-pine/70 hover:text-ink"
+            className="px-2 text-pine hover:text-ink"
             aria-label="Close walkthrough"
           >
             ✕
@@ -132,7 +132,7 @@ export function Walkthrough({
         </div>
 
         <div className="overflow-y-auto px-5 py-4">
-          <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-pine/85">
+          <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-pine">
             {slide.body.map((line) => (
               <li key={line}>{line}</li>
             ))}

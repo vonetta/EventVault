@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --ink: #10241f;
-  --pine: #1c3d34;
-  --mist: #e7efe9;
-  --foam: #f4f8f5;
-  --gold: #c4a35a;
-  --gold-deep: #9a7a35;
-  --line: rgba(16, 36, 31, 0.12);
+  --ink: #142824;
+  --pine: #3a534c;
+  --mist: #eef2ef;
+  --foam: #f7f8f6;
+  --gold: #a8894a;
+  --gold-deep: #7d6430;
+  --line: rgba(20, 40, 36, 0.1);
   --background: var(--foam);
   --foreground: var(--ink);
 }
@@ -34,9 +34,7 @@ body {
   color: var(--foreground);
   font-family: var(--font-figtree), sans-serif;
   background:
-    radial-gradient(1200px 600px at 10% -10%, rgba(196, 163, 90, 0.18), transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, rgba(28, 61, 52, 0.16), transparent 50%),
-    linear-gradient(180deg, #f7faf8 0%, #eef4f0 45%, #e7efe9 100%);
+    linear-gradient(180deg, #f7f8f6 0%, #eef2ef 100%);
   min-height: 100vh;
 }
 

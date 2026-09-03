@@ -91,16 +91,16 @@ export function OverviewTab({
         onOpenWalkthrough={onOpenWalkthrough}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 border-b border-[color:var(--line)] pb-8 sm:grid-cols-4">
         <StatCard label="Guests" value={data.guests.length} />
-        <StatCard label="Media files" value={data.media.length} />
+        <StatCard label="Media" value={data.media.length} />
         <StatCard label="Sessions" value={data.sessions.length} />
         <StatCard label="Days" value={data.days.length} />
       </div>
 
       <AdminPanel
         title="Active event"
-        description={data.days.map((day) => day.label).join(" · ")}
+        description={data.days.map((day) => day.label).join(" · ") || "No days yet"}
         action={
           data.events.length > 1 ? (
             <select
@@ -121,26 +121,26 @@ export function OverviewTab({
           ) : null
         }
       >
-        <p className="text-sm text-pine/80">{eventDescriptionEdit || "No description yet."}</p>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <p className="text-sm text-pine">{eventDescriptionEdit || "No description yet."}</p>
+        <div className="mt-5 flex flex-wrap gap-2">
           <AdminButton variant="primary" onClick={() => setActiveTab("event")}>
             Edit event
           </AdminButton>
-          <AdminButton onClick={() => setActiveTab("guests")}>Manage guests</AdminButton>
-          <AdminButton onClick={() => setActiveTab("media")}>Upload media</AdminButton>
+          <AdminButton onClick={() => setActiveTab("guests")}>Guests</AdminButton>
+          <AdminButton onClick={() => setActiveTab("media")}>Media</AdminButton>
           <AdminButton onClick={applyRetreatTemplate} disabled={applyingTemplate || savingEvent}>
-            {applyingTemplate ? "Applying…" : "Apply Koinonia template"}
+            {applyingTemplate ? "Applying…" : "Koinonia template"}
           </AdminButton>
         </div>
       </AdminPanel>
 
-      <AdminPanel title="Email status">
-        <div className="flex flex-wrap items-center gap-3">
+      <AdminPanel title="Email">
+        <div className="flex flex-wrap items-center gap-4">
           <StatusBadge tone={data.emailConfigured ? "success" : "warning"}>
             {data.emailConfigured ? "Gmail configured" : "Gmail not configured"}
           </StatusBadge>
           {!data.emailConfigured ? (
-            <AdminButton onClick={() => setActiveTab("email")}>Set up email</AdminButton>
+            <AdminButton onClick={() => setActiveTab("email")}>Set up</AdminButton>
           ) : null}
         </div>
       </AdminPanel>
