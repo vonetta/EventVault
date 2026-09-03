@@ -9,6 +9,8 @@ export async function adminPasswordStamp() {
     .slice(0, 16);
 }
 
-export async function isAdminJwtPayload(payload: { role?: unknown; pv?: unknown }) {
-  return payload.role === "admin" && payload.pv === (await adminPasswordStamp());
+export async function isAdminJwtPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") return false;
+  const value = payload as { role?: unknown; pv?: unknown };
+  return value.role === "admin" && value.pv === (await adminPasswordStamp());
 }
