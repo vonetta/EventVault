@@ -33,8 +33,8 @@ export function AdminShell({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#f3f5f3]">
-      <header className="sticky top-0 z-20 border-b border-[color:var(--line)] bg-[#f3f5f3]/95 backdrop-blur-md">
+    <div className="min-h-screen bg-mist">
+      <header className="sticky top-0 z-20 border-b border-[color:var(--line)] bg-mist/95 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-5 py-5 md:px-8">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

@@ -41,7 +41,7 @@ async function ticketQrDataUrl(loginUrl: string) {
   return QRCode.toDataURL(loginUrl, {
     width: 200,
     margin: 1,
-    color: { dark: "#10241f", light: "#f4f1ea" },
+    color: { dark: "#1c1917", light: "#fafaf9" },
   });
 }
 
@@ -73,26 +73,26 @@ async function ticketEmailContent(opts: {
   const qrDataUrl = await ticketQrDataUrl(opts.loginUrl);
 
   const html = `
-    <div style="font-family: Georgia, 'Times New Roman', serif; color: #10241f; line-height: 1.6; max-width: 560px;">
+    <div style="font-family: Georgia, 'Times New Roman', serif; color: #1c1917; line-height: 1.6; max-width: 560px;">
       <p style="font-size: 18px; margin: 0 0 16px;">Hi ${escapeHtml(opts.guestName)},</p>
       <p style="margin: 0 0 16px;">Your private media vault for <strong>${escapeHtml(opts.eventName)}</strong> is ready.</p>
-      <p style="margin: 0 0 8px; font-size: 14px; color: #3d5c52;">Your ticket code</p>
+      <p style="margin: 0 0 8px; font-size: 14px; color: #57534e;">Your ticket code</p>
       <p style="margin: 0 0 20px; font-size: 28px; letter-spacing: 0.12em; font-family: ui-monospace, monospace;">${escapeHtml(opts.ticketCode)}</p>
-      <p style="margin: 0 0 20px; color: #3d5c52;">${escapeHtml(access)}</p>
+      <p style="margin: 0 0 20px; color: #57534e;">${escapeHtml(access)}</p>
       <table cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 0 24px;">
         <tr>
           <td style="padding-right: 20px; vertical-align: top;">
-            <a href="${escapeHtml(opts.loginUrl)}" style="display: inline-block; background: #10241f; color: #f4f1ea; text-decoration: none; padding: 12px 20px; border-radius: 999px; font-family: system-ui, sans-serif; font-size: 14px;">
+            <a href="${escapeHtml(opts.loginUrl)}" style="display: inline-block; background: #1c1917; color: #fafaf9; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-family: system-ui, sans-serif; font-size: 14px;">
               Open my vault
             </a>
           </td>
           <td style="vertical-align: top;">
-            <img src="${qrDataUrl}" width="120" height="120" alt="Scan to open your vault" style="display: block; border-radius: 12px; border: 1px solid #d4cfc4;" />
-            <p style="margin: 6px 0 0; font-size: 11px; color: #3d5c52; text-align: center;">Scan to open</p>
+            <img src="${qrDataUrl}" width="120" height="120" alt="Scan to open your vault" style="display: block; border-radius: 8px; border: 1px solid #e7e5e4;" />
+            <p style="margin: 6px 0 0; font-size: 11px; color: #57534e; text-align: center;">Scan to open</p>
           </td>
         </tr>
       </table>
-      <p style="margin: 0; font-size: 13px; color: #3d5c52;">Keep this code private — it unlocks your media.</p>
+      <p style="margin: 0; font-size: 13px; color: #57534e;">Keep this code private — it unlocks your media.</p>
     </div>
   `.trim();
 
@@ -194,7 +194,7 @@ export async function sendTestEmail(to: string) {
       subject: "EventVault test email",
       text: `EventVault email is working.\n\n${content.text}`,
       html: `
-        <div style="font-family: system-ui, sans-serif; color: #10241f; max-width: 560px;">
+        <div style="font-family: system-ui, sans-serif; color: #1c1917; max-width: 560px;">
           <p style="margin: 0 0 12px;"><strong>EventVault email is working.</strong></p>
           ${content.html}
         </div>

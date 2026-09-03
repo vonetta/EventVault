@@ -92,7 +92,7 @@ export function MediaGrid({
             return (
               <div
                 key={item.id}
-                className={`relative overflow-hidden rounded-2xl border bg-white/70 ${isSelected ? "border-ink ring-2 ring-gold/40" : "border-[color:var(--line)]"}`}
+                className={`relative overflow-hidden rounded-2xl border bg-white/70 ${isSelected ? "border-ink ring-2 ring-ink/20" : "border-[color:var(--line)]"}`}
               >
                 {selectable && onToggleSelect ? (
                   <label className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 shadow">
@@ -140,7 +140,7 @@ export function MediaGrid({
           return (
             <div
               key={item.id}
-              className={`relative overflow-hidden rounded-2xl border bg-white/70 transition hover:-translate-y-0.5 hover:shadow-md ${isSelected ? "border-ink ring-2 ring-gold/40" : "border-[color:var(--line)]"}`}
+              className={`relative overflow-hidden rounded-2xl border bg-white/70 transition hover:-translate-y-0.5 hover:shadow-md ${isSelected ? "border-ink ring-2 ring-ink/20" : "border-[color:var(--line)]"}`}
             >
               {selectable && onToggleSelect ? (
                 <label className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 shadow">

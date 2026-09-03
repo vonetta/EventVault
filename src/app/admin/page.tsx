@@ -145,7 +145,7 @@ export default function AdminPage() {
         <h1 className="mt-2 font-[family-name:var(--font-fraunces)] text-4xl text-ink">Create your event</h1>
         <p className="mt-2 text-pine/75">Set up Koinonia Retreat or any ticketed event.</p>
 
-        <div className="mt-6 rounded-2xl border border-gold/30 bg-gold/5 p-4 text-sm text-pine/80">
+        <div className="mt-6 border border-[color:var(--line)] bg-white p-4 text-sm text-pine">
           <p className="font-medium text-ink">Getting started</p>
           <ol className="mt-2 list-decimal space-y-2 pl-5">
             <li>Create the event below (name, days, description).</li>
@@ -155,11 +155,11 @@ export default function AdminPage() {
             <li>On <strong>Media</strong>, upload group and VIP photos.</li>
             <li>On <strong>Email</strong>, set up Gmail if you want ticket codes sent automatically.</li>
           </ol>
-          <p className="mt-3 text-xs text-pine/70">After you create the event, use <strong>How to use</strong> in the header for a step-by-step walkthrough.</p>
+          <p className="mt-3 text-xs text-pine">After you create the event, use <strong>Guide</strong> in the header for a step-by-step walkthrough.</p>
         </div>
 
         {message ? (
-          <p className="mt-4 rounded-2xl border border-gold/30 bg-gold/10 px-4 py-3 text-sm text-ink">{message}</p>
+          <p className="mt-4 border border-[color:var(--line)] bg-white px-4 py-3 text-sm text-ink">{message}</p>
         ) : null}
 
         <form onSubmit={bootstrap} className="mt-8 space-y-4 rounded-2xl border border-[color:var(--line)] bg-white/90 p-6 shadow-sm">

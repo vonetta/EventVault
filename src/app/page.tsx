@@ -78,7 +78,7 @@ function HomePageContent() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[70vh] opacity-80"
         style={{
           backgroundImage:
-            "linear-gradient(180deg, rgba(16,36,31,0.55), rgba(16,36,31,0.15) 55%, transparent), url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22 viewBox=%220 0 160 160%22%3E%3Cpath fill=%22%231c3d34%22 fill-opacity=%220.05%22 d=%22M0 160L160 0H80L0 80zm160 0V80L80 160z%22/%3E%3C/svg%3E')",
+            "linear-gradient(180deg, rgba(28,25,23,0.5), rgba(28,25,23,0.12) 55%, transparent), url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22 viewBox=%220 0 160 160%22%3E%3Cpath fill=%22%2344403c%22 fill-opacity=%220.06%22 d=%22M0 160L160 0H80L0 80zm160 0V80L80 160z%22/%3E%3C/svg%3E')",
           backgroundSize: "cover, 160px 160px",
         }}
       />
@@ -125,7 +125,7 @@ function HomePageContent() {
             onChange={(e) => setTicketCode(e.target.value)}
             placeholder="EV-XXXXXXXX"
             autoComplete="off"
-            className="h-14 rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 tracking-[0.18em] text-ink outline-none ring-gold/40 placeholder:tracking-normal placeholder:text-pine/40 focus:ring-2"
+            className="h-14 rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 tracking-[0.18em] text-ink outline-none ring-ink/20 placeholder:tracking-normal placeholder:text-pine/40 focus:ring-2"
           />
           <button
             type="submit"
@@ -161,7 +161,7 @@ function HomePageContent() {
                 onChange={(e) => setResendEmail(e.target.value)}
                 placeholder="you@email.com"
                 required
-                className="h-12 rounded-xl border border-[color:var(--line)] bg-white/80 px-4 text-ink outline-none ring-gold/40 focus:ring-2"
+                className="h-12 rounded-xl border border-[color:var(--line)] bg-white/80 px-4 text-ink outline-none ring-ink/20 focus:ring-2"
               />
               <button
                 type="submit"

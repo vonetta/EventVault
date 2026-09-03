@@ -327,7 +327,7 @@ export function MediaTab({
           />
           <label
             htmlFor="photo-upload-input"
-            className="flex min-h-[9rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-pine/25 bg-mist/40 px-4 py-6 text-center transition hover:border-gold/50 hover:bg-mist/70"
+            className="flex min-h-[9rem] cursor-pointer flex-col items-center justify-center gap-2 border-2 border-dashed border-[color:var(--line)] bg-white px-4 py-6 text-center transition hover:border-ink/30"
           >
             <span className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-foam">Choose photo</span>
             <span className="text-sm text-pine/80">

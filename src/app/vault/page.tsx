@@ -121,7 +121,7 @@ export default function VaultPage() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-8 md:px-10 md:py-12">
       {data.preview ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/15 px-4 py-3 text-sm text-ink">
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-[color:var(--line)] bg-white px-4 py-3 text-sm text-ink">
           <span>
             <strong>Admin preview</strong> — you are viewing the vault as{" "}
             <strong>{data.guest.name}</strong> ({data.guest.tier.toUpperCase()})

@@ -43,7 +43,7 @@ export default function AdminLoginPage() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="h-12 w-full rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 outline-none focus:ring-2 focus:ring-gold/40"
+          className="h-12 w-full rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 outline-none focus:ring-2 focus:ring-ink/20"
         />
         <button
           type="submit"
