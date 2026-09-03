@@ -561,6 +561,13 @@ export async function POST(request: Request) {
     if (!session) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+    if (body.dayId) {
+      const day = await Day.findById(body.dayId);
+      if (!day || String(day.eventId) !== String(session.eventId)) {
+        return NextResponse.json({ error: "Invalid day" }, { status: 400 });
+      }
+      session.dayId = day._id;
+    }
     if (body.title !== undefined) session.title = body.title.trim();
     if (body.speaker !== undefined) session.speaker = body.speaker.trim();
     if (body.startsAt !== undefined) session.startsAt = body.startsAt.trim();

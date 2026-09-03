@@ -124,6 +124,7 @@ export const adminActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("update_session"),
     sessionId: objectIdSchema,
+    dayId: objectIdSchema.optional(),
     title: z.string().min(1).max(200).optional(),
     speaker: z.string().max(120).optional(),
     startsAt: z.string().max(80).optional(),
