@@ -247,6 +247,21 @@ export async function POST(request: Request) {
 
     const existing = await Day.find({ eventId: event._id }).sort({ sortOrder: 1 });
 
+    // Pre-check: ensure days to be removed have no sessions before mutating anything
+    for (let index = labels.length; index < existing.length; index++) {
+      const day = existing[index];
+      const sessionCount = await Session.countDocuments({ dayId: day._id });
+      if (sessionCount > 0) {
+        return NextResponse.json(
+          {
+            error: `Cannot remove "${day.label}" — it still has ${sessionCount} session(s). Delete or move those sessions first.`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Safe to mutate — all validations passed
     for (let index = 0; index < labels.length; index++) {
       const label = labels[index];
       if (existing[index]) {
@@ -263,17 +278,7 @@ export async function POST(request: Request) {
     }
 
     for (let index = labels.length; index < existing.length; index++) {
-      const day = existing[index];
-      const sessionCount = await Session.countDocuments({ dayId: day._id });
-      if (sessionCount > 0) {
-        return NextResponse.json(
-          {
-            error: `Cannot remove "${day.label}" — it still has ${sessionCount} session(s). Delete or move those sessions first.`,
-          },
-          { status: 400 },
-        );
-      }
-      await Day.deleteOne({ _id: day._id });
+      await Day.deleteOne({ _id: existing[index]._id });
     }
 
     const days = await Day.find({ eventId: event._id }).sort({ sortOrder: 1 });
@@ -309,7 +314,7 @@ export async function POST(request: Request) {
     const created = [];
     const updated = [];
     const emailed = [];
-    const emailErrors = [];
+    const emailErrors: { email: string; reason: string }[] = [];
 
     for (const row of body.guests) {
       const name = row.name.trim();
@@ -338,16 +343,35 @@ export async function POST(request: Request) {
         created.push(guest);
       }
 
-      if (body.sendEmail && guest.email) {
-        const result = await sendTicketEmail({
-          to: guest.email,
-          guestName: guest.name,
-          eventName: event.name,
-          ticketCode: guest.ticketCode,
-          tier: guest.tier,
+    }
+
+    // Send emails concurrently in batches of 5 to avoid Vercel timeout
+    if (body.sendEmail) {
+      const allGuests = [...created, ...updated].filter((g) => g.email);
+      const BATCH = 5;
+      for (let i = 0; i < allGuests.length; i += BATCH) {
+        const batch = allGuests.slice(i, i + BATCH);
+        const results = await Promise.allSettled(
+          batch.map((guest) =>
+            sendTicketEmail({
+              to: guest.email,
+              guestName: guest.name,
+              eventName: event.name,
+              ticketCode: guest.ticketCode,
+              tier: guest.tier,
+            }),
+          ),
+        );
+        results.forEach((r, j) => {
+          const guest = batch[j];
+          if (r.status === "fulfilled" && r.value.sent) {
+            emailed.push(guest.email);
+          } else {
+            const reason =
+              r.status === "fulfilled" ? r.value.reason : (r.reason as Error)?.message || "Failed";
+            emailErrors.push({ email: guest.email, reason: reason || "Failed" });
+          }
         });
-        if (result.sent) emailed.push(guest.email);
-        else emailErrors.push({ email: guest.email, reason: result.reason });
       }
     }
 

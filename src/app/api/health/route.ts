@@ -1,25 +1,34 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
+import { isAdminAuthenticated } from "@/lib/auth";
 
 export async function GET() {
-  const checks: Record<string, string> = {
-    app: "ok",
-    mongo: "unknown",
-    r2: process.env.R2_BUCKET_NAME ? "configured" : "missing",
-    email: process.env.GMAIL_USER ? "configured" : "missing",
-    appUrl: process.env.APP_URL || "missing",
-  };
-
+  let mongoOk = false;
   try {
     await connectDB();
-    checks.mongo = "ok";
+    mongoOk = true;
   } catch {
-    checks.mongo = "error";
+    // mongo down
   }
 
-  const healthy = checks.mongo === "ok";
+  const admin = await isAdminAuthenticated();
+
+  if (!admin) {
+    return NextResponse.json(
+      { status: mongoOk ? "ok" : "degraded" },
+      { status: mongoOk ? 200 : 503 },
+    );
+  }
+
+  const checks: Record<string, string> = {
+    app: "ok",
+    mongo: mongoOk ? "ok" : "error",
+    r2: process.env.R2_BUCKET_NAME ? "configured" : "missing",
+    email: process.env.GMAIL_USER ? "configured" : "missing",
+  };
+
   return NextResponse.json(
-    { status: healthy ? "ok" : "degraded", checks },
-    { status: healthy ? 200 : 503 },
+    { status: mongoOk ? "ok" : "degraded", checks },
+    { status: mongoOk ? 200 : 503 },
   );
 }

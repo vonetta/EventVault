@@ -1,7 +1,5 @@
-import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/db";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { Guest, Media, type MediaDoc } from "@/lib/models";
+import { type MediaDoc } from "@/lib/models";
 import { resolveGuestSession } from "@/lib/guest-session";
 import { isMediaAvailable } from "@/lib/youtube";
 

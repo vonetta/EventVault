@@ -5,7 +5,7 @@ import { Readable } from "node:stream";
 import { connectDB } from "@/lib/db";
 import { unauthorized, assertSameOrigin } from "@/lib/auth";
 import { Event, Media, type MediaDoc } from "@/lib/models";
-import { readStoredObject } from "@/lib/storage";
+import { openStoredObjectStream } from "@/lib/storage";
 import { resolveGuestSession } from "@/lib/guest-session";
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
@@ -144,14 +144,17 @@ export async function GET(request: Request) {
         if (totalBytes >= MAX_ZIP_BYTES) break;
 
         try {
-          const { body } = await readStoredObject(
+          const { stream, contentLength } = await openStoredObjectStream(
             entry.media.storageKey,
             entry.media.storageProvider as "r2" | "local",
           );
-          const buffer = Buffer.from(body);
-          totalBytes += buffer.length;
-          if (totalBytes > MAX_ZIP_BYTES) break;
-          archive.append(buffer, { name: entry.path });
+          const estimatedSize = contentLength ?? entry.media.size ?? 0;
+          totalBytes += estimatedSize;
+          if (totalBytes > MAX_ZIP_BYTES) {
+            stream.destroy();
+            break;
+          }
+          archive.append(stream, { name: entry.path });
           added += 1;
         } catch {
           // Skip missing files

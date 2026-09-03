@@ -13,7 +13,7 @@ const securityHeaders = [
       "media-src 'self' blob:",
       "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
       "style-src 'self' 'unsafe-inline'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline'",
       "connect-src 'self'",
       "font-src 'self'",
     ].join("; "),

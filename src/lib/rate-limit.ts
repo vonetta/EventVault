@@ -30,37 +30,30 @@ async function rateLimitMongo(key: string, limit: number, windowMs: number) {
   const now = new Date();
   const resetAt = new Date(now.getTime() + windowMs);
 
-  const existing = await RateLimitBucket.findOne({ key });
-  if (!existing || existing.resetAt <= now) {
-    await RateLimitBucket.findOneAndUpdate(
-      { key },
-      { $set: { count: 1, resetAt } },
-      { upsert: true, new: true },
-    );
-    return { ok: true as const, remaining: limit - 1 };
-  }
-
-  if (existing.count >= limit) {
-    return {
-      ok: false as const,
-      retryAfterSec: Math.max(1, Math.ceil((existing.resetAt.getTime() - now.getTime()) / 1000)),
-    };
-  }
-
-  const updated = await RateLimitBucket.findOneAndUpdate(
-    { key, count: { $lt: limit } },
-    { $inc: { count: 1 } },
-    { new: true },
+  // Reset expired buckets atomically
+  await RateLimitBucket.updateOne(
+    { key, resetAt: { $lte: now } },
+    { $set: { count: 0, resetAt } },
   );
 
-  if (!updated) {
+  // Single atomic increment — only succeeds if count < limit
+  const result = await RateLimitBucket.findOneAndUpdate(
+    { key, count: { $lt: limit } },
+    { $inc: { count: 1 }, $setOnInsert: { resetAt } },
+    { upsert: true, new: true },
+  );
+
+  if (!result) {
+    // findOneAndUpdate returned null — bucket is full
+    const bucket = await RateLimitBucket.findOne({ key });
+    const retryMs = bucket ? bucket.resetAt.getTime() - now.getTime() : windowMs;
     return {
       ok: false as const,
-      retryAfterSec: Math.max(1, Math.ceil((existing.resetAt.getTime() - now.getTime()) / 1000)),
+      retryAfterSec: Math.max(1, Math.ceil(retryMs / 1000)),
     };
   }
 
-  return { ok: true as const, remaining: limit - updated.count };
+  return { ok: true as const, remaining: limit - result.count };
 }
 
 /**

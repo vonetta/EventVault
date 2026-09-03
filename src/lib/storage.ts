@@ -24,8 +24,11 @@ function r2Configured() {
   );
 }
 
+let _r2Client: S3Client | null = null;
+
 function r2Client() {
-  return new S3Client({
+  if (_r2Client) return _r2Client;
+  _r2Client = new S3Client({
     region: "auto",
     endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: {
@@ -33,6 +36,7 @@ function r2Client() {
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
     },
   });
+  return _r2Client;
 }
 
 export function uploadsRoot() {
