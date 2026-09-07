@@ -221,18 +221,22 @@ for (const target of targets) {
 
 if (!best || best.readable === 0) {
   const target = best?.target || targets[0];
-  const sensitive = best?.sensitive || 0;
+  const production = pickReadable(envs, "production");
+  const development = pickReadable(envs, "development");
   console.error(
-    `No readable "${target}" environment variables were returned for "${projectName || projectRef}".`,
+    `No readable environment variables were returned for "${projectName || projectRef}".`,
   );
-  if (sensitive > 0) {
+  console.error(
+    `Tried ${targets.join(", ")} (last checked: ${target}; development matching=${development.matching}, production matching=${production.matching}, production sensitive=${production.sensitive}).`,
+  );
+  if (production.sensitive > 0) {
     console.error(
-      `${sensitive} variable(s) are Vercel Sensitive secrets and cannot be pulled into this VM.`,
-    );
-    console.error(
-      "Add the same keys to the Vercel Development environment (not Sensitive), or set MONGODB_URI as a Cursor Cloud secret.",
+      `${production.sensitive} production variable(s) are Vercel Sensitive secrets and cannot be pulled into this VM.`,
     );
   }
+  console.error(
+    "Add the same keys to the Vercel Development environment (not Sensitive), or set MONGODB_URI as a Cursor Cloud secret.",
+  );
   process.exit(3);
 }
 
