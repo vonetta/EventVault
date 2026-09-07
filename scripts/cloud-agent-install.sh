@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
-# Idempotent Cloud Agent install: dependencies, local env file, and a cached
-# in-memory MongoDB binary. Safe to re-run; nothing here starts a long-lived
-# process (those live in environment.json "terminals").
+# Idempotent Cloud Agent install.
+#
+# Credential resolution order:
+#   1. Real service env vars already injected into the VM (Cursor Cloud secrets),
+#      e.g. MONGODB_URI, R2_*, GMAIL_*. Nothing to do -- the app reads them.
+#   2. A VERCEL_TOKEN secret -> pull the project's env vars from Vercel into
+#      .env.local (single source of truth stays in Vercel).
+#   3. Neither -> generate a local .env.local and use the in-memory MongoDB.
+#
+# Nothing here starts a long-lived process (those live in environment.json
+# "terminals"). Safe to re-run.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,9 +18,27 @@ cd "$ROOT"
 echo "==> Installing dependencies (npm ci)"
 npm ci
 
-if [[ ! -f .env.local ]]; then
-  echo "==> Creating .env.local for local development"
-  cat > .env.local <<'EOF'
+# --- Optional: pull real env from Vercel when a token is provided -------------
+if [[ -n "${VERCEL_TOKEN:-}" && -z "${MONGODB_URI:-}" ]]; then
+  echo "==> VERCEL_TOKEN detected; pulling environment from Vercel"
+  VERCEL_ENV_TARGET="${VERCEL_ENV_TARGET:-production}"
+  if npx --yes vercel@latest env pull .env.local \
+        --environment="$VERCEL_ENV_TARGET" \
+        --token="$VERCEL_TOKEN" --yes; then
+    echo "==> Pulled Vercel env ($VERCEL_ENV_TARGET) into .env.local"
+  else
+    echo "!! Vercel env pull failed (check VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID)." >&2
+    echo "!! Falling back to the local in-memory setup." >&2
+  fi
+fi
+
+MONGO_MODE="$(./scripts/cloud-agent-detect-mongo.sh)"
+echo "==> MongoDB mode: $MONGO_MODE"
+
+if [[ "$MONGO_MODE" == "local" ]]; then
+  if [[ ! -f .env.local ]]; then
+    echo "==> Creating .env.local for local development (in-memory MongoDB)"
+    cat > .env.local <<'EOF'
 # Local development environment (in-memory MongoDB)
 MONGODB_URI=mongodb://127.0.0.1:27017/eventvault
 
@@ -36,11 +62,14 @@ GMAIL_USER=
 GMAIL_APP_PASSWORD=
 EMAIL_FROM_NAME=EventVault Dev
 EOF
-else
-  echo "==> .env.local already exists, leaving it untouched"
-fi
+  else
+    echo "==> .env.local already exists, leaving it untouched"
+  fi
 
-echo "==> Pre-downloading in-memory MongoDB binary into cache"
-node -e "import('mongodb-memory-server').then(async ({ MongoMemoryServer }) => { const s = await MongoMemoryServer.create(); await s.stop(); console.log('mongodb-memory-server binary cached'); }).catch((e) => { console.error(e); process.exit(1); });"
+  echo "==> Pre-downloading in-memory MongoDB binary into cache"
+  node -e "import('mongodb-memory-server').then(async ({ MongoMemoryServer }) => { const s = await MongoMemoryServer.create(); await s.stop(); console.log('mongodb-memory-server binary cached'); }).catch((e) => { console.error(e); process.exit(1); });"
+else
+  echo "==> Real MONGODB_URI configured; skipping in-memory MongoDB and local .env.local"
+fi
 
 echo "==> Install complete"

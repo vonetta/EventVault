@@ -4,7 +4,7 @@
   "terminals": [
     {
       "name": "mongo",
-      "command": "node scripts/start-memory-mongo.mjs"
+      "command": "./scripts/cloud-agent-mongo.sh"
     },
     {
       "name": "dev",
