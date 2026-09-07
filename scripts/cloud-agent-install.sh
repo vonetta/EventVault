@@ -19,16 +19,16 @@ echo "==> Installing dependencies (npm ci)"
 npm ci
 
 # --- Optional: pull real env from Vercel when a token is provided -------------
+# Only a VERCEL_TOKEN is required; the project/team are auto-discovered. You can
+# still pin them with VERCEL_PROJECT_ID / VERCEL_ORG_ID if needed.
 if [[ -n "${VERCEL_TOKEN:-}" && -z "${MONGODB_URI:-}" ]]; then
   echo "==> VERCEL_TOKEN detected; pulling environment from Vercel"
-  VERCEL_ENV_TARGET="${VERCEL_ENV_TARGET:-production}"
-  if npx --yes vercel@latest env pull .env.local \
-        --environment="$VERCEL_ENV_TARGET" \
-        --token="$VERCEL_TOKEN" --yes; then
-    echo "==> Pulled Vercel env ($VERCEL_ENV_TARGET) into .env.local"
+  if node scripts/vercel-pull-env.mjs; then
+    echo "==> Pulled Vercel env into .env.local"
   else
-    echo "!! Vercel env pull failed (check VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID)." >&2
-    echo "!! Falling back to the local in-memory setup." >&2
+    echo "!! Vercel env pull failed; falling back to the local in-memory setup." >&2
+    echo "!! Tip: confirm the token is valid and, if the project is under a team," >&2
+    echo "!! set VERCEL_ORG_ID (team_...) and/or VERCEL_PROJECT_ID as secrets." >&2
   fi
 fi
 
