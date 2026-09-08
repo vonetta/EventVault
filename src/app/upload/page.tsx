@@ -15,20 +15,22 @@ type UploadItem = {
   message?: string;
 };
 
-const GALLERY_KINDS = [
-  { value: "event_photo", label: "Event gallery", hint: "Visible to everyone at the event" },
-  { value: "group_photo", label: "Group gallery", hint: "The shared group album" },
-] as const;
+type StagedPhoto = {
+  id: string;
+  title: string;
+  url: string;
+  uploadedByName?: string;
+};
 
 export default function UploadPage() {
   const [events, setEvents] = useState<EventOption[] | null>(null);
   const [eventId, setEventId] = useState("");
-  const [kind, setKind] = useState<(typeof GALLERY_KINDS)[number]["value"]>("event_photo");
   const [items, setItems] = useState<UploadItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [mainGallery, setMainGallery] = useState<StagedPhoto[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,6 +55,34 @@ export default function UploadPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!eventId) return;
+    let active = true;
+    (async () => {
+      const res = await fetch(`/api/uploader/media?eventId=${encodeURIComponent(eventId)}`);
+      if (!active) return;
+      if (res.status === 401) {
+        window.location.assign("/upload/login");
+        return;
+      }
+      if (!res.ok) return;
+      const data = (await res.json()) as { media: StagedPhoto[] };
+      if (!active) return;
+      setMainGallery(data.media);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [eventId]);
+
+  async function refreshMainGallery() {
+    if (!eventId) return;
+    const res = await fetch(`/api/uploader/media?eventId=${encodeURIComponent(eventId)}`);
+    if (!res.ok) return;
+    const data = (await res.json()) as { media: StagedPhoto[] };
+    setMainGallery(data.media);
+  }
 
   function addFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -106,7 +136,7 @@ export default function UploadPage() {
       const form = new FormData();
       form.set("file", toSend);
       form.set("eventId", eventId);
-      form.set("kind", kind);
+      form.set("kind", "team_photo");
       form.set("title", item.name);
 
       try {
@@ -128,7 +158,27 @@ export default function UploadPage() {
     }
 
     setBusy(false);
-    setMessage(uploaded ? `Uploaded ${uploaded} photo${uploaded === 1 ? "" : "s"}.` : "");
+    setMessage(uploaded ? `Uploaded ${uploaded} photo${uploaded === 1 ? "" : "s"} to the event.` : "");
+    await refreshMainGallery();
+  }
+
+  async function deletePhoto(id: string) {
+    if (!confirm("Delete this photo? This can't be undone.")) return;
+    const res = await fetch("/api/uploader/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mediaId: id }),
+    });
+    if (res.status === 401) {
+      window.location.assign("/upload/login");
+      return;
+    }
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Could not delete that photo.");
+      return;
+    }
+    setMainGallery((prev) => prev.filter((photo) => photo.id !== id));
   }
 
   async function signOut() {
@@ -139,7 +189,6 @@ export default function UploadPage() {
   const pendingCount = items.filter(
     (item) => item.status === "pending" || item.status === "error",
   ).length;
-  const doneCount = items.filter((item) => item.status === "done").length;
 
   return (
     <main id="main" tabIndex={-1} className="mx-auto w-full max-w-2xl px-6 py-10">
@@ -149,7 +198,10 @@ export default function UploadPage() {
           <h1 className="mt-1 font-[family-name:var(--font-fraunces)] text-3xl text-ink">
             Team photo upload
           </h1>
-          <p className="mt-1 text-sm text-pine">Add photos to an event gallery.</p>
+          <p className="mt-1 text-sm text-pine">
+            Add photos to an event. They go to the event admin to review and share — guests don’t
+            see them until the admin sends them out.
+          </p>
         </div>
         <button
           type="button"
@@ -182,35 +234,6 @@ export default function UploadPage() {
               ))}
             </select>
           </label>
-
-          <fieldset className="flex flex-col gap-1.5">
-            <legend className="text-xs font-medium uppercase tracking-[0.08em] text-pine">
-              Gallery
-            </legend>
-            <div className="mt-1 grid gap-2 sm:grid-cols-2">
-              {GALLERY_KINDS.map((option) => (
-                <label
-                  key={option.value}
-                  className={`cursor-pointer rounded-xl border p-3 text-sm transition ${
-                    kind === option.value
-                      ? "border-ink bg-white"
-                      : "border-[color:var(--line)] bg-white/60 hover:border-ink/40"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="gallery-kind"
-                    value={option.value}
-                    checked={kind === option.value}
-                    onChange={() => setKind(option.value)}
-                    className="sr-only"
-                  />
-                  <span className="block font-medium text-ink">{option.label}</span>
-                  <span className="mt-0.5 block text-xs text-pine">{option.hint}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
 
           <input
             ref={fileInputRef}
@@ -286,12 +309,48 @@ export default function UploadPage() {
                   ? `Upload ${pendingCount} photo${pendingCount === 1 ? "" : "s"}`
                   : "Choose photos to upload"}
             </button>
-            {doneCount > 0 ? (
-              <span className="text-sm text-pine">{doneCount} uploaded this session</span>
-            ) : null}
           </div>
 
           {message ? <p className="text-sm text-pine">{message}</p> : null}
+
+          <section className="border-t border-[color:var(--line)] pt-6">
+            <h2 className="font-[family-name:var(--font-fraunces)] text-xl text-ink">
+              Main gallery
+              {mainGallery.length ? (
+                <span className="ml-2 text-base text-pine">{mainGallery.length}</span>
+              ) : null}
+            </h2>
+            <p className="mt-1 text-sm text-pine">
+              Photos waiting for the admin to review. You can delete ones you didn’t mean to upload.
+            </p>
+            {mainGallery.length === 0 ? (
+              <p className="mt-4 text-sm text-pine">Nothing here yet.</p>
+            ) : (
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {mainGallery.map((photo) => (
+                  <div
+                    key={photo.id}
+                    className="relative overflow-hidden rounded-lg border border-[color:var(--line)] bg-white"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.url}
+                      alt={photo.title}
+                      className="aspect-square w-full object-cover"
+                      loading="lazy"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => deletePhoto(photo.id)}
+                      className="absolute right-1.5 top-1.5 rounded-full bg-ink/80 px-2 py-1 text-xs text-foam"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       )}
     </main>

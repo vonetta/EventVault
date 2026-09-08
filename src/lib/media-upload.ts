@@ -18,6 +18,7 @@ export const ALL_MEDIA_KINDS = [
   "group_photo",
   "event_photo",
   "session_video",
+  "team_photo",
 ] as const;
 
 export type MediaKind = (typeof ALL_MEDIA_KINDS)[number];
@@ -30,7 +31,7 @@ export type MediaKind = (typeof ALL_MEDIA_KINDS)[number];
  */
 export async function processMediaUpload(
   request: Request,
-  options: { allowedKinds: readonly MediaKind[]; actor: string },
+  options: { allowedKinds: readonly MediaKind[]; actor: string; uploadedByName?: string },
 ): Promise<NextResponse> {
   try {
     assertSameOrigin(request);
@@ -172,6 +173,11 @@ export async function processMediaUpload(
       `events/${eventId.data}/${kind}`,
     );
 
+    // team_photo lands in the admin "Main gallery" (staged, hidden from guests)
+    // until an admin sends it to groups/everyone. All other kinds stay visible
+    // as before.
+    const isTeamPhoto = kind === "team_photo";
+
     const media = await Media.create({
       eventId: eventId.data,
       kind,
@@ -183,6 +189,10 @@ export async function processMediaUpload(
       storageProvider: stored.storageProvider,
       guestId,
       sessionId,
+      published: !isTeamPhoto,
+      everyone: false,
+      groupIds: [],
+      uploadedByName: options.uploadedByName || "",
     });
 
     await logAdminAction(request, "upload_media", {

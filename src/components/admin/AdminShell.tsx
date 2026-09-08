@@ -2,12 +2,20 @@
 
 import type { ReactNode } from "react";
 
-export type AdminTab = "overview" | "event" | "guests" | "media" | "email" | "audit";
+export type AdminTab =
+  | "overview"
+  | "event"
+  | "guests"
+  | "groups"
+  | "media"
+  | "email"
+  | "audit";
 
 const TABS: { id: AdminTab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "event", label: "Event" },
   { id: "guests", label: "Guests" },
+  { id: "groups", label: "Groups" },
   { id: "media", label: "Media" },
   { id: "email", label: "Email" },
   { id: "audit", label: "Activity" },

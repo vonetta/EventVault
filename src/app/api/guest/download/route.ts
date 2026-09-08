@@ -7,6 +7,7 @@ import { unauthorized, assertSameOrigin } from "@/lib/auth";
 import { Event, Media, type MediaDoc } from "@/lib/models";
 import { openStoredObjectStream } from "@/lib/storage";
 import { resolveGuestSession } from "@/lib/guest-session";
+import { guestCanSeeTeamPhoto } from "@/lib/media-access";
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -111,6 +112,15 @@ export async function GET(request: Request) {
     kind: "event_photo",
   }).sort({ createdAt: -1 });
 
+  const guestGroupIds = (guest.groupIds || []).map((id) => String(id));
+  const teamPhotos = (
+    await Media.find({
+      eventId: guest.eventId,
+      kind: "team_photo",
+      published: true,
+    }).sort({ createdAt: -1 })
+  ).filter((item) => guestCanSeeTeamPhoto(item, guestGroupIds));
+
   const personalPhotos =
     guest.tier === "vip"
       ? await Media.find({
@@ -124,6 +134,7 @@ export async function GET(request: Request) {
   const entries: ZipEntry[] = [];
   await collectZipEntries(eventPhotos, "event-gallery", used, entries);
   await collectZipEntries(groupPhotos, "group-gallery", used, entries);
+  await collectZipEntries(teamPhotos, "group-gallery", used, entries);
   await collectZipEntries(personalPhotos, "personal", used, entries);
 
   if (!entries.length) {

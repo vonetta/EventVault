@@ -17,12 +17,15 @@ export type SessionDoc = {
   startsAt?: string;
 };
 
+export type GroupDoc = { _id: string; name: string; sortOrder?: number };
+
 export type GuestDoc = {
   _id: string;
   name: string;
   email?: string;
   tier: "vip" | "standard";
   ticketCode: string;
+  groupIds?: string[];
 };
 
 export type MediaDoc = {
@@ -37,6 +40,10 @@ export type MediaDoc = {
   youtubeId?: string;
   youtubePlaylistId?: string;
   availableUntil?: string | null;
+  published?: boolean;
+  everyone?: boolean;
+  groupIds?: string[];
+  uploadedByName?: string;
 };
 
 export type MediaFilter = "all" | "event_photo" | "group_photo" | "personal_photo" | "session_video";
@@ -47,6 +54,7 @@ export type AdminData = {
   days: DayDoc[];
   sessions: SessionDoc[];
   guests: GuestDoc[];
+  groups: GroupDoc[];
   media: MediaDoc[];
   emailConfigured?: boolean;
   email?: {

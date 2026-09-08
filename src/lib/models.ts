@@ -34,6 +34,15 @@ const SessionSchema = new Schema(
   { timestamps: true },
 );
 
+const GroupSchema = new Schema(
+  {
+    eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    name: { type: String, required: true },
+    sortOrder: { type: Number, default: 0 },
+  },
+  { timestamps: true },
+);
+
 const GuestSchema = new Schema(
   {
     eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
@@ -42,6 +51,8 @@ const GuestSchema = new Schema(
     tier: { type: String, enum: ["vip", "standard"], required: true, default: "standard" },
     ticketCode: { type: String, required: true, unique: true, index: true },
     sessionVersion: { type: Number, default: 0 },
+    // Group membership drives which curated team photos this guest can see.
+    groupIds: { type: [{ type: Schema.Types.ObjectId, ref: "Group" }], default: [] },
   },
   { timestamps: true },
 );
@@ -69,7 +80,7 @@ const MediaSchema = new Schema(
     eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
     kind: {
       type: String,
-      enum: ["personal_photo", "group_photo", "event_photo", "session_video"],
+      enum: ["personal_photo", "group_photo", "event_photo", "session_video", "team_photo"],
       required: true,
       index: true,
     },
@@ -77,6 +88,14 @@ const MediaSchema = new Schema(
     filename: { type: String, default: "" },
     contentType: { type: String, default: "" },
     size: { type: Number, default: 0 },
+    // Curation for team-uploaded photos (kind "team_photo"):
+    //   published=false -> staged in the admin "Main gallery", hidden from guests.
+    //   published=true  -> visible to guests in `everyone` mode or the listed groups.
+    published: { type: Boolean, default: true },
+    everyone: { type: Boolean, default: false },
+    groupIds: { type: [{ type: Schema.Types.ObjectId, ref: "Group" }], default: [], index: true },
+    // Who uploaded it (photographer attribution; populated once accounts land).
+    uploadedByName: { type: String, default: "" },
     // File-backed media (photos / uploaded videos)
     storageKey: { type: String, default: "" },
     storageProvider: {
@@ -102,6 +121,7 @@ MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
 export type EventDoc = InferSchemaType<typeof EventSchema> & { _id: mongoose.Types.ObjectId };
 export type DayDoc = InferSchemaType<typeof DaySchema> & { _id: mongoose.Types.ObjectId };
 export type SessionDoc = InferSchemaType<typeof SessionSchema> & { _id: mongoose.Types.ObjectId };
+export type GroupDoc = InferSchemaType<typeof GroupSchema> & { _id: mongoose.Types.ObjectId };
 export type GuestDoc = InferSchemaType<typeof GuestSchema> & { _id: mongoose.Types.ObjectId };
 export type MediaDoc = InferSchemaType<typeof MediaSchema> & { _id: mongoose.Types.ObjectId };
 export type RateLimitBucketDoc = InferSchemaType<typeof RateLimitBucketSchema> & {
@@ -113,6 +133,8 @@ export const Event: Model<EventDoc> =
   mongoose.models.Event || mongoose.model("Event", EventSchema);
 export const Day: Model<DayDoc> =
   mongoose.models.Day || mongoose.model("Day", DaySchema);
+export const Group: Model<GroupDoc> =
+  mongoose.models.Group || mongoose.model("Group", GroupSchema);
 export const Session: Model<SessionDoc> =
   mongoose.models.Session || mongoose.model("Session", SessionSchema);
 export const Guest: Model<GuestDoc> =

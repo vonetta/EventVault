@@ -7,6 +7,7 @@ import { AdminButton, AdminField, inputClassName, textareaClassName } from "@/co
 import { OverviewTab } from "@/components/admin/OverviewTab";
 import { EventTab } from "@/components/admin/EventTab";
 import { GuestsTab } from "@/components/admin/GuestsTab";
+import { GroupsTab } from "@/components/admin/GroupsTab";
 import { MediaTab } from "@/components/admin/MediaTab";
 import { EmailTab } from "@/components/admin/EmailTab";
 import { AuditTab } from "@/components/admin/AuditTab";
@@ -57,6 +58,7 @@ export default function AdminPage() {
         days: json.days || [],
         sessions: json.sessions || [],
         guests: json.guests || [],
+        groups: json.groups || [],
         media: json.media || [],
         emailConfigured: Boolean(json.emailConfigured),
         email: json.email,
@@ -231,6 +233,7 @@ export default function AdminPage() {
       />
     ),
     guests: <GuestsTab data={data} selectedEventId={selectedEventId} actions={actions} setActiveTab={setActiveTab} />,
+    groups: <GroupsTab data={data} actions={actions} />,
     media: <MediaTab data={data} selectedEventId={selectedEventId} actions={actions} />,
     email: <EmailTab data={data} setMessage={setMessage} />,
     audit: <AuditTab />,

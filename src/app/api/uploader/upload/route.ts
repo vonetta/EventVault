@@ -3,8 +3,12 @@ import { isAdminAuthenticated, isUploaderAuthenticated, unauthorized } from "@/l
 import { processMediaUpload } from "@/lib/media-upload";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
-/** Team uploaders may only add to the shared galleries (not VIP/session media). */
-const UPLOADER_KINDS = ["event_photo", "group_photo"] as const;
+/**
+ * Team uploads always land in the admin "Main gallery" as staged `team_photo`.
+ * The admin later sends them to specific groups (or everyone); guests never see
+ * them until then.
+ */
+const UPLOADER_KINDS = ["team_photo"] as const;
 
 export async function POST(request: Request) {
   if (!(await isUploaderAuthenticated()) && !(await isAdminAuthenticated())) {
