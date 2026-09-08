@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth";
 import { Day, Event, Media, Session } from "@/lib/models";
 import { resolveGuestSession } from "@/lib/guest-session";
+import { guestCanSeeTeamPhoto } from "@/lib/media-access";
 import { mediaProxyUrl } from "@/lib/storage";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
@@ -102,7 +103,18 @@ export async function GET(request: Request) {
     kind: "event_photo",
   }).sort({ createdAt: -1 });
 
-  const group = groupPhotos
+  // Curated team photos the admin has sent to this guest's group(s) or everyone.
+  const guestGroupIds = (guest.groupIds || []).map((id) => String(id));
+  const teamPhotos = await Media.find({
+    eventId: guest.eventId,
+    kind: "team_photo",
+    published: true,
+  }).sort({ createdAt: -1 });
+  const teamForGuest = teamPhotos.filter(
+    (item) => isMediaAvailable(item.availableUntil) && guestCanSeeTeamPhoto(item, guestGroupIds),
+  );
+
+  const group = [...groupPhotos, ...teamForGuest]
     .filter((item) => isMediaAvailable(item.availableUntil))
     .map(mapFileMedia);
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { isAdminAuthenticated, unauthorized, assertSameOrigin } from "@/lib/auth";
 import { logAdminAction } from "@/lib/audit";
-import { AuditLog, Day, Event, Guest, Media, Session } from "@/lib/models";
+import { AuditLog, Day, Event, Group, Guest, Media, Session } from "@/lib/models";
 import { createTicketCode } from "@/lib/tickets";
 import { adminActionSchema } from "@/lib/validate";
 import { emailConfigured, getEmailConfigStatus, sendTicketEmail } from "@/lib/email";
@@ -91,11 +91,12 @@ export async function GET(request: Request) {
   const event =
     (eventId && events.find((item) => String(item._id) === eventId)) || events[0];
 
-  const [days, sessions, guests, media] = await Promise.all([
+  const [days, sessions, guests, media, groups] = await Promise.all([
     Day.find({ eventId: event._id }).sort({ sortOrder: 1 }),
     Session.find({ eventId: event._id }).sort({ sortOrder: 1 }),
     Guest.find({ eventId: event._id }).sort({ name: 1 }),
     Media.find({ eventId: event._id }).sort({ createdAt: -1 }),
+    Group.find({ eventId: event._id }).sort({ sortOrder: 1, createdAt: 1 }),
   ]);
 
   return NextResponse.json({
@@ -103,7 +104,19 @@ export async function GET(request: Request) {
     events,
     days,
     sessions,
-    guests,
+    guests: guests.map((guest) => ({
+      _id: guest._id,
+      name: guest.name,
+      email: guest.email,
+      tier: guest.tier,
+      ticketCode: guest.ticketCode,
+      groupIds: (guest.groupIds || []).map((id) => String(id)),
+    })),
+    groups: groups.map((group) => ({
+      _id: String(group._id),
+      name: group.name,
+      sortOrder: group.sortOrder,
+    })),
     media: media.map((item) => ({
       _id: item._id,
       kind: item.kind,
@@ -117,6 +130,10 @@ export async function GET(request: Request) {
       youtubePlaylistId: item.youtubePlaylistId,
       availableUntil: item.availableUntil,
       createdAt: item.createdAt,
+      published: item.published,
+      everyone: item.everyone,
+      groupIds: (item.groupIds || []).map((id) => String(id)),
+      uploadedByName: item.uploadedByName || "",
       // storageKey intentionally omitted from admin list payloads
     })),
     emailConfigured: emailConfigured(),
@@ -638,6 +655,119 @@ export async function POST(request: Request) {
     await Media.deleteMany({ _id: { $in: body.mediaIds } });
     await logAdminAction(request, "bulk_delete_media", { count: mediaList.length });
     return NextResponse.json({ ok: true, deleted: mediaList.length });
+  }
+
+  if (body.action === "create_group") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    const count = await Group.countDocuments({ eventId: event._id });
+    const group = await Group.create({
+      eventId: event._id,
+      name: body.name.trim(),
+      sortOrder: count,
+    });
+    await logAdminAction(request, "create_group", { name: group.name });
+    return NextResponse.json({
+      group: { _id: String(group._id), name: group.name, sortOrder: group.sortOrder },
+    });
+  }
+
+  if (body.action === "rename_group") {
+    const group = await Group.findById(body.groupId);
+    if (!group) {
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+    }
+    group.name = body.name.trim();
+    await group.save();
+    return NextResponse.json({
+      group: { _id: String(group._id), name: group.name, sortOrder: group.sortOrder },
+    });
+  }
+
+  if (body.action === "delete_group") {
+    const group = await Group.findById(body.groupId);
+    if (!group) {
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+    }
+    await Guest.updateMany(
+      { eventId: group.eventId },
+      { $pull: { groupIds: group._id } },
+    );
+    await Media.updateMany(
+      { eventId: group.eventId },
+      { $pull: { groupIds: group._id } },
+    );
+    // A team photo sent only to this group would now reach no one — restage it.
+    await Media.updateMany(
+      { eventId: group.eventId, kind: "team_photo", everyone: false, groupIds: { $size: 0 } },
+      { $set: { published: false } },
+    );
+    await Group.deleteOne({ _id: group._id });
+    await logAdminAction(request, "delete_group", { name: group.name });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "set_guest_groups") {
+    const guest = await Guest.findById(body.guestId);
+    if (!guest) {
+      return NextResponse.json({ error: "Guest not found" }, { status: 404 });
+    }
+    const validGroups = await Group.find({
+      _id: { $in: body.groupIds },
+      eventId: guest.eventId,
+    }).select("_id");
+    guest.groupIds = validGroups.map((group) => group._id);
+    await guest.save();
+    return NextResponse.json({
+      guest: { _id: String(guest._id), groupIds: guest.groupIds.map((id) => String(id)) },
+    });
+  }
+
+  if (body.action === "publish_media") {
+    const everyone = Boolean(body.everyone);
+    const groupIds = everyone ? [] : body.groupIds || [];
+    if (!everyone && groupIds.length === 0) {
+      return NextResponse.json(
+        { error: "Pick at least one group, or send to everyone" },
+        { status: 400 },
+      );
+    }
+
+    const media = await Media.find({ _id: { $in: body.mediaIds }, kind: "team_photo" });
+    if (!media.length) {
+      return NextResponse.json({ error: "No team photos to send" }, { status: 400 });
+    }
+    const eventId = media[0].eventId;
+    const validGroupIds = everyone
+      ? []
+      : (
+          await Group.find({ _id: { $in: groupIds }, eventId }).select("_id")
+        ).map((group) => group._id);
+    if (!everyone && validGroupIds.length === 0) {
+      return NextResponse.json({ error: "Those groups were not found" }, { status: 400 });
+    }
+
+    await Media.updateMany(
+      { _id: { $in: media.map((item) => item._id) }, kind: "team_photo" },
+      { $set: { published: true, everyone, groupIds: validGroupIds } },
+    );
+    await logAdminAction(request, "publish_media", {
+      count: media.length,
+      everyone,
+      groups: validGroupIds.length,
+    });
+    return NextResponse.json({ ok: true, sent: media.length });
+  }
+
+  if (body.action === "unpublish_media") {
+    await Media.updateMany(
+      { _id: { $in: body.mediaIds }, kind: "team_photo" },
+      { $set: { published: false, everyone: false, groupIds: [] } },
+    );
+    await logAdminAction(request, "unpublish_media", { count: body.mediaIds.length });
+    return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

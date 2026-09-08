@@ -139,6 +139,35 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     action: z.literal("bulk_delete_media"),
     mediaIds: z.array(objectIdSchema).min(1).max(200),
   }),
+  z.object({
+    action: z.literal("create_group"),
+    eventId: objectIdSchema,
+    name: z.string().min(1).max(80),
+  }),
+  z.object({
+    action: z.literal("rename_group"),
+    groupId: objectIdSchema,
+    name: z.string().min(1).max(80),
+  }),
+  z.object({
+    action: z.literal("delete_group"),
+    groupId: objectIdSchema,
+  }),
+  z.object({
+    action: z.literal("set_guest_groups"),
+    guestId: objectIdSchema,
+    groupIds: z.array(objectIdSchema).max(100),
+  }),
+  z.object({
+    action: z.literal("publish_media"),
+    mediaIds: z.array(objectIdSchema).min(1).max(500),
+    everyone: z.boolean().optional(),
+    groupIds: z.array(objectIdSchema).max(100).optional(),
+  }),
+  z.object({
+    action: z.literal("unpublish_media"),
+    mediaIds: z.array(objectIdSchema).min(1).max(500),
+  }),
 ]);
 
 export const IMAGE_MIME = new Set([
