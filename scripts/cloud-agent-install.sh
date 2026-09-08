@@ -45,6 +45,9 @@ MONGODB_URI=mongodb://127.0.0.1:27017/eventvault
 # Admin gate for /admin
 ADMIN_PASSWORD=dev-admin-password-123
 
+# Team photo-upload gate for /upload (separate from admin)
+UPLOADER_PASSWORD=team-upload-password-123
+
 # Signed guest/admin sessions (>= 32 chars)
 SESSION_SECRET=local-development-session-secret-please-change-000
 

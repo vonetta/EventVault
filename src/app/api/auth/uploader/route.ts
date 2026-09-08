@@ -1,0 +1,52 @@
+import { NextResponse } from "next/server";
+import {
+  setUploaderSession,
+  clearGuestSession,
+  secureEqual,
+  assertSameOrigin,
+} from "@/lib/auth";
+import { adminLoginSchema } from "@/lib/validate";
+import { z } from "zod";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
+
+export async function POST(request: Request) {
+  try {
+    assertSameOrigin(request);
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const ip = clientIp(request);
+  const limited = await rateLimit(`uploader:${ip}`, 10, 60_000);
+  if (!limited.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again shortly." },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } },
+    );
+  }
+
+  try {
+    const body = adminLoginSchema.parse(await request.json());
+    const expected = process.env.UPLOADER_PASSWORD;
+
+    if (!expected) {
+      return NextResponse.json(
+        { error: "Team uploads are not enabled yet (UPLOADER_PASSWORD is not set)." },
+        { status: 500 },
+      );
+    }
+
+    if (!secureEqual(body.password, expected)) {
+      return NextResponse.json({ error: "Incorrect password" }, { status: 401 });
+    }
+
+    await clearGuestSession();
+    await setUploaderSession();
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
+    return NextResponse.json({ error: "Login failed" }, { status: 500 });
+  }
+}

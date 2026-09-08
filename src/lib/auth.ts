@@ -3,9 +3,14 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { ADMIN_COOKIE, adminPasswordStamp, isAdminJwtPayload } from "@/lib/admin-token";
+import {
+  UPLOADER_COOKIE,
+  isUploaderJwtPayload,
+  uploaderPasswordStamp,
+} from "@/lib/uploader-token";
 
 export const GUEST_COOKIE = "ev_guest";
-export { ADMIN_COOKIE };
+export { ADMIN_COOKIE, UPLOADER_COOKIE };
 
 function requireSessionSecret() {
   const secret = process.env.SESSION_SECRET?.trim();
@@ -114,9 +119,42 @@ export async function clearAdminSession() {
   jar.set(ADMIN_COOKIE, "", { ...cookieBase(), maxAge: 0 });
 }
 
+export async function setUploaderSession() {
+  const token = await new SignJWT({ role: "uploader", pv: await uploaderPasswordStamp() })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("12h")
+    .sign(secretKey());
+
+  const jar = await cookies();
+  jar.set(UPLOADER_COOKIE, token, {
+    ...cookieBase(),
+    maxAge: 60 * 60 * 12,
+  });
+}
+
+export async function clearUploaderSession() {
+  const jar = await cookies();
+  jar.set(UPLOADER_COOKIE, "", { ...cookieBase(), maxAge: 0 });
+}
+
+export async function isUploaderAuthenticated() {
+  const jar = await cookies();
+  const token = jar.get(UPLOADER_COOKIE)?.value;
+  if (!token) return false;
+
+  try {
+    const { payload } = await jwtVerify(token, secretKey());
+    return await isUploaderJwtPayload(payload);
+  } catch {
+    return false;
+  }
+}
+
 export async function clearAllSessions() {
   await clearGuestSession();
   await clearAdminSession();
+  await clearUploaderSession();
 }
 
 export async function isAdminAuthenticated() {
