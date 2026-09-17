@@ -301,6 +301,7 @@ export default function VaultPage() {
           <MediaGrid
             items={data.personalPhotos}
             showDownload={!personalLocked}
+            allowDownload={!personalLocked}
             showCaptions={false}
             emptyMessage="Your personal photos will appear here when they’re ready."
           />
