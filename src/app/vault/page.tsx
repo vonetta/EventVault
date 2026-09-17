@@ -26,6 +26,9 @@ type Library = {
   groupGallery: MediaItem[];
   eventGallery: MediaItem[];
   personalPhotos: MediaItem[];
+  personalPhotosPaid?: boolean;
+  personalPhotosLocked?: boolean;
+  payments?: { enabled: boolean; priceLabel: string };
   days: DayItem[];
   preview?: boolean;
 };
@@ -40,6 +43,8 @@ export default function VaultPage() {
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [downloadMessage, setDownloadMessage] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockMessage, setUnlockMessage] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -54,9 +59,44 @@ export default function VaultPage() {
         return;
       }
       setData(json);
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("paid") === "1") {
+        setUnlockMessage("Payment received — your individual photos are unlocked.");
+      } else if (params.get("canceled") === "1") {
+        setUnlockMessage("Checkout canceled. Your photos are still locked.");
+      }
+      if (params.has("paid") || params.has("canceled")) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
     }
     load();
   }, [router]);
+
+  async function unlockPhotos() {
+    setUnlocking(true);
+    setUnlockMessage("");
+    try {
+      const response = await fetch("/api/guest/checkout", { method: "POST" });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setUnlockMessage(json.error || "Could not start checkout.");
+        return;
+      }
+      if (json.url) {
+        window.location.assign(json.url);
+        return;
+      }
+      if (json.paid) {
+        setUnlockMessage("Your individual photos are unlocked.");
+        window.location.reload();
+      }
+    } catch {
+      setUnlockMessage("Something went wrong. Try again.");
+    } finally {
+      setUnlocking(false);
+    }
+  }
 
   async function logout() {
     if (data?.preview) {
@@ -126,9 +166,13 @@ export default function VaultPage() {
 
   const isVip = data.guest.tier === "vip";
   const personalCount = photoCount(data.personalPhotos);
+  const hasPersonal = personalCount > 0;
+  const personalLocked = Boolean(data.personalPhotosLocked);
+  const priceLabel = data.payments?.priceLabel || "";
   const eventCount = photoCount(data.eventGallery || []);
   const groupCount = photoCount(data.groupGallery);
-  const zipCount = personalCount + eventCount + groupCount;
+  const downloadablePersonal = personalLocked ? 0 : personalCount;
+  const zipCount = downloadablePersonal + eventCount + groupCount;
   const firstName = data.guest.name.trim().split(/\s+/)[0] || data.guest.name;
   const sessionCount = data.days.reduce((sum, day) => sum + day.sessions.length, 0);
   const showJumpNav = personalCount > 0 || eventCount > 0 || groupCount > 0 || sessionCount > 0;
@@ -159,7 +203,11 @@ export default function VaultPage() {
           </h1>
           <p className="mt-2 text-pine">
             {data.event.name}
-            {isVip ? " · Your photos, sessions, and galleries" : " · Event and group galleries"}
+            {isVip
+              ? " · Your photos, sessions, and galleries"
+              : hasPersonal
+                ? " · Your photos and galleries"
+                : " · Event and group galleries"}
           </p>
           {data.event.description ? (
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine">
@@ -195,10 +243,15 @@ export default function VaultPage() {
       <p role="status" aria-live="polite" className={downloadMessage ? "text-sm text-pine" : "sr-only"}>
         {downloadMessage}
       </p>
+      {unlockMessage ? (
+        <p role="status" aria-live="polite" className="text-sm text-pine">
+          {unlockMessage}
+        </p>
+      ) : null}
 
       {showJumpNav ? (
         <nav aria-label="Vault sections" className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-pine">
-          {isVip ? (
+          {hasPersonal ? (
             <a href="#personal-photos" className="underline-offset-4 hover:underline">
               Your photos{personalCount ? ` (${personalCount})` : ""}
             </a>
@@ -217,16 +270,37 @@ export default function VaultPage() {
         </nav>
       ) : null}
 
-      {isVip ? (
+      {hasPersonal ? (
         <section id="personal-photos" className="space-y-4 scroll-mt-6">
           <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
             Your photos
             {personalCount ? <span className="ml-2 text-lg text-pine">{personalCount}</span> : null}
           </h2>
-          <p className="text-sm text-pine">Tap a photo to view it larger, or download one at a time.</p>
+          {personalLocked ? (
+            <div className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
+              <p className="text-sm text-pine">
+                These are watermarked previews. Unlock to view them full size and download all your
+                individual photos{priceLabel ? ` — ${priceLabel}` : ""}.
+              </p>
+              <button
+                type="button"
+                onClick={unlockPhotos}
+                disabled={unlocking}
+                className="mt-3 rounded-full bg-ink px-5 py-2 text-sm text-foam transition hover:bg-pine disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {unlocking
+                  ? "Starting checkout…"
+                  : priceLabel
+                    ? `Unlock my photos — ${priceLabel}`
+                    : "Unlock my photos"}
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-pine">Tap a photo to view it larger, or download one at a time.</p>
+          )}
           <MediaGrid
             items={data.personalPhotos}
-            showDownload
+            showDownload={!personalLocked}
             showCaptions={false}
             emptyMessage="Your personal photos will appear here when they’re ready."
           />
@@ -300,7 +374,9 @@ export default function VaultPage() {
 
       {!isVip ? (
         <p className="text-sm text-pine">
-          This ticket includes the event gallery and group gallery. Personal photos and speaker sessions are part of VIP access.
+          This ticket includes the event and group galleries
+          {hasPersonal ? ", plus your individual photos" : ""}. Speaker sessions are part of VIP
+          access.
         </p>
       ) : null}
 

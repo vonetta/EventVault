@@ -121,14 +121,14 @@ export async function GET(request: Request) {
     }).sort({ createdAt: -1 })
   ).filter((item) => guestCanSeeTeamPhoto(item, guestGroupIds));
 
-  const personalPhotos =
-    guest.tier === "vip"
-      ? await Media.find({
-          eventId: guest.eventId,
-          kind: "personal_photo",
-          guestId: guest._id,
-        }).sort({ createdAt: -1 })
-      : [];
+  // Individual photos are only bundled once the guest has paid to unlock them.
+  const personalPhotos = guest.personalPhotosPaid
+    ? await Media.find({
+        eventId: guest.eventId,
+        kind: "personal_photo",
+        guestId: guest._id,
+      }).sort({ createdAt: -1 })
+    : [];
 
   const used = new Set<string>();
   const entries: ZipEntry[] = [];

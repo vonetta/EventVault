@@ -64,6 +64,12 @@ R2_BUCKET_NAME=
 GMAIL_USER=
 GMAIL_APP_PASSWORD=
 EMAIL_FROM_NAME=EventVault Dev
+
+# Stripe left blank -> individual-photo paywall unlocks instantly in dev for testing
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+PERSONAL_PHOTOS_PRICE_CENTS=1500
+PERSONAL_PHOTOS_CURRENCY=usd
 EOF
   else
     echo "==> .env.local already exists, leaving it untouched"

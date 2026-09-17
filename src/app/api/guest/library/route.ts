@@ -8,6 +8,7 @@ import { Day, Event, Media, Session } from "@/lib/models";
 import { resolveGuestSession } from "@/lib/guest-session";
 import { guestCanSeeTeamPhoto } from "@/lib/media-access";
 import { mediaProxyUrl } from "@/lib/storage";
+import { paymentsConfigured, priceLabel } from "@/lib/payments";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
 function mapFileMedia(item: {
@@ -124,24 +125,39 @@ export async function GET(request: Request) {
 
   const preview = Boolean(session.adminPreview);
 
+  // Individual photos exist for any guest they're assigned to. They're locked
+  // (watermarked preview only) until the guest pays, unless this is admin preview.
+  const personalPhotoDocs = await Media.find({
+    eventId: guest.eventId,
+    kind: "personal_photo",
+    guestId: guest._id,
+  }).sort({ createdAt: -1 });
+  const personal = personalPhotoDocs
+    .filter((item) => isMediaAvailable(item.availableUntil))
+    .map(mapFileMedia);
+  const hasPersonal = personal.length > 0;
+  const personalPhotosPaid = Boolean(guest.personalPhotosPaid) || preview;
+  const payments = {
+    enabled: paymentsConfigured(),
+    priceLabel: priceLabel(),
+  };
+
   if (tier === "standard") {
     return NextResponse.json({
       guest: { name: guest.name, tier },
       event: { name: event.name, description: event.description },
       groupGallery: group,
       eventGallery,
-      personalPhotos: [],
+      personalPhotos: personal,
+      personalPhotosPaid,
+      personalPhotosLocked: hasPersonal && !personalPhotosPaid,
+      payments,
       days: [],
       preview,
     });
   }
 
-  const [personalPhotos, days, sessions, sessionVideos] = await Promise.all([
-    Media.find({
-      eventId: guest.eventId,
-      kind: "personal_photo",
-      guestId: guest._id,
-    }).sort({ createdAt: -1 }),
+  const [days, sessions, sessionVideos] = await Promise.all([
     Day.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
     Session.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
     Media.find({
@@ -149,10 +165,6 @@ export async function GET(request: Request) {
       kind: "session_video",
     }).sort({ createdAt: -1 }),
   ]);
-
-  const personal = personalPhotos
-    .filter((item) => isMediaAvailable(item.availableUntil))
-    .map(mapFileMedia);
 
   const videosBySession = new Map<string, NonNullable<ReturnType<typeof mapSessionMedia>>[]>();
   for (const video of sessionVideos) {
@@ -193,6 +205,9 @@ export async function GET(request: Request) {
     groupGallery: group,
     eventGallery,
     personalPhotos: personal,
+    personalPhotosPaid,
+    personalPhotosLocked: hasPersonal && !personalPhotosPaid,
+    payments,
     days: dayPayload,
     preview,
   });

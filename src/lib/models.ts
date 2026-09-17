@@ -53,6 +53,23 @@ const GuestSchema = new Schema(
     sessionVersion: { type: Number, default: 0 },
     // Group membership drives which curated team photos this guest can see.
     groupIds: { type: [{ type: Schema.Types.ObjectId, ref: "Group" }], default: [] },
+    // Paywall: individual (personal) photos unlock for full-size view + download
+    // only after this guest pays. Free galleries are unaffected.
+    personalPhotosPaid: { type: Boolean, default: false },
+    personalPhotosPaidAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+
+const PurchaseSchema = new Schema(
+  {
+    eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    guestId: { type: Schema.Types.ObjectId, ref: "Guest", required: true, index: true },
+    kind: { type: String, default: "personal_photos" },
+    amount: { type: Number, default: 0 },
+    currency: { type: String, default: "usd" },
+    stripeSessionId: { type: String, default: "", index: true },
+    status: { type: String, default: "paid" },
   },
   { timestamps: true },
 );
@@ -123,6 +140,7 @@ export type DayDoc = InferSchemaType<typeof DaySchema> & { _id: mongoose.Types.O
 export type SessionDoc = InferSchemaType<typeof SessionSchema> & { _id: mongoose.Types.ObjectId };
 export type GroupDoc = InferSchemaType<typeof GroupSchema> & { _id: mongoose.Types.ObjectId };
 export type GuestDoc = InferSchemaType<typeof GuestSchema> & { _id: mongoose.Types.ObjectId };
+export type PurchaseDoc = InferSchemaType<typeof PurchaseSchema> & { _id: mongoose.Types.ObjectId };
 export type MediaDoc = InferSchemaType<typeof MediaSchema> & { _id: mongoose.Types.ObjectId };
 export type RateLimitBucketDoc = InferSchemaType<typeof RateLimitBucketSchema> & {
   _id: mongoose.Types.ObjectId;
@@ -135,6 +153,8 @@ export const Day: Model<DayDoc> =
   mongoose.models.Day || mongoose.model("Day", DaySchema);
 export const Group: Model<GroupDoc> =
   mongoose.models.Group || mongoose.model("Group", GroupSchema);
+export const Purchase: Model<PurchaseDoc> =
+  mongoose.models.Purchase || mongoose.model("Purchase", PurchaseSchema);
 export const Session: Model<SessionDoc> =
   mongoose.models.Session || mongoose.model("Session", SessionSchema);
 export const Guest: Model<GuestDoc> =
