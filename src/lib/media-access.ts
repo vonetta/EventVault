@@ -45,9 +45,10 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
       return guest.personalPhotosPaid ? "full" : "preview";
     }
 
-    // Speaker sessions remain a VIP benefit.
+    // Speaker sessions are behind the same one-time unlock as individual photos.
     if (media.kind === "session_video") {
-      return guest.tier === "vip" ? "full" : "none";
+      if (session.adminPreview) return "full";
+      return guest.personalPhotosPaid ? "full" : "none";
     }
 
     return "none";

@@ -124,47 +124,24 @@ export async function GET(request: Request) {
     .map(mapFileMedia);
 
   const preview = Boolean(session.adminPreview);
+  // One purchase unlocks a guest's individual photos AND the speaker sessions.
+  const paid = Boolean(guest.personalPhotosPaid) || preview;
 
-  // Individual photos exist for any guest they're assigned to. They're locked
-  // (watermarked preview only) until the guest pays, unless this is admin preview.
-  const personalPhotoDocs = await Media.find({
-    eventId: guest.eventId,
-    kind: "personal_photo",
-    guestId: guest._id,
-  }).sort({ createdAt: -1 });
+  const [personalPhotoDocs, days, sessions, sessionVideos] = await Promise.all([
+    Media.find({
+      eventId: guest.eventId,
+      kind: "personal_photo",
+      guestId: guest._id,
+    }).sort({ createdAt: -1 }),
+    Day.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
+    Session.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
+    Media.find({ eventId: guest.eventId, kind: "session_video" }).sort({ createdAt: -1 }),
+  ]);
+
   const personal = personalPhotoDocs
     .filter((item) => isMediaAvailable(item.availableUntil))
     .map(mapFileMedia);
   const hasPersonal = personal.length > 0;
-  const personalPhotosPaid = Boolean(guest.personalPhotosPaid) || preview;
-  const payments = {
-    enabled: paymentsConfigured(),
-    priceLabel: priceLabel(),
-  };
-
-  if (tier === "standard") {
-    return NextResponse.json({
-      guest: { name: guest.name, tier },
-      event: { name: event.name, description: event.description },
-      groupGallery: group,
-      eventGallery,
-      personalPhotos: personal,
-      personalPhotosPaid,
-      personalPhotosLocked: hasPersonal && !personalPhotosPaid,
-      payments,
-      days: [],
-      preview,
-    });
-  }
-
-  const [days, sessions, sessionVideos] = await Promise.all([
-    Day.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
-    Session.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
-    Media.find({
-      eventId: guest.eventId,
-      kind: "session_video",
-    }).sort({ createdAt: -1 }),
-  ]);
 
   const videosBySession = new Map<string, NonNullable<ReturnType<typeof mapSessionMedia>>[]>();
   for (const video of sessionVideos) {
@@ -175,29 +152,37 @@ export async function GET(request: Request) {
     list.push(mapped);
     videosBySession.set(key, list);
   }
+  const totalSessionVideos = [...videosBySession.values()].reduce((n, v) => n + v.length, 0);
+  const hasSessions = totalSessionVideos > 0;
 
   const dayPayload = days.map((day) => {
     const daySessions = sessions.filter(
       (sessionItem) => String(sessionItem.dayId) === String(day._id),
     );
-
     return {
       id: String(day._id),
       label: day.label,
       date: day.date,
       sessions: daySessions.map((sessionItem) => {
-        const videos = videosBySession.get(String(sessionItem._id)) || [];
+        const all = videosBySession.get(String(sessionItem._id)) || [];
         return {
           id: String(sessionItem._id),
           title: sessionItem.title,
           speaker: sessionItem.speaker,
           startsAt: sessionItem.startsAt,
           description: sessionItem.description,
-          videos,
+          videoCount: all.length,
+          // Video refs (YouTube embeds / files) are withheld until unlocked.
+          videos: paid ? all : [],
         };
       }),
     };
   });
+
+  const payments = {
+    enabled: paymentsConfigured(),
+    priceLabel: priceLabel(),
+  };
 
   return NextResponse.json({
     guest: { name: guest.name, tier },
@@ -205,8 +190,10 @@ export async function GET(request: Request) {
     groupGallery: group,
     eventGallery,
     personalPhotos: personal,
-    personalPhotosPaid,
-    personalPhotosLocked: hasPersonal && !personalPhotosPaid,
+    personalPhotosPaid: paid,
+    personalPhotosLocked: hasPersonal && !paid,
+    hasSessions,
+    sessionsLocked: hasSessions && !paid,
     payments,
     days: dayPayload,
     preview,

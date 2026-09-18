@@ -42,14 +42,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ paid: true, alreadyPaid: true });
   }
 
-  const personalCount = await Media.countDocuments({
-    eventId: guest.eventId,
-    kind: "personal_photo",
-    guestId: guest._id,
-  });
-  if (personalCount === 0) {
+  const [personalCount, sessionCount] = await Promise.all([
+    Media.countDocuments({
+      eventId: guest.eventId,
+      kind: "personal_photo",
+      guestId: guest._id,
+    }),
+    Media.countDocuments({ eventId: guest.eventId, kind: "session_video" }),
+  ]);
+  if (personalCount === 0 && sessionCount === 0) {
     return NextResponse.json(
-      { error: "You don't have any individual photos to unlock yet." },
+      { error: "There's nothing to unlock for you yet." },
       { status: 400 },
     );
   }
@@ -58,6 +61,10 @@ export async function POST(request: Request) {
   const eventName = event?.name || "your event";
   const amount = personalPhotoPriceCents();
   const currency = personalPhotoCurrency();
+  const parts: string[] = [];
+  if (personalCount) parts.push("photos");
+  if (sessionCount) parts.push("speaker sessions");
+  const productName = `Unlock ${parts.join(" & ")} — ${eventName}`;
 
   if (paymentsConfigured()) {
     const appUrl = requireProductionAppUrl();
@@ -70,7 +77,7 @@ export async function POST(request: Request) {
             price_data: {
               currency,
               unit_amount: amount,
-              product_data: { name: `Individual photos — ${eventName}` },
+              product_data: { name: productName },
             },
           },
         ],

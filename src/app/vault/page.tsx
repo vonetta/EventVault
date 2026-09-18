@@ -11,6 +11,7 @@ type SessionItem = {
   startsAt: string;
   description: string;
   videos: MediaItem[];
+  videoCount?: number;
 };
 
 type DayItem = {
@@ -28,6 +29,8 @@ type Library = {
   personalPhotos: MediaItem[];
   personalPhotosPaid?: boolean;
   personalPhotosLocked?: boolean;
+  hasSessions?: boolean;
+  sessionsLocked?: boolean;
   payments?: { enabled: boolean; priceLabel: string };
   days: DayItem[];
   preview?: boolean;
@@ -168,6 +171,8 @@ export default function VaultPage() {
   const personalCount = photoCount(data.personalPhotos);
   const hasPersonal = personalCount > 0;
   const personalLocked = Boolean(data.personalPhotosLocked);
+  const hasSessions = Boolean(data.hasSessions);
+  const sessionsLocked = Boolean(data.sessionsLocked);
   const priceLabel = data.payments?.priceLabel || "";
   const eventCount = photoCount(data.eventGallery || []);
   const groupCount = photoCount(data.groupGallery);
@@ -256,7 +261,7 @@ export default function VaultPage() {
               Your photos{personalCount ? ` (${personalCount})` : ""}
             </a>
           ) : null}
-          {isVip && sessionCount ? (
+          {hasSessions ? (
             <a href="#speaker-sessions" className="underline-offset-4 hover:underline">
               Sessions
             </a>
@@ -280,7 +285,8 @@ export default function VaultPage() {
             <div className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
               <p className="text-sm text-pine">
                 These are watermarked previews. Unlock to view them full size and download all your
-                individual photos{priceLabel ? ` — ${priceLabel}` : ""}.
+                individual photos{hasSessions ? " and watch the speaker sessions" : ""}
+                {priceLabel ? ` — ${priceLabel}` : ""}.
               </p>
               <button
                 type="button"
@@ -308,41 +314,72 @@ export default function VaultPage() {
         </section>
       ) : null}
 
-      {isVip && data.days.length ? (
-        <section id="speaker-sessions" className="space-y-8 scroll-mt-6">
+      {hasSessions ? (
+        <section id="speaker-sessions" className="space-y-6 scroll-mt-6">
           <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
             Speaker sessions
           </h2>
-          {data.days.map((day) => (
-            <div key={day.id} className="space-y-4">
-              <h3 className="text-lg font-semibold text-pine">{day.label}</h3>
-              <div className="space-y-4">
-                {day.sessions.map((session) => (
-                  <article
-                    key={session.id}
-                    className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4"
-                  >
-                    <h4 className="text-lg text-ink">{session.title}</h4>
-                    <p className="text-sm text-pine">
-                      {[session.speaker, session.startsAt].filter(Boolean).join(" · ")}
-                    </p>
-                    {session.description ? (
-                      <p className="mt-2 text-sm text-pine">{session.description}</p>
-                    ) : null}
-                    <div className="mt-4">
-                      <MediaGrid
-                        items={session.videos}
-                        emptyMessage="This session’s video will appear here when it’s linked."
-                      />
-                    </div>
-                  </article>
-                ))}
-                {!day.sessions.length ? (
-                  <p className="text-sm text-pine">Sessions for this day will appear here.</p>
-                ) : null}
-              </div>
+          {sessionsLocked ? (
+            <div className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
+              <p className="text-sm text-pine">
+                Speaker session videos are locked. Unlock to watch them
+                {hasPersonal ? " (this also unlocks your individual photos)" : ""}
+                {priceLabel ? ` — ${priceLabel}` : ""}.
+              </p>
+              <button
+                type="button"
+                onClick={unlockPhotos}
+                disabled={unlocking}
+                className="mt-3 rounded-full bg-ink px-5 py-2 text-sm text-foam transition hover:bg-pine disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {unlocking
+                  ? "Starting checkout…"
+                  : priceLabel
+                    ? `Unlock speaker sessions — ${priceLabel}`
+                    : "Unlock speaker sessions"}
+              </button>
             </div>
-          ))}
+          ) : null}
+          {data.days
+            .filter((day) => day.sessions.length > 0)
+            .map((day) => (
+              <div key={day.id} className="space-y-4">
+                <h3 className="text-lg font-semibold text-pine">{day.label}</h3>
+                <div className="space-y-4">
+                  {day.sessions.map((session) => (
+                    <article
+                      key={session.id}
+                      className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4"
+                    >
+                      <h4 className="text-lg text-ink">{session.title}</h4>
+                      <p className="text-sm text-pine">
+                        {[session.speaker, session.startsAt].filter(Boolean).join(" · ")}
+                      </p>
+                      {session.description ? (
+                        <p className="mt-2 text-sm text-pine">{session.description}</p>
+                      ) : null}
+                      <div className="mt-4">
+                        {sessionsLocked ? (
+                          (session.videoCount || 0) > 0 ? (
+                            <p className="text-sm text-pine">
+                              Locked — {session.videoCount} video
+                              {session.videoCount === 1 ? "" : "s"}. Unlock above to watch.
+                            </p>
+                          ) : (
+                            <p className="text-sm text-pine">Video coming soon.</p>
+                          )
+                        ) : (
+                          <MediaGrid
+                            items={session.videos}
+                            emptyMessage="This session’s video will appear here when it’s linked."
+                          />
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ))}
         </section>
       ) : null}
 
@@ -375,9 +412,10 @@ export default function VaultPage() {
 
       {!isVip ? (
         <p className="text-sm text-pine">
-          This ticket includes the event and group galleries
-          {hasPersonal ? ", plus your individual photos" : ""}. Speaker sessions are part of VIP
-          access.
+          The event and group galleries are included with your ticket.
+          {hasPersonal || hasSessions
+            ? " Your individual photos and speaker sessions can be unlocked above."
+            : ""}
         </p>
       ) : null}
 
