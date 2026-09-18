@@ -6,7 +6,9 @@ import {
 } from "@/lib/auth";
 import { Day, Event, Media, Session } from "@/lib/models";
 import { resolveGuestSession } from "@/lib/guest-session";
+import { guestCanSeeTeamPhoto } from "@/lib/media-access";
 import { mediaProxyUrl } from "@/lib/storage";
+import { paymentsConfigured, priceLabel } from "@/lib/payments";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
 function mapFileMedia(item: {
@@ -102,7 +104,18 @@ export async function GET(request: Request) {
     kind: "event_photo",
   }).sort({ createdAt: -1 });
 
-  const group = groupPhotos
+  // Curated team photos the admin has sent to this guest's group(s) or everyone.
+  const guestGroupIds = (guest.groupIds || []).map((id) => String(id));
+  const teamPhotos = await Media.find({
+    eventId: guest.eventId,
+    kind: "team_photo",
+    published: true,
+  }).sort({ createdAt: -1 });
+  const teamForGuest = teamPhotos.filter(
+    (item) => isMediaAvailable(item.availableUntil) && guestCanSeeTeamPhoto(item, guestGroupIds),
+  );
+
+  const group = [...groupPhotos, ...teamForGuest]
     .filter((item) => isMediaAvailable(item.availableUntil))
     .map(mapFileMedia);
 
@@ -111,20 +124,10 @@ export async function GET(request: Request) {
     .map(mapFileMedia);
 
   const preview = Boolean(session.adminPreview);
+  // One purchase unlocks a guest's individual photos AND the speaker sessions.
+  const paid = Boolean(guest.personalPhotosPaid) || preview;
 
-  if (tier === "standard") {
-    return NextResponse.json({
-      guest: { name: guest.name, tier },
-      event: { name: event.name, description: event.description },
-      groupGallery: group,
-      eventGallery,
-      personalPhotos: [],
-      days: [],
-      preview,
-    });
-  }
-
-  const [personalPhotos, days, sessions, sessionVideos] = await Promise.all([
+  const [personalPhotoDocs, days, sessions, sessionVideos] = await Promise.all([
     Media.find({
       eventId: guest.eventId,
       kind: "personal_photo",
@@ -132,15 +135,13 @@ export async function GET(request: Request) {
     }).sort({ createdAt: -1 }),
     Day.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
     Session.find({ eventId: guest.eventId }).sort({ sortOrder: 1 }),
-    Media.find({
-      eventId: guest.eventId,
-      kind: "session_video",
-    }).sort({ createdAt: -1 }),
+    Media.find({ eventId: guest.eventId, kind: "session_video" }).sort({ createdAt: -1 }),
   ]);
 
-  const personal = personalPhotos
+  const personal = personalPhotoDocs
     .filter((item) => isMediaAvailable(item.availableUntil))
     .map(mapFileMedia);
+  const hasPersonal = personal.length > 0;
 
   const videosBySession = new Map<string, NonNullable<ReturnType<typeof mapSessionMedia>>[]>();
   for (const video of sessionVideos) {
@@ -151,29 +152,37 @@ export async function GET(request: Request) {
     list.push(mapped);
     videosBySession.set(key, list);
   }
+  const totalSessionVideos = [...videosBySession.values()].reduce((n, v) => n + v.length, 0);
+  const hasSessions = totalSessionVideos > 0;
 
   const dayPayload = days.map((day) => {
     const daySessions = sessions.filter(
       (sessionItem) => String(sessionItem.dayId) === String(day._id),
     );
-
     return {
       id: String(day._id),
       label: day.label,
       date: day.date,
       sessions: daySessions.map((sessionItem) => {
-        const videos = videosBySession.get(String(sessionItem._id)) || [];
+        const all = videosBySession.get(String(sessionItem._id)) || [];
         return {
           id: String(sessionItem._id),
           title: sessionItem.title,
           speaker: sessionItem.speaker,
           startsAt: sessionItem.startsAt,
           description: sessionItem.description,
-          videos,
+          videoCount: all.length,
+          // Video refs (YouTube embeds / files) are withheld until unlocked.
+          videos: paid ? all : [],
         };
       }),
     };
   });
+
+  const payments = {
+    enabled: paymentsConfigured(),
+    priceLabel: priceLabel(),
+  };
 
   return NextResponse.json({
     guest: { name: guest.name, tier },
@@ -181,6 +190,11 @@ export async function GET(request: Request) {
     groupGallery: group,
     eventGallery,
     personalPhotos: personal,
+    personalPhotosPaid: paid,
+    personalPhotosLocked: hasPersonal && !paid,
+    hasSessions,
+    sessionsLocked: hasSessions && !paid,
+    payments,
     days: dayPayload,
     preview,
   });
