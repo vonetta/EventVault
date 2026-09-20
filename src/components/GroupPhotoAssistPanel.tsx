@@ -77,7 +77,7 @@ export function GroupPhotoAssistPanel({
             url: photo.url,
             faceCount,
             selected: true,
-          } satisfies GroupHit;
+          } as GroupHit;
         } catch {
           return null;
         }
@@ -86,7 +86,7 @@ export function GroupPhotoAssistPanel({
     );
 
     const nextHits = results
-      .filter((hit): hit is GroupHit => Boolean(hit))
+      .filter((hit): hit is GroupHit => hit !== null)
       .sort((a, b) => b.faceCount - a.faceCount);
 
     setHits(nextHits);
