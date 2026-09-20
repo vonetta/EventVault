@@ -105,74 +105,82 @@ export function GuestTagPicker({
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
       {selected.length ? (
-        <div className="flex flex-wrap gap-1.5">
-          {selected.map((guest) =>
-            renamingId === guest._id ? (
-              <span
-                key={guest._id}
-                className="inline-flex items-center gap-1 rounded-full border border-ink bg-white px-2 py-1"
-              >
-                <input
-                  autoFocus
-                  value={renameValue}
-                  disabled={renaming}
-                  onChange={(e) => setRenameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void commitRename();
-                    }
-                    if (e.key === "Escape") setRenamingId(null);
-                  }}
-                  className="w-28 border-0 bg-transparent text-xs text-ink outline-none"
-                  aria-label={`Rename ${guest.name}`}
-                />
-                <button
-                  type="button"
-                  disabled={renaming}
-                  onClick={() => void commitRename()}
-                  className="text-xs font-medium text-ink"
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {selected.map((guest) =>
+              renamingId === guest._id ? (
+                <span
+                  key={guest._id}
+                  className="inline-flex w-full max-w-sm items-center gap-2 rounded-lg border border-ink bg-white px-2 py-1.5"
                 >
-                  {renaming ? "…" : "Save"}
-                </button>
-                <button
-                  type="button"
-                  disabled={renaming}
-                  onClick={() => setRenamingId(null)}
-                  className="text-xs text-pine"
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    disabled={renaming}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void commitRename();
+                      }
+                      if (e.key === "Escape") setRenamingId(null);
+                    }}
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none"
+                    aria-label={`Rename ${guest.name}`}
+                  />
+                  <button
+                    type="button"
+                    disabled={renaming}
+                    onClick={() => void commitRename()}
+                    className="shrink-0 rounded-md bg-ink px-2 py-1 text-xs font-medium text-foam"
+                  >
+                    {renaming ? "…" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={renaming}
+                    onClick={() => setRenamingId(null)}
+                    className="shrink-0 text-xs text-pine"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <span
+                  key={guest._id}
+                  className="inline-flex items-center gap-0 overflow-hidden rounded-lg border border-ink bg-ink text-xs text-foam"
                 >
-                  Cancel
-                </button>
-              </span>
-            ) : (
-              <span
-                key={guest._id}
-                className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-xs text-foam"
-              >
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => toggle(guest._id)}
-                  className="disabled:opacity-50"
-                  title="Remove tag"
-                >
-                  {guest.name}
-                  <span aria-hidden> ×</span>
-                </button>
-                {onRenameGuest ? (
                   <button
                     type="button"
                     disabled={disabled}
-                    onClick={() => startRename(guest)}
-                    className="rounded px-1 text-[10px] uppercase tracking-wide text-foam/80 hover:text-foam disabled:opacity-50"
-                    title="Rename this person"
+                    onClick={() => toggle(guest._id)}
+                    className="px-2.5 py-1.5 disabled:opacity-50"
+                    title="Remove tag"
                   >
-                    Edit
+                    {guest.name}
+                    <span aria-hidden> ×</span>
                   </button>
-                ) : null}
-              </span>
-            ),
-          )}
+                  {onRenameGuest ? (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => startRename(guest)}
+                      className="border-l border-foam/30 bg-foam/15 px-2.5 py-1.5 font-medium text-foam hover:bg-foam/25 disabled:opacity-50"
+                      title="Rename this person on every photo"
+                    >
+                      Rename
+                    </button>
+                  ) : null}
+                </span>
+              ),
+            )}
+          </div>
+          {onRenameGuest ? (
+            <p className="text-xs text-pine">
+              Tip: tap <span className="font-medium text-ink">Rename</span> on a name to fix a typo —
+              it updates every photo with that tag.
+            </p>
+          ) : null}
         </div>
       ) : (
         <p className="text-xs text-pine">No one tagged yet.</p>
