@@ -46,6 +46,8 @@ export async function processMediaUpload(
   const title = String(form.get("title") || "").slice(0, 200);
   const guestIdRaw = String(form.get("guestId") || "");
   const sessionIdRaw = String(form.get("sessionId") || "");
+  const needsEditingRaw = String(form.get("needsEditing") || "").toLowerCase();
+  const needsEditing = needsEditingRaw === "1" || needsEditingRaw === "true" || needsEditingRaw === "yes";
 
   if (!(file instanceof File) || !eventIdRaw || !kindRaw) {
     return NextResponse.json(
@@ -192,6 +194,8 @@ export async function processMediaUpload(
       published: !isTeamPhoto,
       everyone: false,
       groupIds: [],
+      taggedGuestIds: [],
+      needsEditing,
       uploadedByName: options.uploadedByName || "",
     });
 
@@ -199,6 +203,7 @@ export async function processMediaUpload(
       kind: media.kind,
       title: media.title,
       actor: options.actor,
+      needsEditing,
     });
     return NextResponse.json({
       media: {
@@ -209,6 +214,8 @@ export async function processMediaUpload(
         contentType: media.contentType,
         guestId: media.guestId,
         sessionId: media.sessionId,
+        needsEditing: media.needsEditing,
+        taggedGuestIds: [],
       },
     });
   } catch (error) {

@@ -10,6 +10,7 @@ import {
   personalPhotoCurrency,
   personalPhotoPriceCents,
 } from "@/lib/payments";
+import { countIndividualPhotos } from "@/lib/individual-photos";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 /**
@@ -43,11 +44,7 @@ export async function POST(request: Request) {
   }
 
   const [personalCount, sessionCount] = await Promise.all([
-    Media.countDocuments({
-      eventId: guest.eventId,
-      kind: "personal_photo",
-      guestId: guest._id,
-    }),
+    countIndividualPhotos(guest.eventId, guest._id),
     Media.countDocuments({ eventId: guest.eventId, kind: "session_video" }),
   ]);
   if (personalCount === 0 && sessionCount === 0) {

@@ -8,6 +8,7 @@ import { Event, Media, type MediaDoc } from "@/lib/models";
 import { openStoredObjectStream } from "@/lib/storage";
 import { resolveGuestSession } from "@/lib/guest-session";
 import { guestCanSeeTeamPhoto } from "@/lib/media-access";
+import { findIndividualPhotos } from "@/lib/individual-photos";
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -105,29 +106,33 @@ export async function GET(request: Request) {
   const groupPhotos = await Media.find({
     eventId: guest.eventId,
     kind: "group_photo",
+    needsEditing: { $ne: true },
   }).sort({ createdAt: -1 });
 
   const eventPhotos = await Media.find({
     eventId: guest.eventId,
     kind: "event_photo",
+    needsEditing: { $ne: true },
   }).sort({ createdAt: -1 });
 
   const guestGroupIds = (guest.groupIds || []).map((id) => String(id));
+  const guestId = String(guest._id);
   const teamPhotos = (
     await Media.find({
       eventId: guest.eventId,
       kind: "team_photo",
       published: true,
+      needsEditing: { $ne: true },
     }).sort({ createdAt: -1 })
-  ).filter((item) => guestCanSeeTeamPhoto(item, guestGroupIds));
+  ).filter(
+    (item) =>
+      guestCanSeeTeamPhoto(item, guestGroupIds) &&
+      !(item.taggedGuestIds || []).some((id) => String(id) === guestId),
+  );
 
-  // Individual photos are only bundled once the guest has paid to unlock them.
+  // Individual photos (assigned + tagged) only once unlocked.
   const personalPhotos = guest.personalPhotosPaid
-    ? await Media.find({
-        eventId: guest.eventId,
-        kind: "personal_photo",
-        guestId: guest._id,
-      }).sort({ createdAt: -1 })
+    ? await findIndividualPhotos(guest.eventId, guest._id)
     : [];
 
   const used = new Set<string>();

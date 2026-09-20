@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { GuestTagPicker } from "@/components/GuestTagPicker";
+import type { NameOnlyGuest } from "@/lib/guest-name-match";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
 
 type EventOption = { _id: string; name: string };
@@ -20,7 +22,12 @@ type StagedPhoto = {
   title: string;
   url: string;
   uploadedByName?: string;
+  needsEditing: boolean;
+  taggedGuestIds: string[];
+  taggedNames: string[];
 };
+
+type GalleryBucket = "ready" | "editing";
 
 export default function UploadPage() {
   const [events, setEvents] = useState<EventOption[] | null>(null);
@@ -30,8 +37,36 @@ export default function UploadPage() {
   const [preparing, setPreparing] = useState(false);
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState("");
-  const [mainGallery, setMainGallery] = useState<StagedPhoto[]>([]);
+  const [readyGallery, setReadyGallery] = useState<StagedPhoto[]>([]);
+  const [editingGallery, setEditingGallery] = useState<StagedPhoto[]>([]);
+  const [guests, setGuests] = useState<NameOnlyGuest[]>([]);
+  const [markNeedsEditing, setMarkNeedsEditing] = useState(false);
+  const [bucket, setBucket] = useState<GalleryBucket>("ready");
+  const [taggingId, setTaggingId] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadGuests = useCallback(async (id: string) => {
+    const res = await fetch(`/api/uploader/guests?eventId=${encodeURIComponent(id)}`);
+    if (!res.ok) return;
+    const data = (await res.json()) as { guests: NameOnlyGuest[] };
+    setGuests(data.guests);
+  }, []);
+
+  const refreshGalleries = useCallback(async (id: string) => {
+    const res = await fetch(`/api/uploader/media?eventId=${encodeURIComponent(id)}`);
+    if (res.status === 401) {
+      window.location.assign("/upload/login");
+      return;
+    }
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      media: StagedPhoto[];
+      needsEditing: StagedPhoto[];
+    };
+    setReadyGallery(data.media || []);
+    setEditingGallery(data.needsEditing || []);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -60,29 +95,13 @@ export default function UploadPage() {
     if (!eventId) return;
     let active = true;
     (async () => {
-      const res = await fetch(`/api/uploader/media?eventId=${encodeURIComponent(eventId)}`);
+      await Promise.all([refreshGalleries(eventId), loadGuests(eventId)]);
       if (!active) return;
-      if (res.status === 401) {
-        window.location.assign("/upload/login");
-        return;
-      }
-      if (!res.ok) return;
-      const data = (await res.json()) as { media: StagedPhoto[] };
-      if (!active) return;
-      setMainGallery(data.media);
     })();
     return () => {
       active = false;
     };
-  }, [eventId]);
-
-  async function refreshMainGallery() {
-    if (!eventId) return;
-    const res = await fetch(`/api/uploader/media?eventId=${encodeURIComponent(eventId)}`);
-    if (!res.ok) return;
-    const data = (await res.json()) as { media: StagedPhoto[] };
-    setMainGallery(data.media);
-  }
+  }, [eventId, refreshGalleries, loadGuests]);
 
   function addFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -138,6 +157,7 @@ export default function UploadPage() {
       form.set("eventId", eventId);
       form.set("kind", "team_photo");
       form.set("title", item.name);
+      if (markNeedsEditing) form.set("needsEditing", "true");
 
       try {
         const res = await fetch("/api/uploader/upload", { method: "POST", body: form });
@@ -158,8 +178,15 @@ export default function UploadPage() {
     }
 
     setBusy(false);
-    setMessage(uploaded ? `Uploaded ${uploaded} photo${uploaded === 1 ? "" : "s"} to the event.` : "");
-    await refreshMainGallery();
+    setMessage(
+      uploaded
+        ? `Uploaded ${uploaded} photo${uploaded === 1 ? "" : "s"}${
+            markNeedsEditing ? " to Needs editing" : " to the Main gallery"
+          }.`
+        : "",
+    );
+    if (markNeedsEditing) setBucket("editing");
+    await refreshGalleries(eventId);
   }
 
   async function deletePhoto(id: string) {
@@ -178,7 +205,55 @@ export default function UploadPage() {
       setMessage(json.error || "Could not delete that photo.");
       return;
     }
-    setMainGallery((prev) => prev.filter((photo) => photo.id !== id));
+    setReadyGallery((prev) => prev.filter((photo) => photo.id !== id));
+    setEditingGallery((prev) => prev.filter((photo) => photo.id !== id));
+    if (taggingId === id) setTaggingId(null);
+  }
+
+  async function updatePhoto(
+    id: string,
+    patch: { taggedGuestIds?: string[]; needsEditing?: boolean },
+  ) {
+    setSavingId(id);
+    const res = await fetch("/api/uploader/media/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mediaId: id, ...patch }),
+    });
+    setSavingId(null);
+    if (res.status === 401) {
+      window.location.assign("/upload/login");
+      return;
+    }
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Could not update that photo.");
+      return;
+    }
+    await refreshGalleries(eventId);
+  }
+
+  async function createGuest(name: string): Promise<NameOnlyGuest | null> {
+    const res = await fetch("/api/uploader/guests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, name }),
+    });
+    if (res.status === 401) {
+      window.location.assign("/upload/login");
+      return null;
+    }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMessage(json.error || "Could not create that name.");
+      return null;
+    }
+    const guest = json.guest as NameOnlyGuest;
+    setGuests((prev) => {
+      if (prev.some((g) => g._id === guest._id)) return prev;
+      return [...prev, guest].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    return guest;
   }
 
   async function signOut() {
@@ -190,6 +265,71 @@ export default function UploadPage() {
     (item) => item.status === "pending" || item.status === "error",
   ).length;
 
+  const activeGallery = bucket === "ready" ? readyGallery : editingGallery;
+
+  function renderPhotoCard(photo: StagedPhoto) {
+    const isTagging = taggingId === photo.id;
+    return (
+      <div
+        key={photo.id}
+        className="overflow-hidden rounded-lg border border-[color:var(--line)] bg-white"
+      >
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photo.url}
+            alt={photo.title}
+            className="aspect-square w-full object-cover"
+            loading="lazy"
+          />
+          <button
+            type="button"
+            onClick={() => deletePhoto(photo.id)}
+            className="absolute right-1.5 top-1.5 rounded-full bg-ink/80 px-2 py-1 text-xs text-foam"
+          >
+            Delete
+          </button>
+        </div>
+        <div className="space-y-2 p-2.5">
+          <p className="truncate text-xs text-pine">
+            {photo.taggedNames.length
+              ? photo.taggedNames.join(", ")
+              : "No one tagged"}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setTaggingId(isTagging ? null : photo.id)}
+              className="rounded-md border border-[color:var(--line)] px-2 py-1 text-xs text-ink hover:bg-mist"
+            >
+              {isTagging ? "Close tags" : "Tag people"}
+            </button>
+            <button
+              type="button"
+              disabled={savingId === photo.id}
+              onClick={() =>
+                void updatePhoto(photo.id, { needsEditing: !photo.needsEditing })
+              }
+              className="rounded-md border border-[color:var(--line)] px-2 py-1 text-xs text-ink hover:bg-mist disabled:opacity-50"
+            >
+              {photo.needsEditing ? "Mark ready" : "Needs editing"}
+            </button>
+          </div>
+          {isTagging ? (
+            <GuestTagPicker
+              compact
+              guests={guests}
+              selectedIds={photo.taggedGuestIds}
+              disabled={savingId === photo.id}
+              onChange={(ids) => void updatePhoto(photo.id, { taggedGuestIds: ids })}
+              onCreateGuest={createGuest}
+            />
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main id="main" tabIndex={-1} className="mx-auto w-full max-w-2xl px-6 py-10">
       <header className="flex items-start justify-between gap-4">
@@ -199,8 +339,8 @@ export default function UploadPage() {
             Team photo upload
           </h1>
           <p className="mt-1 text-sm text-pine">
-            Add photos to an event. They go to the event admin to review and share — guests don’t
-            see them until the admin sends them out.
+            Upload photos, flag ones that still need editing, and tag guests by name. Tagged
+            people see that photo in their own gallery once it’s marked ready.
           </p>
         </div>
         <button
@@ -254,6 +394,16 @@ export default function UploadPage() {
             <span className="text-sm text-pine">
               JPEG, PNG, WebP, or GIF · you can pick several · large photos are auto-resized
             </span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={markNeedsEditing}
+              onChange={(e) => setMarkNeedsEditing(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Mark new uploads as Needs editing (hidden from guests until ready)
           </label>
 
           {items.length > 0 ? (
@@ -314,40 +464,38 @@ export default function UploadPage() {
           {message ? <p className="text-sm text-pine">{message}</p> : null}
 
           <section className="border-t border-[color:var(--line)] pt-6">
-            <h2 className="font-[family-name:var(--font-fraunces)] text-xl text-ink">
-              Main gallery
-              {mainGallery.length ? (
-                <span className="ml-2 text-base text-pine">{mainGallery.length}</span>
-              ) : null}
-            </h2>
-            <p className="mt-1 text-sm text-pine">
-              Photos waiting for the admin to review. You can delete ones you didn’t mean to upload.
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBucket("ready")}
+                aria-pressed={bucket === "ready"}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  bucket === "ready" ? "bg-ink text-foam" : "bg-mist text-pine"
+                }`}
+              >
+                Main gallery ({readyGallery.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setBucket("editing")}
+                aria-pressed={bucket === "editing"}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  bucket === "editing" ? "bg-ink text-foam" : "bg-mist text-pine"
+                }`}
+              >
+                Needs editing ({editingGallery.length})
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-pine">
+              {bucket === "ready"
+                ? "Ready for the admin to send to groups, or already tagged for someone’s personal gallery."
+                : "Hidden from guests. Tag people here if you like, then mark ready when the edit is done."}
             </p>
-            {mainGallery.length === 0 ? (
+            {activeGallery.length === 0 ? (
               <p className="mt-4 text-sm text-pine">Nothing here yet.</p>
             ) : (
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {mainGallery.map((photo) => (
-                  <div
-                    key={photo.id}
-                    className="relative overflow-hidden rounded-lg border border-[color:var(--line)] bg-white"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.url}
-                      alt={photo.title}
-                      className="aspect-square w-full object-cover"
-                      loading="lazy"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => deletePhoto(photo.id)}
-                      className="absolute right-1.5 top-1.5 rounded-full bg-ink/80 px-2 py-1 text-xs text-foam"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {activeGallery.map(renderPhotoCard)}
               </div>
             )}
           </section>

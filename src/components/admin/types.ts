@@ -43,6 +43,8 @@ export type MediaDoc = {
   published?: boolean;
   everyone?: boolean;
   groupIds?: string[];
+  taggedGuestIds?: string[];
+  needsEditing?: boolean;
   uploadedByName?: string;
 };
 

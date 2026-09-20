@@ -113,6 +113,17 @@ const MediaSchema = new Schema(
     groupIds: { type: [{ type: Schema.Types.ObjectId, ref: "Group" }], default: [], index: true },
     // Who uploaded it (photographer attribution; populated once accounts land).
     uploadedByName: { type: String, default: "" },
+    // People in the frame. Tagged guests see this same file in "Your photos"
+    // (paid unlock) — no duplicate uploads. Empty until the team/admin tags.
+    taggedGuestIds: {
+      type: [{ type: Schema.Types.ObjectId, ref: "Guest" }],
+      default: [],
+      index: true,
+    },
+    // Not ready for live view: hidden from guests; cannot be sent to groups
+    // until cleared. Tags may be prepared while editing but only go live when
+    // this is false.
+    needsEditing: { type: Boolean, default: false, index: true },
     // File-backed media (photos / uploaded videos)
     storageKey: { type: String, default: "" },
     storageProvider: {
@@ -134,6 +145,8 @@ const MediaSchema = new Schema(
 GuestSchema.index({ eventId: 1, email: 1 });
 MediaSchema.index({ eventId: 1, kind: 1 });
 MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
+MediaSchema.index({ eventId: 1, taggedGuestIds: 1 });
+MediaSchema.index({ eventId: 1, needsEditing: 1, kind: 1 });
 
 export type EventDoc = InferSchemaType<typeof EventSchema> & { _id: mongoose.Types.ObjectId };
 export type DayDoc = InferSchemaType<typeof DaySchema> & { _id: mongoose.Types.ObjectId };

@@ -29,20 +29,26 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
     const { session, guest } = resolved;
     if (String(guest.eventId) !== String(media.eventId)) return "none";
     if (!isMediaAvailable(media.availableUntil)) return "none";
+    // Needs-editing photos stay out of the guest vault entirely.
+    if (media.needsEditing) return "none";
+
+    const guestId = String(guest._id);
+    const isTagged = (media.taggedGuestIds || []).some((id) => String(id) === guestId);
+    const isAssignedPersonal =
+      media.kind === "personal_photo" && String(media.guestId) === guestId;
+
+    // Tagged / assigned individual photos use the paywall — checked before free
+    // group galleries so a tagged share stays a paid individual photo.
+    if (isAssignedPersonal || isTagged) {
+      if (session.adminPreview) return "full";
+      return guest.personalPhotosPaid ? "full" : "preview";
+    }
 
     if (media.kind === "group_photo" || media.kind === "event_photo") return "full";
 
     if (media.kind === "team_photo") {
       const guestGroupIds = (guest.groupIds || []).map((id) => String(id));
       return guestCanSeeTeamPhoto(media, guestGroupIds) ? "full" : "none";
-    }
-
-    // Individual photos: available to the assigned guest (any tier), but locked
-    // behind payment. Admin preview sees them unlocked.
-    if (media.kind === "personal_photo") {
-      if (String(media.guestId) !== String(guest._id)) return "none";
-      if (session.adminPreview) return "full";
-      return guest.personalPhotosPaid ? "full" : "preview";
     }
 
     // Speaker sessions are behind the same one-time unlock as individual photos.
