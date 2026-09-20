@@ -456,6 +456,8 @@ export async function POST(request: Request) {
       { taggedGuestIds: guest._id },
       { $pull: { taggedGuestIds: guest._id } },
     );
+    const { FaceProfile } = await import("@/lib/models");
+    await FaceProfile.deleteMany({ guestId: guest._id });
     await logAdminAction(request, "delete_guest", { guestId: body.guestId });
     return NextResponse.json({ ok: true });
   }

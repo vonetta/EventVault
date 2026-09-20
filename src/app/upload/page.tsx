@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FaceAssistPanel } from "@/components/FaceAssistPanel";
 import { GuestTagPicker } from "@/components/GuestTagPicker";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
@@ -266,6 +267,10 @@ export default function UploadPage() {
   ).length;
 
   const activeGallery = bucket === "ready" ? readyGallery : editingGallery;
+  const allPhotos = useMemo(
+    () => [...readyGallery, ...editingGallery],
+    [readyGallery, editingGallery],
+  );
 
   function renderPhotoCard(photo: StagedPhoto) {
     const isTagging = taggingId === photo.id;
@@ -331,7 +336,7 @@ export default function UploadPage() {
   }
 
   return (
-    <main id="main" tabIndex={-1} className="mx-auto w-full max-w-2xl px-6 py-10">
+    <main id="main" tabIndex={-1} className="mx-auto w-full max-w-3xl px-6 py-10">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">EventVault</p>
@@ -339,8 +344,8 @@ export default function UploadPage() {
             Team photo upload
           </h1>
           <p className="mt-1 text-sm text-pine">
-            Upload photos, flag ones that still need editing, and tag guests by name. Tagged
-            people see that photo in their own gallery once it’s marked ready.
+            Upload photos, flag ones that still need editing, and tag guests. Use AI face tagging
+            to name people once on a seed photo, then auto-tag the rest of the gallery.
           </p>
         </div>
         <button
@@ -462,6 +467,22 @@ export default function UploadPage() {
           </div>
 
           {message ? <p className="text-sm text-pine">{message}</p> : null}
+
+          {eventId && allPhotos.length > 0 ? (
+            <FaceAssistPanel
+              eventId={eventId}
+              guests={guests}
+              photos={allPhotos}
+              onCreateGuest={createGuest}
+              onGuestsChanged={async () => {
+                await loadGuests(eventId);
+              }}
+              onPhotosChanged={async () => {
+                await refreshGalleries(eventId);
+              }}
+              onMessage={setMessage}
+            />
+          ) : null}
 
           <section className="border-t border-[color:var(--line)] pt-6">
             <div className="flex flex-wrap items-center gap-2">

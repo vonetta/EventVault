@@ -146,6 +146,17 @@ const MediaSchema = new Schema(
   { timestamps: true },
 );
 
+const FaceProfileSchema = new Schema(
+  {
+    eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    guestId: { type: Schema.Types.ObjectId, ref: "Guest", required: true, index: true },
+    // 128-d face-api descriptors. Multiple samples (different angles) improve match rate.
+    descriptors: { type: [[Number]], default: [] },
+  },
+  { timestamps: true },
+);
+FaceProfileSchema.index({ eventId: 1, guestId: 1 }, { unique: true });
+
 GuestSchema.index({ eventId: 1, email: 1 });
 MediaSchema.index({ eventId: 1, kind: 1 });
 MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
@@ -159,6 +170,9 @@ export type GroupDoc = InferSchemaType<typeof GroupSchema> & { _id: mongoose.Typ
 export type GuestDoc = InferSchemaType<typeof GuestSchema> & { _id: mongoose.Types.ObjectId };
 export type PurchaseDoc = InferSchemaType<typeof PurchaseSchema> & { _id: mongoose.Types.ObjectId };
 export type MediaDoc = InferSchemaType<typeof MediaSchema> & { _id: mongoose.Types.ObjectId };
+export type FaceProfileDoc = InferSchemaType<typeof FaceProfileSchema> & {
+  _id: mongoose.Types.ObjectId;
+};
 export type RateLimitBucketDoc = InferSchemaType<typeof RateLimitBucketSchema> & {
   _id: mongoose.Types.ObjectId;
 };
@@ -178,6 +192,8 @@ export const Guest: Model<GuestDoc> =
   mongoose.models.Guest || mongoose.model("Guest", GuestSchema);
 export const Media: Model<MediaDoc> =
   mongoose.models.Media || mongoose.model("Media", MediaSchema);
+export const FaceProfile: Model<FaceProfileDoc> =
+  mongoose.models.FaceProfile || mongoose.model("FaceProfile", FaceProfileSchema);
 export const RateLimitBucket: Model<RateLimitBucketDoc> =
   mongoose.models.RateLimitBucket || mongoose.model("RateLimitBucket", RateLimitBucketSchema);
 export const AuditLog: Model<AuditLogDoc> =
