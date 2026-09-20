@@ -54,9 +54,12 @@ const GuestSchema = new Schema(
     // Group membership drives which curated team photos this guest can see.
     groupIds: { type: [{ type: Schema.Types.ObjectId, ref: "Group" }], default: [] },
     // Paywall: individual (personal) photos unlock for full-size view + download
-    // only after this guest pays. Free galleries are unaffected.
+    // only after this guest pays (Zelle → admin marks paid). Free galleries are unaffected.
     personalPhotosPaid: { type: Boolean, default: false },
     personalPhotosPaidAt: { type: Date, default: null },
+    // Guest tapped “I’ve sent Zelle” — waiting for admin to confirm and unlock.
+    zellePaymentPending: { type: Boolean, default: false },
+    zellePaymentPendingAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
@@ -66,10 +69,11 @@ const PurchaseSchema = new Schema(
     eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
     guestId: { type: Schema.Types.ObjectId, ref: "Guest", required: true, index: true },
     kind: { type: String, default: "personal_photos" },
+    method: { type: String, enum: ["zelle", "stripe", "manual"], default: "zelle" },
     amount: { type: Number, default: 0 },
     currency: { type: String, default: "usd" },
     stripeSessionId: { type: String, default: "", index: true },
-    status: { type: String, default: "paid" },
+    status: { type: String, enum: ["pending", "paid"], default: "paid" },
   },
   { timestamps: true },
 );

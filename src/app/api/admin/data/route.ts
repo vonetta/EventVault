@@ -111,6 +111,8 @@ export async function GET(request: Request) {
       tier: guest.tier,
       ticketCode: guest.ticketCode,
       groupIds: (guest.groupIds || []).map((id) => String(id)),
+      personalPhotosPaid: Boolean(guest.personalPhotosPaid),
+      zellePaymentPending: Boolean(guest.zellePaymentPending) && !guest.personalPhotosPaid,
     })),
     groups: groups.map((group) => ({
       _id: String(group._id),
@@ -853,6 +855,55 @@ export async function POST(request: Request) {
       await logAdminAction(request, "create_guest_name", { name: result.guest.name });
     }
     return NextResponse.json(result);
+  }
+
+  if (body.action === "mark_guest_paid") {
+    const { personalPhotoPriceCents, personalPhotoCurrency } = await import("@/lib/payments");
+    const { Purchase } = await import("@/lib/models");
+    const guest = await Guest.findById(body.guestId);
+    if (!guest) {
+      return NextResponse.json({ error: "Guest not found" }, { status: 404 });
+    }
+
+    if (body.paid) {
+      guest.personalPhotosPaid = true;
+      guest.personalPhotosPaidAt = new Date();
+      guest.zellePaymentPending = false;
+      await guest.save();
+      await Purchase.create({
+        eventId: guest.eventId,
+        guestId: guest._id,
+        method: "zelle",
+        amount: personalPhotoPriceCents(),
+        currency: personalPhotoCurrency(),
+        status: "paid",
+        stripeSessionId: `zelle_${guest._id}_${Date.now()}`,
+      });
+      await logAdminAction(request, "mark_guest_paid", {
+        guestId: body.guestId,
+        guestName: guest.name,
+        paid: true,
+      });
+    } else {
+      guest.personalPhotosPaid = false;
+      guest.personalPhotosPaidAt = null;
+      guest.zellePaymentPending = false;
+      guest.zellePaymentPendingAt = null;
+      await guest.save();
+      await logAdminAction(request, "mark_guest_paid", {
+        guestId: body.guestId,
+        guestName: guest.name,
+        paid: false,
+      });
+    }
+
+    return NextResponse.json({
+      guest: {
+        _id: String(guest._id),
+        personalPhotosPaid: guest.personalPhotosPaid,
+        zellePaymentPending: false,
+      },
+    });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

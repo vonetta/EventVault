@@ -9,7 +9,7 @@ import { resolveGuestSession } from "@/lib/guest-session";
 import { guestCanSeeTeamPhoto } from "@/lib/media-access";
 import { findIndividualPhotos } from "@/lib/individual-photos";
 import { mediaProxyUrl } from "@/lib/storage";
-import { paymentsConfigured, priceLabel } from "@/lib/payments";
+import { zelleConfigured, zellePaymentInfo } from "@/lib/payments";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 
 function mapFileMedia(item: {
@@ -185,8 +185,10 @@ export async function GET(request: Request) {
   });
 
   const payments = {
-    enabled: paymentsConfigured(),
-    priceLabel: priceLabel(),
+    method: "zelle" as const,
+    enabled: zelleConfigured(),
+    priceLabel: zellePaymentInfo().priceLabel,
+    zelle: zellePaymentInfo(guest.ticketCode),
   };
 
   return NextResponse.json({
@@ -197,6 +199,7 @@ export async function GET(request: Request) {
     personalPhotos: personal,
     personalPhotosPaid: paid,
     personalPhotosLocked: hasPersonal && !paid,
+    zellePaymentPending: Boolean(guest.zellePaymentPending) && !paid,
     hasSessions,
     sessionsLocked: hasSessions && !paid,
     payments,

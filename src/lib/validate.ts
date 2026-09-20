@@ -183,6 +183,11 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     eventId: objectIdSchema,
     name: z.string().min(1).max(120),
   }),
+  z.object({
+    action: z.literal("mark_guest_paid"),
+    guestId: objectIdSchema,
+    paid: z.boolean(),
+  }),
 ]);
 
 export const uploaderUpdateMediaSchema = z.object({
