@@ -61,8 +61,10 @@ export async function POST(request: Request) {
   }).select("_id");
   const validSet = new Set(validGuests.map((guest) => String(guest._id)));
 
+  const asAdmin = await isAdminAuthenticated();
   let updated = 0;
   let tagged = 0;
+  let skippedPublished = 0;
   for (const update of body.updates) {
     const media = await Media.findOne({
       _id: update.mediaId,
@@ -70,6 +72,10 @@ export async function POST(request: Request) {
       kind: "team_photo",
     });
     if (!media) continue;
+    if (media.published && !asAdmin) {
+      skippedPublished += 1;
+      continue;
+    }
 
     const nextIds = update.guestIds.filter((id) => validSet.has(id));
     if (!nextIds.length && !body.replace) continue;
@@ -94,7 +100,8 @@ export async function POST(request: Request) {
     eventId: body.eventId,
     photos: updated,
     tags: tagged,
+    skippedPublished,
   });
 
-  return NextResponse.json({ ok: true, photos: updated, tags: tagged });
+  return NextResponse.json({ ok: true, photos: updated, tags: tagged, skippedPublished });
 }

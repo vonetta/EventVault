@@ -23,9 +23,14 @@ export async function loadFaceModels() {
     modelsReady = (async () => {
       const faceapi = await import("@vladmandic/face-api");
       // Prefer CPU so tagging works on machines without WebGL (common in VMs / CI).
+      // face-api's bundled tf typings omit setBackend/ready — runtime still has them.
       try {
-        await faceapi.tf.setBackend("cpu");
-        await faceapi.tf.ready();
+        const tf = faceapi.tf as unknown as {
+          setBackend: (name: string) => Promise<boolean>;
+          ready: () => Promise<void>;
+        };
+        await tf.setBackend("cpu");
+        await tf.ready();
       } catch {
         // Fall through to whatever backend tfjs picks.
       }

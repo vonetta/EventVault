@@ -189,7 +189,11 @@ export function GuestsTab({
 {`Jane Doe, jane@email.com, vip
 John Smith, john@email.com, standard`}
         </pre>
-        <p>VIP guests see personal photos and speaker sessions. Every guest sees the event gallery and group gallery. Use <strong>View vault</strong> to check what someone will see.</p>
+        <p>
+          VIP guests include personal photos and speaker sessions. Standard guests unlock those
+          with Zelle (Mark paid after you confirm payment). Every guest sees the event gallery and
+          group gallery. Use <strong>View vault</strong> to check what someone will see.
+        </p>
       </HowTo>
 
       <AdminPanel
@@ -298,8 +302,10 @@ John Smith, john@email.com, standard`}
                       <TierBadge tier={guest.tier} />
                     </td>
                     <td className="py-3 pr-4">
-                      {guest.personalPhotosPaid ? (
-                        <span className="text-xs font-medium text-ink">Unlocked</span>
+                      {guest.personalPhotosPaid || guest.tier === "vip" ? (
+                        <span className="text-xs font-medium text-ink">
+                          {guest.tier === "vip" && !guest.personalPhotosPaid ? "VIP unlock" : "Unlocked"}
+                        </span>
                       ) : guest.zellePaymentPending ? (
                         <span className="text-xs font-medium text-gold-deep">Zelle pending</span>
                       ) : (
@@ -318,7 +324,7 @@ John Smith, john@email.com, standard`}
                         >
                           {previewingGuestId === guest._id ? "Opening…" : "View vault"}
                         </AdminButton>
-                        {!guest.personalPhotosPaid ? (
+                        {!guest.personalPhotosPaid && guest.tier !== "vip" ? (
                           <AdminButton
                             className="!h-8 !px-2 !text-xs"
                             disabled={isLoading("paid")}
@@ -327,7 +333,7 @@ John Smith, john@email.com, standard`}
                           >
                             {isLoading("paid") ? "Saving…" : "Mark paid"}
                           </AdminButton>
-                        ) : (
+                        ) : guest.personalPhotosPaid ? (
                           <AdminButton
                             className="!h-8 !px-2 !text-xs"
                             disabled={isLoading("unpaid")}
@@ -336,7 +342,7 @@ John Smith, john@email.com, standard`}
                           >
                             {isLoading("unpaid") ? "Saving…" : "Lock again"}
                           </AdminButton>
-                        )}
+                        ) : null}
                         <AdminButton
                           className="!h-8 !px-2 !text-xs"
                           onClick={() => navigator.clipboard.writeText(guest.ticketCode)}

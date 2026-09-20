@@ -868,23 +868,27 @@ export async function POST(request: Request) {
     }
 
     if (body.paid) {
+      const alreadyPaid = Boolean(guest.personalPhotosPaid);
       guest.personalPhotosPaid = true;
-      guest.personalPhotosPaidAt = new Date();
+      guest.personalPhotosPaidAt = guest.personalPhotosPaidAt || new Date();
       guest.zellePaymentPending = false;
       await guest.save();
-      await Purchase.create({
-        eventId: guest.eventId,
-        guestId: guest._id,
-        method: "zelle",
-        amount: personalPhotoPriceCents(),
-        currency: personalPhotoCurrency(),
-        status: "paid",
-        stripeSessionId: `zelle_${guest._id}_${Date.now()}`,
-      });
+      if (!alreadyPaid) {
+        await Purchase.create({
+          eventId: guest.eventId,
+          guestId: guest._id,
+          method: "zelle",
+          amount: personalPhotoPriceCents(),
+          currency: personalPhotoCurrency(),
+          status: "paid",
+          stripeSessionId: `zelle_${guest._id}_${Date.now()}`,
+        });
+      }
       await logAdminAction(request, "mark_guest_paid", {
         guestId: body.guestId,
         guestName: guest.name,
         paid: true,
+        alreadyPaid,
       });
     } else {
       guest.personalPhotosPaid = false;

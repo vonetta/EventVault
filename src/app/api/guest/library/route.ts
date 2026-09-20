@@ -133,8 +133,9 @@ export async function GET(request: Request) {
     .map(mapFileMedia);
 
   const preview = Boolean(session.adminPreview);
-  // One purchase unlocks a guest's individual photos AND the speaker sessions.
-  const paid = Boolean(guest.personalPhotosPaid) || preview;
+  // VIP includes unlock; others unlock after Zelle is confirmed (or admin preview).
+  const paid =
+    Boolean(guest.personalPhotosPaid) || guest.tier === "vip" || preview;
 
   const [personalPhotoDocs, days, sessions, sessionVideos] = await Promise.all([
     findIndividualPhotos(guest.eventId, guest._id),

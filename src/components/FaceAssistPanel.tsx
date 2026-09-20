@@ -76,8 +76,11 @@ export function FaceAssistPanel({
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    queueMicrotask(() => {
+      if (!active) return;
       setModelsStatus("loading");
+    });
+    (async () => {
       try {
         await loadFaceModels();
         if (!active) return;
@@ -108,7 +111,11 @@ export function FaceAssistPanel({
   }, [eventId]);
 
   useEffect(() => {
-    if (!seedId && photos[0]) setSeedId(photos[0].id);
+    if (!seedId && photos[0]) {
+      // Defer so we don't sync-set during render/effect cascade.
+      const id = photos[0].id;
+      queueMicrotask(() => setSeedId(id));
+    }
   }, [photos, seedId]);
 
   function assignmentFor(faceId: string) {

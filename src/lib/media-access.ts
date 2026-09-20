@@ -39,9 +39,11 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
 
     // Tagged / assigned individual photos use the paywall — checked before free
     // group galleries so a tagged share stays a paid individual photo.
+    // VIP tickets include unlock (documented product behavior); others pay via Zelle.
     if (isAssignedPersonal || isTagged) {
       if (session.adminPreview) return "full";
-      return guest.personalPhotosPaid ? "full" : "preview";
+      if (guest.tier === "vip" || guest.personalPhotosPaid) return "full";
+      return "preview";
     }
 
     if (media.kind === "group_photo" || media.kind === "event_photo") return "full";
@@ -54,7 +56,8 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
     // Speaker sessions are behind the same one-time unlock as individual photos.
     if (media.kind === "session_video") {
       if (session.adminPreview) return "full";
-      return guest.personalPhotosPaid ? "full" : "none";
+      if (guest.tier === "vip" || guest.personalPhotosPaid) return "full";
+      return "none";
     }
 
     return "none";
@@ -62,7 +65,10 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
 
   if (await isAdminAuthenticated()) return "full";
   if (await isUploaderAuthenticated()) {
-    return media.kind === "team_photo" ? "full" : "none";
+    // Uploaders only need staged (not-yet-sent) team photos for tagging / edits.
+    // Published guest-facing photos stay admin-managed.
+    if (media.kind === "team_photo" && !media.published) return "full";
+    return "none";
   }
   return "none";
 }

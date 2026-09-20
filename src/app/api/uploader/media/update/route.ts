@@ -47,6 +47,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Team photo not found" }, { status: 404 });
   }
 
+  const asAdmin = await isAdminAuthenticated();
+  // Match delete policy: once sent to guests, only admin can change it.
+  if (media.published && !asAdmin) {
+    return NextResponse.json(
+      {
+        error:
+          "This photo has already been sent to guests. Ask an admin to change tags or move it back.",
+      },
+      { status: 403 },
+    );
+  }
+
   if (body.taggedGuestIds !== undefined) {
     const validGuests = await Guest.find({
       _id: { $in: body.taggedGuestIds },
@@ -69,7 +81,7 @@ export async function POST(request: Request) {
     mediaId: body.mediaId,
     tags: media.taggedGuestIds?.length || 0,
     needsEditing: media.needsEditing,
-    actor: (await isAdminAuthenticated()) ? "admin" : "uploader",
+    actor: asAdmin ? "admin" : "uploader",
   });
 
   return NextResponse.json({

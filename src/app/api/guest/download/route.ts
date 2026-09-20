@@ -130,10 +130,11 @@ export async function GET(request: Request) {
       !(item.taggedGuestIds || []).some((id) => String(id) === guestId),
   );
 
-  // Individual photos (assigned + tagged) only once unlocked.
-  const personalPhotos = guest.personalPhotosPaid
-    ? await findIndividualPhotos(guest.eventId, guest._id)
-    : [];
+  // Individual photos (assigned + tagged) only once unlocked (VIP included).
+  const personalPhotos =
+    guest.personalPhotosPaid || guest.tier === "vip"
+      ? await findIndividualPhotos(guest.eventId, guest._id)
+      : [];
 
   const used = new Set<string>();
   const entries: ZipEntry[] = [];

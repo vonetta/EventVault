@@ -1,11 +1,6 @@
 import { Guest } from "@/lib/models";
 import { createTicketCode } from "@/lib/tickets";
-import {
-  foldGuestName,
-  normalizeGuestName,
-  suggestSimilarGuests,
-  type NameOnlyGuest,
-} from "@/lib/guest-name-match";
+import { foldGuestName, normalizeGuestName } from "@/lib/guest-name-match";
 
 export {
   normalizeGuestName,
