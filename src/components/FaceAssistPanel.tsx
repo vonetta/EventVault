@@ -359,8 +359,9 @@ export function FaceAssistPanel({
           AI face tagging
         </h2>
         <p className="mt-1 text-sm text-pine">
-          Name faces once on a clear seed photo. We save those faces, then automatically scan the
-          rest of the gallery and tag lookalikes — so you don’t walk 1000+ shots by hand.
+          For personal “Your photos” only — name faces on a seed shot and auto-tag lookalikes.
+          Big group shots belong in <span className="text-ink">Group photos → Everyone</span> above
+          (no tagging needed).
         </p>
         <p className="mt-1 text-xs text-pine">
           Models:{" "}

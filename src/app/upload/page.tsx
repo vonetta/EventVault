@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FaceAssistPanel } from "@/components/FaceAssistPanel";
 import { GuestTagPicker } from "@/components/GuestTagPicker";
+import { GroupPhotoAssistPanel } from "@/components/GroupPhotoAssistPanel";
 import { QualityAssistPanel } from "@/components/QualityAssistPanel";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
 import { mapPool } from "@/lib/photo-quality";
@@ -592,19 +593,20 @@ export default function UploadPage() {
           <span className="mt-0.5 block">Every upload goes under the event selected below.</span>
         </li>
         <li>
-          <span className="font-medium text-ink">2. Upload · clean · tag</span>
+          <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
-            Quality &amp; duplicates + face tagging cut the manual sorting.
+            Group-photo AI finds multi-person shots for Everyone; face tagging is for personal
+            galleries only.
           </span>
         </li>
         <li>
-          <span className="font-medium text-ink">3. Send to groups</span>
+          <span className="font-medium text-ink">3. Send the rest</span>
           <span className="mt-0.5 block">
-            In{" "}
+            Publish group shots here, or open{" "}
             <a href="/admin" className="underline hover:text-ink">
               Admin → Media
-            </a>
-            , select ready photos and Send to Everyone or a group.
+            </a>{" "}
+            to send other ready photos to specific groups.
           </span>
         </li>
       </ol>
@@ -781,6 +783,15 @@ export default function UploadPage() {
               ) : null}
               {assistPhotos.length > 0 ? (
                 <>
+                  <GroupPhotoAssistPanel
+                    eventId={eventId}
+                    photos={assistPhotos}
+                    onPhotosChanged={async () => {
+                      await refreshGalleries(eventId);
+                      await refreshAssistPhotos();
+                    }}
+                    onMessage={setMessage}
+                  />
                   <QualityAssistPanel
                     eventId={eventId}
                     photos={assistPhotos}
