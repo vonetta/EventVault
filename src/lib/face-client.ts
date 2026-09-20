@@ -80,6 +80,18 @@ export async function detectFacesInImage(url: string): Promise<DetectedFace[]> {
   });
 }
 
+/**
+ * Fast face count only (no landmarks / descriptors) — for spotting group shots
+ * across large galleries without the full recognition cost.
+ */
+export async function countFacesInImage(url: string): Promise<number> {
+  const faceapi = await loadFaceModels();
+  const img = await loadImageElement(url);
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
+  const results = await faceapi.detectAllFaces(img, options);
+  return results.length;
+}
+
 export function bestMatch(
   descriptor: FaceDescriptor,
   profiles: FaceLabeledProfile[],
