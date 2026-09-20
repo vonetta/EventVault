@@ -26,9 +26,13 @@ if [[ -n "${VERCEL_TOKEN:-}" && -z "${MONGODB_URI:-}" ]]; then
   if node scripts/vercel-pull-env.mjs; then
     echo "==> Pulled Vercel env into .env.local"
   else
-    echo "!! Vercel env pull failed; falling back to the local in-memory setup." >&2
-    echo "!! Tip: confirm the token is valid and, if the project is under a team," >&2
-    echo "!! set VERCEL_ORG_ID (team_...) and/or VERCEL_PROJECT_ID as secrets." >&2
+    echo "!! Vercel env pull failed." >&2
+    echo "!! Not falling back to in-memory MongoDB (a VERCEL_TOKEN means use Atlas; never seed)." >&2
+    echo "!! If values are Sensitive, add Development env vars in Vercel or set MONGODB_URI as a Cursor secret." >&2
+    if [[ -f .env.local ]] && grep -q '127.0.0.1:27017/eventvault' .env.local; then
+      echo "==> Removing leftover in-memory .env.local from a previous fallback"
+      rm -f .env.local
+    fi
   fi
 fi
 
@@ -69,7 +73,7 @@ EOF
   echo "==> Pre-downloading in-memory MongoDB binary into cache"
   node -e "import('mongodb-memory-server').then(async ({ MongoMemoryServer }) => { const s = await MongoMemoryServer.create(); await s.stop(); console.log('mongodb-memory-server binary cached'); }).catch((e) => { console.error(e); process.exit(1); });"
 else
-  echo "==> Real MONGODB_URI configured; skipping in-memory MongoDB and local .env.local"
+  echo "==> Using real/external MongoDB; skipping in-memory MongoDB and demo seed"
 fi
 
 echo "==> Install complete"
