@@ -410,8 +410,8 @@ export function MediaTab({
           what fills the shared group gallery.
         </p>
         <p>
-          Fix a typo on a tagged name: open <strong>Tag people</strong> on a photo → tap{" "}
-          <strong>Rename</strong> on the name chip. It updates that person on every photo.
+          Fix a typo on a tagged name: open <strong>Tag people</strong> on a photo → tap the black{" "}
+          <strong>Fix spelling</strong> button under the name. It updates that person on every photo.
         </p>
       </HowTo>
 
