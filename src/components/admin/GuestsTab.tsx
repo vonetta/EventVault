@@ -42,6 +42,8 @@ export function GuestsTab({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showEmailConfirm, setShowEmailConfirm] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ guests: ReturnType<typeof parseGuestLines> } | null>(null);
+  const [renamingGuestId, setRenamingGuestId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const filteredGuests = useMemo(() => {
     if (!guestSearch.trim()) return data.guests;
@@ -125,6 +127,27 @@ export function GuestsTab({
     setActionLoading(null);
     if (!json) return;
     actions.setMessage("Ticket email sent.");
+  }
+
+  async function saveGuestRename(guestId: string) {
+    if (!data.event) return;
+    const name = renameValue.trim();
+    if (!name) return;
+    setActionLoading(`rename-${guestId}`);
+    const res = await fetch("/api/uploader/guests", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: data.event._id, guestId, name }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setActionLoading(null);
+    if (!res.ok) {
+      actions.setMessage(json.error || "Could not rename that guest.");
+      return;
+    }
+    setRenamingGuestId(null);
+    actions.setMessage(`Renamed to ${json.guest?.name || name}.`);
+    await actions.load(selectedEventId);
   }
 
   async function markGuestPaid(guestId: string, paid: boolean) {
@@ -295,8 +318,41 @@ John Smith, john@email.com, standard`}
                 return (
                   <tr key={guest._id} className="border-b border-[color:var(--line)] last:border-0">
                     <td className="py-3 pr-4">
-                      <p className="font-medium text-ink">{guest.name}</p>
-                      {guest.email ? <p className="text-xs text-pine">{guest.email}</p> : null}
+                      {renamingGuestId === guest._id ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void saveGuestRename(guest._id);
+                              }
+                              if (e.key === "Escape") setRenamingGuestId(null);
+                            }}
+                            className={`${inputClassName} !h-8 !min-w-[10rem] !py-1`}
+                            aria-label={`Rename ${guest.name}`}
+                          />
+                          <AdminButton
+                            className="!h-8 !px-2 !text-xs"
+                            disabled={isLoading("rename")}
+                            onClick={() => void saveGuestRename(guest._id)}
+                          >
+                            {isLoading("rename") ? "Saving…" : "Save"}
+                          </AdminButton>
+                          <AdminButton
+                            className="!h-8 !px-2 !text-xs"
+                            onClick={() => setRenamingGuestId(null)}
+                          >
+                            Cancel
+                          </AdminButton>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="font-medium text-ink">{guest.name}</p>
+                          {guest.email ? <p className="text-xs text-pine">{guest.email}</p> : null}
+                        </>
+                      )}
                     </td>
                     <td className="py-3 pr-4">
                       <TierBadge tier={guest.tier} />
@@ -315,6 +371,16 @@ John Smith, john@email.com, standard`}
                     <td className="py-3 pr-4 font-mono text-xs tracking-wider">{guest.ticketCode}</td>
                     <td className="py-3">
                       <div className="flex flex-wrap gap-1.5">
+                        <AdminButton
+                          className="!h-8 !px-2 !text-xs"
+                          onClick={() => {
+                            setRenamingGuestId(guest._id);
+                            setRenameValue(guest.name);
+                          }}
+                          aria-label={`Rename ${guest.name}`}
+                        >
+                          Rename
+                        </AdminButton>
                         <AdminButton
                           variant="primary"
                           className="!h-8 !px-3 !text-xs"

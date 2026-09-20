@@ -60,3 +60,44 @@ export async function createGuestByName(eventId: string, rawName: string) {
     created: true as const,
   };
 }
+
+/**
+ * Rename a guest. Photos store guest IDs, so every tagged photo picks up the
+ * new name automatically — no media rewrite needed.
+ */
+export async function renameGuestById(eventId: string, guestId: string, rawName: string) {
+  const name = normalizeGuestName(rawName);
+  if (!name) {
+    return { error: "Name is required" as const };
+  }
+
+  const guest = await Guest.findOne({ _id: guestId, eventId });
+  if (!guest) {
+    return { error: "Guest not found" as const };
+  }
+
+  const folded = foldGuestName(name);
+  const clash = await Guest.find({ eventId }).select("_id name").lean();
+  const duplicate = clash.find(
+    (row) => foldGuestName(row.name) === folded && String(row._id) !== String(guest._id),
+  );
+  if (duplicate) {
+    return {
+      error: `Another person is already named “${duplicate.name}”. Reuse that tag instead.` as const,
+    };
+  }
+
+  if (guest.name === name) {
+    return {
+      guest: { _id: String(guest._id), name: guest.name },
+      changed: false as const,
+    };
+  }
+
+  guest.name = name;
+  await guest.save();
+  return {
+    guest: { _id: String(guest._id), name: guest.name },
+    changed: true as const,
+  };
+}

@@ -7,9 +7,10 @@ import {
   unauthorized,
 } from "@/lib/auth";
 import { Event, Guest } from "@/lib/models";
-import { createGuestByName, suggestSimilarGuests } from "@/lib/guest-names";
-import { createGuestNameSchema, objectIdSchema } from "@/lib/validate";
+import { createGuestByName, renameGuestById, suggestSimilarGuests } from "@/lib/guest-names";
+import { createGuestNameSchema, objectIdSchema, renameGuestNameSchema } from "@/lib/validate";
 import { logAdminAction } from "@/lib/audit";
+import { z } from "zod";
 
 /**
  * Names-only guest list for the photo team (no emails or ticket codes).
@@ -87,4 +88,45 @@ export async function POST(request: Request) {
     // Surface near-matches so the team can reuse a name instead of duplicating.
     suggestions: result.created ? suggestions.filter((g) => g._id !== result.guest._id) : [],
   });
+}
+
+/** Rename a tagged person. All photos using that guest ID show the new name. */
+export async function PATCH(request: Request) {
+  if (!(await isUploaderAuthenticated()) && !(await isAdminAuthenticated())) {
+    return unauthorized();
+  }
+
+  try {
+    assertSameOrigin(request);
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: z.infer<typeof renameGuestNameSchema>;
+  try {
+    body = renameGuestNameSchema.parse(await request.json());
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  await connectDB();
+  const event = await Event.findById(body.eventId);
+  if (!event) {
+    return NextResponse.json({ error: "Event not found" }, { status: 404 });
+  }
+
+  const result = await renameGuestById(body.eventId, body.guestId, body.name);
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+
+  if (result.changed) {
+    await logAdminAction(request, "rename_guest", {
+      guestId: result.guest._id,
+      name: result.guest.name,
+      actor: (await isAdminAuthenticated()) ? "admin" : "uploader",
+    });
+  }
+
+  return NextResponse.json(result);
 }

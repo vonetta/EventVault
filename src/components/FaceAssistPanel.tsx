@@ -28,6 +28,7 @@ type FaceAssistPanelProps = {
   guests: NameOnlyGuest[];
   photos: GalleryPhoto[];
   onCreateGuest: (name: string) => Promise<NameOnlyGuest | null>;
+  onRenameGuest?: (guestId: string, name: string) => Promise<NameOnlyGuest | null>;
   onGuestsChanged: () => Promise<void>;
   onPhotosChanged: () => Promise<void>;
   onMessage: (message: string) => void;
@@ -53,6 +54,7 @@ export function FaceAssistPanel({
   guests,
   photos,
   onCreateGuest,
+  onRenameGuest,
   onGuestsChanged,
   onPhotosChanged,
   onMessage,
@@ -192,22 +194,75 @@ export function FaceAssistPanel({
       });
 
       const profilesRes = await fetch(`/api/uploader/faces?eventId=${encodeURIComponent(eventId)}`);
+      let nextProfiles = profiles;
       if (profilesRes.ok) {
         const data = (await profilesRes.json()) as { profiles: FaceLabeledProfile[] };
-        setProfiles(data.profiles || []);
+        nextProfiles = data.profiles || [];
+        setProfiles(nextProfiles);
       }
       await onPhotosChanged();
       onMessage(
-        `Saved faces for ${json.guests} people. Next: scan the gallery to auto-tag matching photos.`,
+        `Saved faces for ${json.guests} people. Scanning the gallery to auto-tag lookalikes…`,
       );
+
+      // Heavy lifting: immediately find + apply matches across the rest of the drop.
+      await scanGallery({
+        profileList: nextProfiles,
+        autoApply: true,
+        announce: true,
+      });
     } finally {
       setSavingSeed(false);
     }
   }
 
-  async function scanGallery() {
+  async function applyHits(
+    selected: ScanHit[],
+    announce: boolean,
+  ): Promise<number> {
+    if (!selected.length) return 0;
+    setApplying(true);
+    try {
+      const updates = selected.map((hit) => ({
+        mediaId: hit.mediaId,
+        guestIds: hit.guestIds,
+      }));
+      let photosTagged = 0;
+      for (let i = 0; i < updates.length; i += APPLY_CHUNK) {
+        const chunk = updates.slice(i, i + APPLY_CHUNK);
+        const res = await fetch("/api/uploader/faces/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventId, updates: chunk }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          onMessage(json.error || "Could not apply tags");
+          return photosTagged;
+        }
+        photosTagged += Number(json.photos) || 0;
+      }
+      if (announce) {
+        onMessage(
+          `Auto-tagged ${photosTagged} photo${photosTagged === 1 ? "" : "s"}. Review the list or scan again after naming another seed angle.`,
+        );
+      }
+      setHits([]);
+      await onPhotosChanged();
+      return photosTagged;
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  async function scanGallery(options?: {
+    profileList?: FaceLabeledProfile[];
+    autoApply?: boolean;
+    announce?: boolean;
+  }) {
     if (modelsStatus !== "ready") return;
-    if (!profiles.length) {
+    const profileList = options?.profileList ?? profiles;
+    if (!profileList.length) {
       onMessage("Save a seed photo with named faces first.");
       return;
     }
@@ -230,7 +285,7 @@ export function FaceAssistPanel({
           const detected = await detectFacesInImage(photo.url);
           const matched = new Map<string, number>();
           for (const face of detected) {
-            const hit = bestMatch(face.descriptor, profiles, 0.55);
+            const hit = bestMatch(face.descriptor, profileList, 0.55);
             if (!hit) continue;
             const prev = matched.get(hit.guestId);
             if (prev === undefined || hit.distance < prev) {
@@ -269,10 +324,16 @@ export function FaceAssistPanel({
     setHits(nextHits);
     setScanProgress({ done: targets.length, total: targets.length });
     setScanning(false);
+
+    if (options?.autoApply && nextHits.length) {
+      await applyHits(nextHits, Boolean(options.announce));
+      return;
+    }
+
     onMessage(
       nextHits.length
         ? `Found matches on ${nextHits.length} photo${nextHits.length === 1 ? "" : "s"}. Review and apply.`
-        : "No new matches. Add another seed angle or lower the bar by naming more faces.",
+        : "No new matches. Add another seed angle or name more faces, then scan again.",
     );
   }
 
@@ -282,32 +343,9 @@ export function FaceAssistPanel({
       onMessage("Select at least one photo to tag.");
       return;
     }
-    setApplying(true);
-    try {
-      const updates = selected.map((hit) => ({
-        mediaId: hit.mediaId,
-        guestIds: hit.guestIds,
-      }));
-      let photosTagged = 0;
-      for (let i = 0; i < updates.length; i += APPLY_CHUNK) {
-        const chunk = updates.slice(i, i + APPLY_CHUNK);
-        const res = await fetch("/api/uploader/faces/apply", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ eventId, updates: chunk }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          onMessage(json.error || "Could not apply tags");
-          return;
-        }
-        photosTagged += Number(json.photos) || 0;
-      }
-      onMessage(`Tagged ${photosTagged} photo${photosTagged === 1 ? "" : "s"}.`);
-      setHits([]);
-      await onPhotosChanged();
-    } finally {
-      setApplying(false);
+    const count = await applyHits(selected, false);
+    if (count) {
+      onMessage(`Tagged ${count} photo${count === 1 ? "" : "s"}.`);
     }
   }
 
@@ -321,8 +359,8 @@ export function FaceAssistPanel({
           AI face tagging
         </h2>
         <p className="mt-1 text-sm text-pine">
-          Pick one clear photo, name every face once, then scan the rest of the gallery. Matching
-          runs in your browser — no cloud face service.
+          Name faces once on a clear seed photo. We save those faces, then automatically scan the
+          rest of the gallery and tag lookalikes — so you don’t walk 1000+ shots by hand.
         </p>
         <p className="mt-1 text-xs text-pine">
           Models:{" "}
@@ -459,6 +497,15 @@ export function FaceAssistPanel({
                       }
                       return guest;
                     }}
+                    onRenameGuest={
+                      onRenameGuest
+                        ? async (id, name) => {
+                            const guest = await onRenameGuest(id, name);
+                            if (guest) await onGuestsChanged();
+                            return guest;
+                          }
+                        : undefined
+                    }
                   />
                 </li>
               );
@@ -466,11 +513,15 @@ export function FaceAssistPanel({
           </ul>
           <button
             type="button"
-            disabled={savingSeed || namedCount === 0}
+            disabled={savingSeed || scanning || applying || namedCount === 0}
             onClick={() => void saveSeedProfiles()}
             className="inline-flex h-11 items-center justify-center rounded-lg bg-ink px-4 text-sm font-medium text-foam disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {savingSeed ? "Saving…" : `Save ${namedCount} face${namedCount === 1 ? "" : "s"} & tag seed photo`}
+            {savingSeed
+              ? "Saving & scanning gallery…"
+              : scanning
+                ? `Scanning ${scanProgress.done}/${scanProgress.total}…`
+                : `Save ${namedCount} face${namedCount === 1 ? "" : "s"} & auto-tag gallery`}
           </button>
         </div>
       ) : null}
@@ -479,13 +530,13 @@ export function FaceAssistPanel({
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            disabled={scanning || modelsStatus !== "ready" || profileCount === 0}
-            onClick={() => void scanGallery()}
+            disabled={scanning || applying || modelsStatus !== "ready" || profileCount === 0}
+            onClick={() => void scanGallery({ announce: true })}
             className="inline-flex h-11 items-center justify-center rounded-lg border border-ink bg-white px-4 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             {scanning
               ? `Scanning ${scanProgress.done}/${scanProgress.total}…`
-              : "Scan gallery for these faces"}
+              : "Scan gallery again"}
           </button>
           {hits.length ? (
             <button

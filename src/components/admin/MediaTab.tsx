@@ -253,6 +253,24 @@ export function MediaTab({
     return guest;
   }
 
+  async function renameGuestName(guestId: string, name: string): Promise<NameOnlyGuest | null> {
+    if (!data.event) return null;
+    const res = await fetch("/api/uploader/guests", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: data.event._id, guestId, name }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      actions.setMessage(json.error || "Could not rename that person.");
+      return null;
+    }
+    const guest = json.guest as NameOnlyGuest;
+    actions.setMessage(`Renamed to ${guest.name}.`);
+    await actions.load(selectedEventId);
+    return guest;
+  }
+
   async function sendTeamPhotos() {
     if (teamSelected.size === 0) return;
     if (!sendEveryone && sendGroupIds.size === 0) {
@@ -459,6 +477,7 @@ export function MediaTab({
                     selectedIds={item.taggedGuestIds || []}
                     onChange={(ids) => void saveTags(item._id, ids)}
                     onCreateGuest={createGuestName}
+                    onRenameGuest={renameGuestName}
                   />
                 </div>
               </details>
@@ -630,6 +649,7 @@ export function MediaTab({
                     selectedIds={item.taggedGuestIds || []}
                     onChange={(ids) => void saveTags(item._id, ids)}
                     onCreateGuest={createGuestName}
+                    onRenameGuest={renameGuestName}
                   />
                 </div>
               </details>
@@ -691,6 +711,7 @@ export function MediaTab({
                     selectedIds={item.taggedGuestIds || []}
                     onChange={(ids) => void saveTags(item._id, ids)}
                     onCreateGuest={createGuestName}
+                    onRenameGuest={renameGuestName}
                   />
                 </div>
               </details>

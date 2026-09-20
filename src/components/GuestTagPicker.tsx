@@ -8,6 +8,8 @@ type GuestTagPickerProps = {
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   onCreateGuest: (name: string) => Promise<NameOnlyGuest | null>;
+  /** Rename a person — updates the name everywhere that guest is tagged. */
+  onRenameGuest?: (guestId: string, name: string) => Promise<NameOnlyGuest | null>;
   disabled?: boolean;
   /** Compact mode for embedding under a photo thumbnail. */
   compact?: boolean;
@@ -18,11 +20,15 @@ export function GuestTagPicker({
   selectedIds,
   onChange,
   onCreateGuest,
+  onRenameGuest,
   disabled,
   compact,
 }: GuestTagPickerProps) {
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
   const [hint, setHint] = useState("");
 
   const selected = useMemo(() => {
@@ -73,23 +79,100 @@ export function GuestTagPicker({
     }
   }
 
+  function startRename(guest: NameOnlyGuest) {
+    if (!onRenameGuest || disabled) return;
+    setRenamingId(guest._id);
+    setRenameValue(guest.name);
+    setHint("");
+  }
+
+  async function commitRename() {
+    if (!onRenameGuest || !renamingId) return;
+    const name = renameValue.trim();
+    if (!name) return;
+    setRenaming(true);
+    try {
+      const guest = await onRenameGuest(renamingId, name);
+      if (guest) {
+        setHint(`Renamed to ${guest.name} (updates every photo with this tag)`);
+        setRenamingId(null);
+      }
+    } finally {
+      setRenaming(false);
+    }
+  }
+
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
       {selected.length ? (
         <div className="flex flex-wrap gap-1.5">
-          {selected.map((guest) => (
-            <button
-              key={guest._id}
-              type="button"
-              disabled={disabled}
-              onClick={() => toggle(guest._id)}
-              className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-xs text-foam disabled:opacity-50"
-              title="Remove tag"
-            >
-              {guest.name}
-              <span aria-hidden>×</span>
-            </button>
-          ))}
+          {selected.map((guest) =>
+            renamingId === guest._id ? (
+              <span
+                key={guest._id}
+                className="inline-flex items-center gap-1 rounded-full border border-ink bg-white px-2 py-1"
+              >
+                <input
+                  autoFocus
+                  value={renameValue}
+                  disabled={renaming}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void commitRename();
+                    }
+                    if (e.key === "Escape") setRenamingId(null);
+                  }}
+                  className="w-28 border-0 bg-transparent text-xs text-ink outline-none"
+                  aria-label={`Rename ${guest.name}`}
+                />
+                <button
+                  type="button"
+                  disabled={renaming}
+                  onClick={() => void commitRename()}
+                  className="text-xs font-medium text-ink"
+                >
+                  {renaming ? "…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  disabled={renaming}
+                  onClick={() => setRenamingId(null)}
+                  className="text-xs text-pine"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <span
+                key={guest._id}
+                className="inline-flex items-center gap-1 rounded-full bg-ink px-2.5 py-1 text-xs text-foam"
+              >
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => toggle(guest._id)}
+                  className="disabled:opacity-50"
+                  title="Remove tag"
+                >
+                  {guest.name}
+                  <span aria-hidden> ×</span>
+                </button>
+                {onRenameGuest ? (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => startRename(guest)}
+                    className="rounded px-1 text-[10px] uppercase tracking-wide text-foam/80 hover:text-foam disabled:opacity-50"
+                    title="Rename this person"
+                  >
+                    Edit
+                  </button>
+                ) : null}
+              </span>
+            ),
+          )}
         </div>
       ) : (
         <p className="text-xs text-pine">No one tagged yet.</p>
@@ -149,18 +232,29 @@ export function GuestTagPicker({
         {filtered.map((guest) => {
           const on = selectedIds.includes(guest._id);
           return (
-            <li key={guest._id}>
+            <li key={guest._id} className="flex items-center gap-1">
               <button
                 type="button"
                 disabled={disabled}
                 onClick={() => toggle(guest._id)}
-                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-sm ${
+                className={`flex min-w-0 flex-1 items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-sm ${
                   on ? "bg-ink text-foam" : "text-ink hover:bg-mist"
                 }`}
               >
-                <span>{guest.name}</span>
+                <span className="truncate">{guest.name}</span>
                 {on ? <span className="text-xs opacity-80">Tagged</span> : null}
               </button>
+              {onRenameGuest ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => startRename(guest)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs text-pine hover:bg-mist hover:text-ink disabled:opacity-50"
+                  title="Rename"
+                >
+                  Edit
+                </button>
+              ) : null}
             </li>
           );
         })}

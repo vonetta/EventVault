@@ -201,6 +201,12 @@ export const createGuestNameSchema = z.object({
   name: z.string().min(1).max(120),
 });
 
+export const renameGuestNameSchema = z.object({
+  eventId: objectIdSchema,
+  guestId: objectIdSchema,
+  name: z.string().min(1).max(120),
+});
+
 export const IMAGE_MIME = new Set([
   "image/jpeg",
   "image/png",
