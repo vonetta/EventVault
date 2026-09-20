@@ -34,6 +34,15 @@ const SessionSchema = new Schema(
   { timestamps: true },
 );
 
+const GroupSchema = new Schema(
+  {
+    eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    name: { type: String, required: true },
+    sortOrder: { type: Number, default: 0 },
+  },
+  { timestamps: true },
+);
+
 const GuestSchema = new Schema(
   {
     eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
@@ -42,6 +51,29 @@ const GuestSchema = new Schema(
     tier: { type: String, enum: ["vip", "standard"], required: true, default: "standard" },
     ticketCode: { type: String, required: true, unique: true, index: true },
     sessionVersion: { type: Number, default: 0 },
+    // Group membership drives which curated team photos this guest can see.
+    groupIds: { type: [{ type: Schema.Types.ObjectId, ref: "Group" }], default: [] },
+    // Paywall: individual (personal) photos unlock for full-size view + download
+    // only after this guest pays (Zelle → admin marks paid). Free galleries are unaffected.
+    personalPhotosPaid: { type: Boolean, default: false },
+    personalPhotosPaidAt: { type: Date, default: null },
+    // Guest tapped “I’ve sent Zelle” — waiting for admin to confirm and unlock.
+    zellePaymentPending: { type: Boolean, default: false },
+    zellePaymentPendingAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+
+const PurchaseSchema = new Schema(
+  {
+    eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    guestId: { type: Schema.Types.ObjectId, ref: "Guest", required: true, index: true },
+    kind: { type: String, default: "personal_photos" },
+    method: { type: String, enum: ["zelle", "stripe", "manual"], default: "zelle" },
+    amount: { type: Number, default: 0 },
+    currency: { type: String, default: "usd" },
+    stripeSessionId: { type: String, default: "", index: true },
+    status: { type: String, enum: ["pending", "paid"], default: "paid" },
   },
   { timestamps: true },
 );
@@ -69,7 +101,7 @@ const MediaSchema = new Schema(
     eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
     kind: {
       type: String,
-      enum: ["personal_photo", "group_photo", "event_photo", "session_video"],
+      enum: ["personal_photo", "group_photo", "event_photo", "session_video", "team_photo"],
       required: true,
       index: true,
     },
@@ -77,6 +109,25 @@ const MediaSchema = new Schema(
     filename: { type: String, default: "" },
     contentType: { type: String, default: "" },
     size: { type: Number, default: 0 },
+    // Curation for team-uploaded photos (kind "team_photo"):
+    //   published=false -> staged in the admin "Main gallery", hidden from guests.
+    //   published=true  -> visible to guests in `everyone` mode or the listed groups.
+    published: { type: Boolean, default: true },
+    everyone: { type: Boolean, default: false },
+    groupIds: { type: [{ type: Schema.Types.ObjectId, ref: "Group" }], default: [], index: true },
+    // Who uploaded it (photographer attribution; populated once accounts land).
+    uploadedByName: { type: String, default: "" },
+    // People in the frame. Tagged guests see this same file in "Your photos"
+    // (paid unlock) — no duplicate uploads. Empty until the team/admin tags.
+    taggedGuestIds: {
+      type: [{ type: Schema.Types.ObjectId, ref: "Guest" }],
+      default: [],
+      index: true,
+    },
+    // Not ready for live view: hidden from guests; cannot be sent to groups
+    // until cleared. Tags may be prepared while editing but only go live when
+    // this is false.
+    needsEditing: { type: Boolean, default: false, index: true },
     // File-backed media (photos / uploaded videos)
     storageKey: { type: String, default: "" },
     storageProvider: {
@@ -95,15 +146,33 @@ const MediaSchema = new Schema(
   { timestamps: true },
 );
 
+const FaceProfileSchema = new Schema(
+  {
+    eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    guestId: { type: Schema.Types.ObjectId, ref: "Guest", required: true, index: true },
+    // 128-d face-api descriptors. Multiple samples (different angles) improve match rate.
+    descriptors: { type: [[Number]], default: [] },
+  },
+  { timestamps: true },
+);
+FaceProfileSchema.index({ eventId: 1, guestId: 1 }, { unique: true });
+
 GuestSchema.index({ eventId: 1, email: 1 });
 MediaSchema.index({ eventId: 1, kind: 1 });
 MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
+MediaSchema.index({ eventId: 1, taggedGuestIds: 1 });
+MediaSchema.index({ eventId: 1, needsEditing: 1, kind: 1 });
 
 export type EventDoc = InferSchemaType<typeof EventSchema> & { _id: mongoose.Types.ObjectId };
 export type DayDoc = InferSchemaType<typeof DaySchema> & { _id: mongoose.Types.ObjectId };
 export type SessionDoc = InferSchemaType<typeof SessionSchema> & { _id: mongoose.Types.ObjectId };
+export type GroupDoc = InferSchemaType<typeof GroupSchema> & { _id: mongoose.Types.ObjectId };
 export type GuestDoc = InferSchemaType<typeof GuestSchema> & { _id: mongoose.Types.ObjectId };
+export type PurchaseDoc = InferSchemaType<typeof PurchaseSchema> & { _id: mongoose.Types.ObjectId };
 export type MediaDoc = InferSchemaType<typeof MediaSchema> & { _id: mongoose.Types.ObjectId };
+export type FaceProfileDoc = InferSchemaType<typeof FaceProfileSchema> & {
+  _id: mongoose.Types.ObjectId;
+};
 export type RateLimitBucketDoc = InferSchemaType<typeof RateLimitBucketSchema> & {
   _id: mongoose.Types.ObjectId;
 };
@@ -113,12 +182,18 @@ export const Event: Model<EventDoc> =
   mongoose.models.Event || mongoose.model("Event", EventSchema);
 export const Day: Model<DayDoc> =
   mongoose.models.Day || mongoose.model("Day", DaySchema);
+export const Group: Model<GroupDoc> =
+  mongoose.models.Group || mongoose.model("Group", GroupSchema);
+export const Purchase: Model<PurchaseDoc> =
+  mongoose.models.Purchase || mongoose.model("Purchase", PurchaseSchema);
 export const Session: Model<SessionDoc> =
   mongoose.models.Session || mongoose.model("Session", SessionSchema);
 export const Guest: Model<GuestDoc> =
   mongoose.models.Guest || mongoose.model("Guest", GuestSchema);
 export const Media: Model<MediaDoc> =
   mongoose.models.Media || mongoose.model("Media", MediaSchema);
+export const FaceProfile: Model<FaceProfileDoc> =
+  mongoose.models.FaceProfile || mongoose.model("FaceProfile", FaceProfileSchema);
 export const RateLimitBucket: Model<RateLimitBucketDoc> =
   mongoose.models.RateLimitBucket || mongoose.model("RateLimitBucket", RateLimitBucketSchema);
 export const AuditLog: Model<AuditLogDoc> =

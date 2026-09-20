@@ -139,7 +139,73 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     action: z.literal("bulk_delete_media"),
     mediaIds: z.array(objectIdSchema).min(1).max(200),
   }),
+  z.object({
+    action: z.literal("create_group"),
+    eventId: objectIdSchema,
+    name: z.string().min(1).max(80),
+  }),
+  z.object({
+    action: z.literal("rename_group"),
+    groupId: objectIdSchema,
+    name: z.string().min(1).max(80),
+  }),
+  z.object({
+    action: z.literal("delete_group"),
+    groupId: objectIdSchema,
+  }),
+  z.object({
+    action: z.literal("set_guest_groups"),
+    guestId: objectIdSchema,
+    groupIds: z.array(objectIdSchema).max(100),
+  }),
+  z.object({
+    action: z.literal("publish_media"),
+    mediaIds: z.array(objectIdSchema).min(1).max(500),
+    everyone: z.boolean().optional(),
+    groupIds: z.array(objectIdSchema).max(100).optional(),
+  }),
+  z.object({
+    action: z.literal("unpublish_media"),
+    mediaIds: z.array(objectIdSchema).min(1).max(500),
+  }),
+  z.object({
+    action: z.literal("tag_media"),
+    mediaId: objectIdSchema,
+    taggedGuestIds: z.array(objectIdSchema).max(100),
+  }),
+  z.object({
+    action: z.literal("set_needs_editing"),
+    mediaIds: z.array(objectIdSchema).min(1).max(500),
+    needsEditing: z.boolean(),
+  }),
+  z.object({
+    action: z.literal("create_guest_name"),
+    eventId: objectIdSchema,
+    name: z.string().min(1).max(120),
+  }),
+  z.object({
+    action: z.literal("mark_guest_paid"),
+    guestId: objectIdSchema,
+    paid: z.boolean(),
+  }),
 ]);
+
+export const uploaderUpdateMediaSchema = z.object({
+  mediaId: objectIdSchema,
+  taggedGuestIds: z.array(objectIdSchema).max(100).optional(),
+  needsEditing: z.boolean().optional(),
+});
+
+export const createGuestNameSchema = z.object({
+  eventId: objectIdSchema,
+  name: z.string().min(1).max(120),
+});
+
+export const renameGuestNameSchema = z.object({
+  eventId: objectIdSchema,
+  guestId: objectIdSchema,
+  name: z.string().min(1).max(120),
+});
 
 export const IMAGE_MIME = new Set([
   "image/jpeg",

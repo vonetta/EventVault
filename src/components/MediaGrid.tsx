@@ -22,6 +22,7 @@ type MediaGridProps = {
   onToggleSelect?: (id: string) => void;
   showDownload?: boolean;
   showCaptions?: boolean;
+  allowDownload?: boolean;
 };
 
 function downloadUrl(src: string) {
@@ -71,6 +72,7 @@ export function MediaGrid({
   onToggleSelect,
   showDownload = false,
   showCaptions = true,
+  allowDownload = true,
 }: MediaGridProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -246,6 +248,7 @@ export function MediaGrid({
           }))}
           startIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
+          allowDownload={allowDownload}
         />
       ) : null}
     </>

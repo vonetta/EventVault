@@ -63,6 +63,13 @@ export default function AdminLoginPage() {
           </p>
         ) : null}
       </form>
+
+      <p className="mt-8 text-sm text-pine">
+        On the photo team?{" "}
+        <a href="/upload/login" className="font-medium text-ink underline">
+          Upload event photos
+        </a>
+      </p>
     </main>
   );
 }
