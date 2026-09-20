@@ -101,6 +101,10 @@ export function MediaTab({
   const [taggingId, setTaggingId] = useState<string | null>(null);
   const [editingSelected, setEditingSelected] = useState<Set<string>>(new Set());
   const [togglingEdit, setTogglingEdit] = useState(false);
+  const [stagedFilter, setStagedFilter] = useState<"all" | "untagged" | "tagged">("all");
+  const [stagedVisibleCount, setStagedVisibleCount] = useState(60);
+  const [sentVisibleCount, setSentVisibleCount] = useState(60);
+  const [editingVisibleCount, setEditingVisibleCount] = useState(60);
 
   const groups = data.groups || [];
 
@@ -129,6 +133,55 @@ export function MediaTab({
     () => data.media.filter((item) => item.kind === "team_photo" && item.published && !item.needsEditing),
     [data.media],
   );
+
+  const filteredStagedPhotos = useMemo(() => {
+    if (stagedFilter === "untagged") {
+      return stagedTeamPhotos.filter((item) => !(item.taggedGuestIds || []).length);
+    }
+    if (stagedFilter === "tagged") {
+      return stagedTeamPhotos.filter((item) => (item.taggedGuestIds || []).length > 0);
+    }
+    return stagedTeamPhotos;
+  }, [stagedTeamPhotos, stagedFilter]);
+
+  const visibleStagedPhotos = useMemo(
+    () => filteredStagedPhotos.slice(0, stagedVisibleCount),
+    [filteredStagedPhotos, stagedVisibleCount],
+  );
+  const visibleNeedsEditing = useMemo(
+    () => needsEditingPhotos.slice(0, editingVisibleCount),
+    [needsEditingPhotos, editingVisibleCount],
+  );
+  const visibleSentPhotos = useMemo(
+    () => sentTeamPhotos.slice(0, sentVisibleCount),
+    [sentTeamPhotos, sentVisibleCount],
+  );
+
+  const untaggedStagedCount = useMemo(
+    () => stagedTeamPhotos.filter((item) => !(item.taggedGuestIds || []).length).length,
+    [stagedTeamPhotos],
+  );
+  const taggedStagedCount = useMemo(
+    () => stagedTeamPhotos.filter((item) => (item.taggedGuestIds || []).length > 0).length,
+    [stagedTeamPhotos],
+  );
+
+  function toggleIdInSet(setter: (fn: (prev: Set<string>) => Set<string>) => void, id: string) {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllFilteredStaged() {
+    setTeamSelected(new Set(filteredStagedPhotos.map((item) => item._id)));
+  }
+
+  function clearTeamSelection() {
+    setTeamSelected(new Set());
+  }
 
   function audienceLabel(item: MediaDoc) {
     if (item.everyone) return "Everyone";
@@ -328,6 +381,18 @@ export function MediaTab({
 
   return (
     <>
+      <HowTo title="Same person? Upload here, send groups here" defaultOpen={stagedTeamPhotos.length > 0}>
+        <p>
+          If you shoot and run the vault yourself: dump the weekend on{" "}
+          <a href="/upload" className="underline hover:text-ink">
+            Photo upload
+          </a>
+          , clean rejects and tag faces there, then come back to this Media tab to Send ready photos
+          to Everyone or a group. Tagging alone puts a photo in that guest’s Your photos — Send is
+          what fills the shared group gallery.
+        </p>
+      </HowTo>
+
       <AdminPanel
         title="Needs editing"
         description="Not ready for live view. Guests can’t see these, and they can’t be sent to a group until you mark them ready."
@@ -336,21 +401,40 @@ export function MediaTab({
           <p className="text-sm text-pine">Nothing waiting on edits.</p>
         ) : (
           <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
+              <span>
+                Showing {visibleNeedsEditing.length} of {needsEditingPhotos.length}
+              </span>
+              <AdminButton
+                variant="secondary"
+                onClick={() =>
+                  setEditingSelected(new Set(needsEditingPhotos.map((item) => item._id)))
+                }
+              >
+                Select all
+              </AdminButton>
+              {editingSelected.size > 0 ? (
+                <AdminButton variant="secondary" onClick={() => setEditingSelected(new Set())}>
+                  Clear
+                </AdminButton>
+              ) : null}
+            </div>
             <MediaGrid
-              items={needsEditingPhotos.map(toMediaItem)}
+              items={visibleNeedsEditing.map(toMediaItem)}
               selectable
               selectedIds={editingSelected}
-              onToggleSelect={(id) =>
-                setEditingSelected((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                })
-              }
+              onToggleSelect={(id) => toggleIdInSet(setEditingSelected, id)}
               onRemove={deleteMedia}
               showCaptions
             />
+            {editingVisibleCount < needsEditingPhotos.length ? (
+              <AdminButton
+                variant="secondary"
+                onClick={() => setEditingVisibleCount((n) => n + 60)}
+              >
+                Show more ({needsEditingPhotos.length - editingVisibleCount} left)
+              </AdminButton>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <AdminButton
                 variant="primary"
@@ -360,7 +444,7 @@ export function MediaTab({
                 {togglingEdit ? "Saving…" : `Mark ${editingSelected.size || ""} ready`.trim()}
               </AdminButton>
             </div>
-            {needsEditingPhotos.map((item) => (
+            {visibleNeedsEditing.map((item) => (
               <details key={`edit-tag-${item._id}`} className="rounded-lg border border-[color:var(--line)] bg-white p-3">
                 <summary className="cursor-pointer text-sm text-ink">
                   Tag people — {item.title || item.filename}
@@ -384,30 +468,76 @@ export function MediaTab({
       </AdminPanel>
 
       <AdminPanel
-        title="Main gallery — from the photo team"
-        description="Ready photos. Guests can’t see these until you send them to a group or everyone — or until someone is tagged (that person sees it in Your photos after unlock)."
+        title="Main gallery — ready to send"
+        description="Photos waiting on this event. Guests don’t see them in a group gallery until you Send below. Tagged people can already unlock them under Your photos."
       >
         {stagedTeamPhotos.length === 0 ? (
           <p className="text-sm text-pine">
-            No photos waiting. Anything your photo team uploads shows up here first (unless it’s marked Needs editing).
+            Nothing waiting.{" "}
+            <a href="/upload" className="underline hover:text-ink">
+              Upload photos
+            </a>{" "}
+            for this event first (unless they’re still in Needs editing).
           </p>
         ) : (
           <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {(
+                [
+                  { id: "all" as const, label: `All (${stagedTeamPhotos.length})` },
+                  { id: "untagged" as const, label: `Untagged (${untaggedStagedCount})` },
+                  { id: "tagged" as const, label: `Tagged (${taggedStagedCount})` },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={stagedFilter === option.id}
+                  onClick={() => {
+                    setStagedFilter(option.id);
+                    setStagedVisibleCount(60);
+                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    stagedFilter === option.id ? "bg-ink text-foam" : "bg-mist text-pine"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
+              <span>
+                Showing {visibleStagedPhotos.length} of {filteredStagedPhotos.length}
+                {teamSelected.size ? ` · ${teamSelected.size} selected` : ""}
+              </span>
+              <AdminButton variant="secondary" onClick={selectAllFilteredStaged}>
+                Select all {stagedFilter === "all" ? "ready" : stagedFilter}
+              </AdminButton>
+              {teamSelected.size > 0 ? (
+                <AdminButton variant="secondary" onClick={clearTeamSelection}>
+                  Clear selection
+                </AdminButton>
+              ) : null}
+            </div>
+
             <MediaGrid
-              items={stagedTeamPhotos.map(toMediaItem)}
+              items={visibleStagedPhotos.map(toMediaItem)}
               selectable
               selectedIds={teamSelected}
-              onToggleSelect={(id) =>
-                setTeamSelected((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                })
-              }
+              onToggleSelect={(id) => toggleIdInSet(setTeamSelected, id)}
               onRemove={deleteMedia}
               showCaptions
             />
+            {stagedVisibleCount < filteredStagedPhotos.length ? (
+              <AdminButton
+                variant="secondary"
+                onClick={() => setStagedVisibleCount((n) => n + 60)}
+              >
+                Show more ({filteredStagedPhotos.length - stagedVisibleCount} left)
+              </AdminButton>
+            ) : null}
+
             <div className="flex flex-wrap gap-2">
               <AdminButton
                 variant="secondary"
@@ -417,9 +547,15 @@ export function MediaTab({
                 Move to Needs editing
               </AdminButton>
             </div>
+
             <div className="rounded-xl border border-[color:var(--line)] bg-white p-4">
               <p className="text-sm font-medium text-ink">
-                Send {teamSelected.size} selected {teamSelected.size === 1 ? "photo" : "photos"} to…
+                Send {teamSelected.size} selected {teamSelected.size === 1 ? "photo" : "photos"} to
+                groups…
+              </p>
+              <p className="mt-1 text-xs text-pine">
+                This is the step that fills the shared guest gallery. Pick Everyone or one/more
+                groups, then Send.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <label className="flex items-center gap-2 text-sm text-ink">
@@ -470,7 +606,8 @@ export function MediaTab({
                 {sending ? "Sending…" : `Send ${teamSelected.size || ""} to guests`.trim()}
               </AdminButton>
             </div>
-            {stagedTeamPhotos.map((item) => (
+
+            {visibleStagedPhotos.map((item) => (
               <details
                 key={`tag-${item._id}`}
                 open={taggingId === item._id}
@@ -507,28 +644,42 @@ export function MediaTab({
           description="Already visible to the audience shown on each photo. Select and return them to the Main gallery to hide them again."
         >
           <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
+              <span>
+                Showing {visibleSentPhotos.length} of {sentTeamPhotos.length}
+              </span>
+              <AdminButton
+                variant="secondary"
+                onClick={() => setSentSelected(new Set(sentTeamPhotos.map((item) => item._id)))}
+              >
+                Select all
+              </AdminButton>
+              {sentSelected.size > 0 ? (
+                <AdminButton variant="secondary" onClick={() => setSentSelected(new Set())}>
+                  Clear
+                </AdminButton>
+              ) : null}
+            </div>
             <MediaGrid
-              items={sentTeamPhotos.map((item) => ({
+              items={visibleSentPhotos.map((item) => ({
                 ...toMediaItem(item),
                 title: `${audienceLabel(item)}${(item.taggedGuestIds || []).length ? ` · tagged ${(item.taggedGuestIds || []).length}` : ""}`,
               }))}
               selectable
               selectedIds={sentSelected}
-              onToggleSelect={(id) =>
-                setSentSelected((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(id)) next.delete(id);
-                  else next.add(id);
-                  return next;
-                })
-              }
+              onToggleSelect={(id) => toggleIdInSet(setSentSelected, id)}
             />
+            {sentVisibleCount < sentTeamPhotos.length ? (
+              <AdminButton variant="secondary" onClick={() => setSentVisibleCount((n) => n + 60)}>
+                Show more ({sentTeamPhotos.length - sentVisibleCount} left)
+              </AdminButton>
+            ) : null}
             {sentSelected.size > 0 ? (
               <AdminButton variant="secondary" disabled={unsending} onClick={unsendTeamPhotos}>
                 {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
               </AdminButton>
             ) : null}
-            {sentTeamPhotos.map((item) => (
+            {visibleSentPhotos.map((item) => (
               <details key={`sent-tag-${item._id}`} className="rounded-lg border border-[color:var(--line)] bg-white p-3">
                 <summary className="cursor-pointer text-sm text-ink">
                   Tag people — {item.title || item.filename}

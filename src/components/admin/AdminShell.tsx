@@ -62,6 +62,12 @@ export function AdminShell({
                 </button>
               ) : null}
               <a
+                href="/upload"
+                className="rounded-lg px-3 py-2 text-sm text-pine transition hover:bg-white hover:text-ink"
+              >
+                Photo upload
+              </a>
+              <a
                 href="/"
                 target="_blank"
                 rel="noreferrer"
