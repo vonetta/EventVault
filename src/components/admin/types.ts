@@ -17,7 +17,12 @@ export type SessionDoc = {
   startsAt?: string;
 };
 
-export type GroupDoc = { _id: string; name: string; sortOrder?: number };
+export type GroupDoc = {
+  _id: string;
+  name: string;
+  sortOrder?: number;
+  loginCode?: string;
+};
 
 export type GuestDoc = {
   _id: string;
@@ -28,6 +33,8 @@ export type GuestDoc = {
   groupIds?: string[];
   personalPhotosPaid?: boolean;
   zellePaymentPending?: boolean;
+  isSharedLogin?: boolean;
+  sharedGroupId?: string | null;
 };
 
 export type MediaDoc = {

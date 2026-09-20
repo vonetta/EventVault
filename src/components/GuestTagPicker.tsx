@@ -258,9 +258,9 @@ export function GuestTagPicker({
                   disabled={disabled}
                   onClick={() => startRename(guest)}
                   className="shrink-0 rounded-lg px-2 py-1 text-xs text-pine hover:bg-mist hover:text-ink disabled:opacity-50"
-                  title="Rename"
+                  title="Rename this person on every photo"
                 >
-                  Edit
+                  Rename
                 </button>
               ) : null}
             </li>
