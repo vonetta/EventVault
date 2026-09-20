@@ -43,6 +43,7 @@ type MediaPage = {
 const UPLOAD_CONCURRENCY = 4;
 const MEDIA_PAGE_SIZE = 120;
 const GALLERY_PAGE_SIZE = 48;
+const LAST_EVENT_KEY = "eventvault.uploader.lastEventId";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -200,7 +201,16 @@ export default function UploadPage() {
       const data = (await res.json()) as { events: EventOption[] };
       if (!active) return;
       setEvents(data.events);
-      setEventId((current) => current || data.events[0]?._id || "");
+      setEventId((current) => {
+        if (current) return current;
+        try {
+          const saved = localStorage.getItem(LAST_EVENT_KEY) || "";
+          if (saved && data.events.some((event) => event._id === saved)) return saved;
+        } catch {
+          // ignore storage errors
+        }
+        return data.events[0]?._id || "";
+      });
     })();
     return () => {
       active = false;
@@ -209,6 +219,11 @@ export default function UploadPage() {
 
   useEffect(() => {
     if (!eventId) return;
+    try {
+      localStorage.setItem(LAST_EVENT_KEY, eventId);
+    } catch {
+      // ignore storage errors
+    }
     let active = true;
     (async () => {
       await Promise.all([refreshGalleries(eventId), loadGuests(eventId)]);
@@ -349,7 +364,7 @@ export default function UploadPage() {
       uploaded
         ? `Uploaded ${uploaded} of ${queue.length} photo${queue.length === 1 ? "" : "s"}${
             markNeedsEditing ? " to Needs editing" : " to the Main gallery"
-          }.`
+          }. Next: clean/tag here, then open Admin → Media to send to groups.`
         : cancelUploadRef.current
           ? "Upload paused."
           : "",
@@ -523,29 +538,66 @@ export default function UploadPage() {
             Team photo upload
           </h1>
           <p className="mt-1 text-sm text-pine">
-            Built for big drops (1000+). Uploads run in parallel, galleries paginate, and AI can
-            tag faces plus flag soft or duplicate shots for Needs editing.
+            Built for big drops (1000+). Dump photos here, clean and tag them, then send to groups
+            from Admin → Media — same person, two screens.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={signOut}
-          className="shrink-0 rounded-lg border border-[color:var(--line)] px-3 py-2 text-sm text-pine hover:text-ink"
-        >
-          Sign out
-        </button>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <a
+            href="/admin"
+            className="rounded-lg border border-[color:var(--line)] bg-white px-3 py-2 text-sm text-ink hover:bg-mist"
+          >
+            Open Admin → Media
+          </a>
+          <button
+            type="button"
+            onClick={signOut}
+            className="rounded-lg border border-[color:var(--line)] px-3 py-2 text-sm text-pine hover:text-ink"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
+
+      <ol className="mt-6 grid gap-2 rounded-xl border border-[color:var(--line)] bg-white p-4 text-sm text-pine sm:grid-cols-3">
+        <li>
+          <span className="font-medium text-ink">1. Pick the event</span>
+          <span className="mt-0.5 block">Every upload goes under the event selected below.</span>
+        </li>
+        <li>
+          <span className="font-medium text-ink">2. Upload · clean · tag</span>
+          <span className="mt-0.5 block">
+            Quality &amp; duplicates + face tagging cut the manual sorting.
+          </span>
+        </li>
+        <li>
+          <span className="font-medium text-ink">3. Send to groups</span>
+          <span className="mt-0.5 block">
+            In{" "}
+            <a href="/admin" className="underline hover:text-ink">
+              Admin → Media
+            </a>
+            , select ready photos and Send to Everyone or a group.
+          </span>
+        </li>
+      </ol>
 
       {loadError ? <p className="mt-6 text-sm text-red-700">{loadError}</p> : null}
 
       {events && events.length === 0 ? (
         <p className="mt-8 rounded-xl border border-[color:var(--line)] bg-white p-4 text-sm text-pine">
-          No events exist yet. Ask an admin to create one, then refresh this page.
+          No events exist yet. Create one in{" "}
+          <a href="/admin" className="underline hover:text-ink">
+            Admin
+          </a>
+          , then refresh this page.
         </p>
       ) : (
         <div className="mt-8 space-y-6">
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-[0.08em] text-pine">Event</span>
+            <span className="text-xs font-medium uppercase tracking-[0.08em] text-pine">
+              Event — photos land here
+            </span>
             <select
               value={eventId}
               onChange={(e) => setEventId(e.target.value)}
@@ -557,6 +609,10 @@ export default function UploadPage() {
                 </option>
               ))}
             </select>
+            <span className="text-xs text-pine">
+              Last used event is remembered on this device. Switch before you upload if this isn’t
+              the right weekend.
+            </span>
           </label>
 
           <input
