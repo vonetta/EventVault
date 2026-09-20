@@ -29,6 +29,22 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
     const { session, guest } = resolved;
     if (String(guest.eventId) !== String(media.eventId)) return "none";
     if (!isMediaAvailable(media.availableUntil)) return "none";
+    // Needs-editing photos stay out of the guest vault entirely.
+    if (media.needsEditing) return "none";
+
+    const guestId = String(guest._id);
+    const isTagged = (media.taggedGuestIds || []).some((id) => String(id) === guestId);
+    const isAssignedPersonal =
+      media.kind === "personal_photo" && String(media.guestId) === guestId;
+
+    // Tagged / assigned individual photos use the paywall — checked before free
+    // group galleries so a tagged share stays a paid individual photo.
+    // VIP tickets include unlock (documented product behavior); others pay via Zelle.
+    if (isAssignedPersonal || isTagged) {
+      if (session.adminPreview) return "full";
+      if (guest.tier === "vip" || guest.personalPhotosPaid) return "full";
+      return "preview";
+    }
 
     if (media.kind === "group_photo" || media.kind === "event_photo") return "full";
 
@@ -37,18 +53,11 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
       return guestCanSeeTeamPhoto(media, guestGroupIds) ? "full" : "none";
     }
 
-    // Individual photos: available to the assigned guest (any tier), but locked
-    // behind payment. Admin preview sees them unlocked.
-    if (media.kind === "personal_photo") {
-      if (String(media.guestId) !== String(guest._id)) return "none";
-      if (session.adminPreview) return "full";
-      return guest.personalPhotosPaid ? "full" : "preview";
-    }
-
     // Speaker sessions are behind the same one-time unlock as individual photos.
     if (media.kind === "session_video") {
       if (session.adminPreview) return "full";
-      return guest.personalPhotosPaid ? "full" : "none";
+      if (guest.tier === "vip" || guest.personalPhotosPaid) return "full";
+      return "none";
     }
 
     return "none";
@@ -56,7 +65,10 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
 
   if (await isAdminAuthenticated()) return "full";
   if (await isUploaderAuthenticated()) {
-    return media.kind === "team_photo" ? "full" : "none";
+    // Uploaders only need staged (not-yet-sent) team photos for tagging / edits.
+    // Published guest-facing photos stay admin-managed.
+    if (media.kind === "team_photo" && !media.published) return "full";
+    return "none";
   }
   return "none";
 }

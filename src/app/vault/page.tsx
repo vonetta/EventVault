@@ -29,9 +29,21 @@ type Library = {
   personalPhotos: MediaItem[];
   personalPhotosPaid?: boolean;
   personalPhotosLocked?: boolean;
+  zellePaymentPending?: boolean;
   hasSessions?: boolean;
   sessionsLocked?: boolean;
-  payments?: { enabled: boolean; priceLabel: string };
+  payments?: {
+    method?: "zelle";
+    enabled: boolean;
+    priceLabel: string;
+    zelle?: {
+      enabled: boolean;
+      priceLabel: string;
+      recipient: string;
+      recipientName: string;
+      memoHint: string;
+    };
+  };
   days: DayItem[];
   preview?: boolean;
 };
@@ -48,6 +60,7 @@ export default function VaultPage() {
   const [downloadMessage, setDownloadMessage] = useState("");
   const [unlocking, setUnlocking] = useState(false);
   const [unlockMessage, setUnlockMessage] = useState("");
+  const [copiedField, setCopiedField] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -62,38 +75,40 @@ export default function VaultPage() {
         return;
       }
       setData(json);
-
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("paid") === "1") {
-        setUnlockMessage("Payment received — your individual photos are unlocked.");
-      } else if (params.get("canceled") === "1") {
-        setUnlockMessage("Checkout canceled. Your photos are still locked.");
-      }
-      if (params.has("paid") || params.has("canceled")) {
-        window.history.replaceState(null, "", window.location.pathname);
-      }
     }
     load();
   }, [router]);
 
-  async function unlockPhotos() {
+  async function copyText(label: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(label);
+      setTimeout(() => setCopiedField(""), 2000);
+    } catch {
+      setUnlockMessage("Could not copy — select the text manually.");
+    }
+  }
+
+  async function confirmZelleSent() {
     setUnlocking(true);
     setUnlockMessage("");
     try {
-      const response = await fetch("/api/guest/checkout", { method: "POST" });
+      const response = await fetch("/api/guest/zelle", { method: "POST" });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setUnlockMessage(json.error || "Could not start checkout.");
-        return;
-      }
-      if (json.url) {
-        window.location.assign(json.url);
+        setUnlockMessage(json.error || "Could not record your payment.");
         return;
       }
       if (json.paid) {
-        setUnlockMessage("Your individual photos are unlocked.");
+        setUnlockMessage("Your photos are already unlocked.");
         window.location.reload();
+        return;
       }
+      setUnlockMessage(
+        json.message ||
+          "Thanks — once your Zelle is confirmed, your photos will unlock.",
+      );
+      setData((prev) => (prev ? { ...prev, zellePaymentPending: true } : prev));
     } catch {
       setUnlockMessage("Something went wrong. Try again.");
     } finally {
@@ -174,6 +189,9 @@ export default function VaultPage() {
   const hasSessions = Boolean(data.hasSessions);
   const sessionsLocked = Boolean(data.sessionsLocked);
   const priceLabel = data.payments?.priceLabel || "";
+  const zelle = data.payments?.zelle;
+  const zellePending = Boolean(data.zellePaymentPending);
+  const zelleReady = Boolean(data.payments?.enabled && zelle?.recipient);
   const eventCount = photoCount(data.eventGallery || []);
   const groupCount = photoCount(data.groupGallery);
   const downloadablePersonal = personalLocked ? 0 : personalCount;
@@ -181,6 +199,90 @@ export default function VaultPage() {
   const firstName = data.guest.name.trim().split(/\s+/)[0] || data.guest.name;
   const sessionCount = data.days.reduce((sum, day) => sum + day.sessions.length, 0);
   const showJumpNav = personalCount > 0 || eventCount > 0 || groupCount > 0 || sessionCount > 0;
+
+  function unlockPanel(kind: "photos" | "sessions") {
+    const title =
+      kind === "photos"
+        ? `These are watermarked previews. Send ${priceLabel || "payment"} with Zelle to unlock full-size photos and downloads${
+            hasSessions ? " (and speaker sessions)" : ""
+          }.`
+        : `Speaker session videos are locked. Send ${priceLabel || "payment"} with Zelle to unlock them${
+            hasPersonal ? " (same payment also unlocks your individual photos)" : ""
+          }.`;
+
+    return (
+      <div className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
+        <p className="text-sm text-pine">{title}</p>
+
+        {zelleReady ? (
+          <div className="mt-3 space-y-3 rounded-xl border border-[color:var(--line)] bg-mist/40 p-3 text-sm text-ink">
+            <p className="font-medium">Pay with Zelle (no card fees)</p>
+            <ol className="list-decimal space-y-1.5 pl-5 text-pine">
+              <li>
+                Open Zelle in your bank app and send{" "}
+                <strong className="text-ink">{zelle?.priceLabel || priceLabel}</strong>
+                {zelle?.recipientName ? (
+                  <>
+                    {" "}
+                    to <strong className="text-ink">{zelle.recipientName}</strong>
+                  </>
+                ) : null}
+                .
+              </li>
+              <li>
+                Use this Zelle recipient:{" "}
+                <button
+                  type="button"
+                  onClick={() => copyText("recipient", zelle!.recipient)}
+                  className="font-mono text-ink underline-offset-2 hover:underline"
+                >
+                  {zelle?.recipient}
+                </button>
+                {copiedField === "recipient" ? (
+                  <span className="ml-2 text-xs text-pine">Copied</span>
+                ) : null}
+              </li>
+              <li>
+                In the memo / note, put your ticket code{" "}
+                <button
+                  type="button"
+                  onClick={() => copyText("memo", zelle!.memoHint)}
+                  className="font-mono text-ink underline-offset-2 hover:underline"
+                >
+                  {zelle?.memoHint}
+                </button>
+                {copiedField === "memo" ? <span className="ml-2 text-xs text-pine">Copied</span> : null}{" "}
+                so we can match your payment.
+              </li>
+              <li>Tap the button below after you’ve sent it.</li>
+            </ol>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-pine">
+            Zelle details aren’t posted yet — please contact the organizer to unlock.
+          </p>
+        )}
+
+        {zellePending ? (
+          <p className="mt-3 rounded-xl bg-mist/60 px-3 py-2 text-sm text-ink">
+            We’ve noted your Zelle. Photos unlock after the organizer confirms the payment —
+            usually soon after it arrives.
+          </p>
+        ) : zelleReady ? (
+          <button
+            type="button"
+            onClick={confirmZelleSent}
+            disabled={unlocking}
+            className="mt-3 rounded-full bg-ink px-5 py-2 text-sm text-foam transition hover:bg-pine disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {unlocking ? "Saving…" : "I’ve sent the Zelle payment"}
+          </button>
+        ) : null}
+
+        {unlockMessage ? <p className="mt-3 text-sm text-pine">{unlockMessage}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-8 md:px-10 md:py-12">
@@ -282,25 +384,7 @@ export default function VaultPage() {
             {personalCount ? <span className="ml-2 text-lg text-pine">{personalCount}</span> : null}
           </h2>
           {personalLocked ? (
-            <div className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
-              <p className="text-sm text-pine">
-                These are watermarked previews. Unlock to view them full size and download all your
-                individual photos{hasSessions ? " and watch the speaker sessions" : ""}
-                {priceLabel ? ` — ${priceLabel}` : ""}.
-              </p>
-              <button
-                type="button"
-                onClick={unlockPhotos}
-                disabled={unlocking}
-                className="mt-3 rounded-full bg-ink px-5 py-2 text-sm text-foam transition hover:bg-pine disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {unlocking
-                  ? "Starting checkout…"
-                  : priceLabel
-                    ? `Unlock my photos — ${priceLabel}`
-                    : "Unlock my photos"}
-              </button>
-            </div>
+            unlockPanel("photos")
           ) : (
             <p className="text-sm text-pine">Tap a photo to view it larger, or download one at a time.</p>
           )}
@@ -320,25 +404,13 @@ export default function VaultPage() {
             Speaker sessions
           </h2>
           {sessionsLocked ? (
-            <div className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
+            hasPersonal && personalLocked ? (
               <p className="text-sm text-pine">
-                Speaker session videos are locked. Unlock to watch them
-                {hasPersonal ? " (this also unlocks your individual photos)" : ""}
-                {priceLabel ? ` — ${priceLabel}` : ""}.
+                Locked until your Zelle payment is confirmed — same unlock as Your photos above.
               </p>
-              <button
-                type="button"
-                onClick={unlockPhotos}
-                disabled={unlocking}
-                className="mt-3 rounded-full bg-ink px-5 py-2 text-sm text-foam transition hover:bg-pine disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {unlocking
-                  ? "Starting checkout…"
-                  : priceLabel
-                    ? `Unlock speaker sessions — ${priceLabel}`
-                    : "Unlock speaker sessions"}
-              </button>
-            </div>
+            ) : (
+              unlockPanel("sessions")
+            )
           ) : null}
           {data.days
             .filter((day) => day.sessions.length > 0)

@@ -127,6 +127,20 @@ export function GuestsTab({
     actions.setMessage("Ticket email sent.");
   }
 
+  async function markGuestPaid(guestId: string, paid: boolean) {
+    setActionLoading(`${paid ? "paid" : "unpaid"}-${guestId}`);
+    const json = await actions.postAction({ action: "mark_guest_paid", guestId, paid });
+    setActionLoading(null);
+    if (!json) return;
+    actions.setMessage(paid ? "Marked paid — photos unlocked." : "Payment cleared — photos locked again.");
+    await actions.load(selectedEventId);
+  }
+
+  const pendingZelle = useMemo(
+    () => data.guests.filter((guest) => guest.zellePaymentPending),
+    [data.guests],
+  );
+
   async function previewGuest(guestId: string) {
     setPreviewingGuestId(guestId);
     try {
@@ -175,7 +189,11 @@ export function GuestsTab({
 {`Jane Doe, jane@email.com, vip
 John Smith, john@email.com, standard`}
         </pre>
-        <p>VIP guests see personal photos and speaker sessions. Every guest sees the event gallery and group gallery. Use <strong>View vault</strong> to check what someone will see.</p>
+        <p>
+          VIP guests include personal photos and speaker sessions. Standard guests unlock those
+          with Zelle (Mark paid after you confirm payment). Every guest sees the event gallery and
+          group gallery. Use <strong>View vault</strong> to check what someone will see.
+        </p>
       </HowTo>
 
       <AdminPanel
@@ -214,9 +232,38 @@ John Smith, john@email.com, standard`}
         </form>
       </AdminPanel>
 
+      {pendingZelle.length ? (
+        <AdminPanel
+          title={`Zelle waiting (${pendingZelle.length})`}
+          description="These guests say they sent Zelle. Confirm in your bank app, then mark them paid to unlock photos."
+        >
+          <ul className="space-y-2">
+            {pendingZelle.map((guest) => (
+              <li
+                key={guest._id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[color:var(--line)] bg-white px-3 py-2 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-ink">{guest.name}</p>
+                  <p className="font-mono text-xs text-pine">{guest.ticketCode}</p>
+                </div>
+                <AdminButton
+                  variant="primary"
+                  className="!h-8 !px-3 !text-xs"
+                  disabled={actionLoading === `paid-${guest._id}`}
+                  onClick={() => markGuestPaid(guest._id, true)}
+                >
+                  {actionLoading === `paid-${guest._id}` ? "Saving…" : "Mark paid"}
+                </AdminButton>
+              </li>
+            ))}
+          </ul>
+        </AdminPanel>
+      ) : null}
+
       <AdminPanel
         title={`Guest list (${data.guests.length})`}
-        description="Preview what each guest sees with View vault."
+        description="Preview what each guest sees with View vault. Mark paid after you receive their Zelle."
         action={
           data.guests.length > 5 ? (
             <AdminField label="Search guests" className="min-w-[14rem]">
@@ -237,6 +284,7 @@ John Smith, john@email.com, standard`}
               <tr className="border-b border-[color:var(--line)] text-xs uppercase tracking-wide text-pine">
                 <th scope="col" className="py-3 pr-4">Guest</th>
                 <th scope="col" className="py-3 pr-4">Tier</th>
+                <th scope="col" className="py-3 pr-4">Photos</th>
                 <th scope="col" className="py-3 pr-4">Ticket</th>
                 <th scope="col" className="py-3">Actions</th>
               </tr>
@@ -253,6 +301,17 @@ John Smith, john@email.com, standard`}
                     <td className="py-3 pr-4">
                       <TierBadge tier={guest.tier} />
                     </td>
+                    <td className="py-3 pr-4">
+                      {guest.personalPhotosPaid || guest.tier === "vip" ? (
+                        <span className="text-xs font-medium text-ink">
+                          {guest.tier === "vip" && !guest.personalPhotosPaid ? "VIP unlock" : "Unlocked"}
+                        </span>
+                      ) : guest.zellePaymentPending ? (
+                        <span className="text-xs font-medium text-gold-deep">Zelle pending</span>
+                      ) : (
+                        <span className="text-xs text-pine">Locked</span>
+                      )}
+                    </td>
                     <td className="py-3 pr-4 font-mono text-xs tracking-wider">{guest.ticketCode}</td>
                     <td className="py-3">
                       <div className="flex flex-wrap gap-1.5">
@@ -265,6 +324,25 @@ John Smith, john@email.com, standard`}
                         >
                           {previewingGuestId === guest._id ? "Opening…" : "View vault"}
                         </AdminButton>
+                        {!guest.personalPhotosPaid && guest.tier !== "vip" ? (
+                          <AdminButton
+                            className="!h-8 !px-2 !text-xs"
+                            disabled={isLoading("paid")}
+                            onClick={() => markGuestPaid(guest._id, true)}
+                            aria-label={`Mark ${guest.name} paid via Zelle`}
+                          >
+                            {isLoading("paid") ? "Saving…" : "Mark paid"}
+                          </AdminButton>
+                        ) : guest.personalPhotosPaid ? (
+                          <AdminButton
+                            className="!h-8 !px-2 !text-xs"
+                            disabled={isLoading("unpaid")}
+                            onClick={() => markGuestPaid(guest._id, false)}
+                            aria-label={`Lock photos for ${guest.name}`}
+                          >
+                            {isLoading("unpaid") ? "Saving…" : "Lock again"}
+                          </AdminButton>
+                        ) : null}
                         <AdminButton
                           className="!h-8 !px-2 !text-xs"
                           onClick={() => navigator.clipboard.writeText(guest.ticketCode)}

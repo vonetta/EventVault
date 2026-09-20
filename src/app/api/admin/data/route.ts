@@ -111,6 +111,8 @@ export async function GET(request: Request) {
       tier: guest.tier,
       ticketCode: guest.ticketCode,
       groupIds: (guest.groupIds || []).map((id) => String(id)),
+      personalPhotosPaid: Boolean(guest.personalPhotosPaid),
+      zellePaymentPending: Boolean(guest.zellePaymentPending) && !guest.personalPhotosPaid,
     })),
     groups: groups.map((group) => ({
       _id: String(group._id),
@@ -133,6 +135,8 @@ export async function GET(request: Request) {
       published: item.published,
       everyone: item.everyone,
       groupIds: (item.groupIds || []).map((id) => String(id)),
+      taggedGuestIds: (item.taggedGuestIds || []).map((id) => String(id)),
+      needsEditing: Boolean(item.needsEditing),
       uploadedByName: item.uploadedByName || "",
       // storageKey intentionally omitted from admin list payloads
     })),
@@ -448,6 +452,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Guest not found" }, { status: 404 });
     }
     await Media.updateMany({ guestId: guest._id }, { $set: { guestId: null } });
+    await Media.updateMany(
+      { taggedGuestIds: guest._id },
+      { $pull: { taggedGuestIds: guest._id } },
+    );
+    const { FaceProfile } = await import("@/lib/models");
+    await FaceProfile.deleteMany({ guestId: guest._id });
     await logAdminAction(request, "delete_guest", { guestId: body.guestId });
     return NextResponse.json({ ok: true });
   }
@@ -739,6 +749,15 @@ export async function POST(request: Request) {
     if (!media.length) {
       return NextResponse.json({ error: "No team photos to send" }, { status: 400 });
     }
+    const stillEditing = media.filter((item) => item.needsEditing);
+    if (stillEditing.length) {
+      return NextResponse.json(
+        {
+          error: `${stillEditing.length} photo${stillEditing.length === 1 ? "" : "s"} still need editing. Mark them ready before sending.`,
+        },
+        { status: 400 },
+      );
+    }
     const eventId = media[0].eventId;
     const validGroupIds = everyone
       ? []
@@ -768,6 +787,129 @@ export async function POST(request: Request) {
     );
     await logAdminAction(request, "unpublish_media", { count: body.mediaIds.length });
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "tag_media") {
+    const media = await Media.findById(body.mediaId);
+    if (!media) {
+      return NextResponse.json({ error: "Media not found" }, { status: 404 });
+    }
+    const validGuests = await Guest.find({
+      _id: { $in: body.taggedGuestIds },
+      eventId: media.eventId,
+    }).select("_id");
+    media.taggedGuestIds = validGuests.map((guest) => guest._id);
+    await media.save();
+    await logAdminAction(request, "tag_media", {
+      mediaId: body.mediaId,
+      tags: media.taggedGuestIds.length,
+    });
+    return NextResponse.json({
+      media: {
+        _id: String(media._id),
+        taggedGuestIds: media.taggedGuestIds.map((id) => String(id)),
+      },
+    });
+  }
+
+  if (body.action === "set_needs_editing") {
+    const media = await Media.find({ _id: { $in: body.mediaIds } });
+    if (!media.length) {
+      return NextResponse.json({ error: "No media found" }, { status: 404 });
+    }
+    if (body.needsEditing) {
+      // Returning to editing also pulls published team photos out of guest view.
+      await Media.updateMany(
+        { _id: { $in: media.map((item) => item._id) } },
+        {
+          $set: {
+            needsEditing: true,
+            published: false,
+            everyone: false,
+            groupIds: [],
+          },
+        },
+      );
+    } else {
+      await Media.updateMany(
+        { _id: { $in: media.map((item) => item._id) } },
+        { $set: { needsEditing: false } },
+      );
+    }
+    await logAdminAction(request, "set_needs_editing", {
+      count: media.length,
+      needsEditing: body.needsEditing,
+    });
+    return NextResponse.json({ ok: true, count: media.length });
+  }
+
+  if (body.action === "create_guest_name") {
+    const { createGuestByName } = await import("@/lib/guest-names");
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    const result = await createGuestByName(body.eventId, body.name);
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    if (result.created) {
+      await logAdminAction(request, "create_guest_name", { name: result.guest.name });
+    }
+    return NextResponse.json(result);
+  }
+
+  if (body.action === "mark_guest_paid") {
+    const { personalPhotoPriceCents, personalPhotoCurrency } = await import("@/lib/payments");
+    const { Purchase } = await import("@/lib/models");
+    const guest = await Guest.findById(body.guestId);
+    if (!guest) {
+      return NextResponse.json({ error: "Guest not found" }, { status: 404 });
+    }
+
+    if (body.paid) {
+      const alreadyPaid = Boolean(guest.personalPhotosPaid);
+      guest.personalPhotosPaid = true;
+      guest.personalPhotosPaidAt = guest.personalPhotosPaidAt || new Date();
+      guest.zellePaymentPending = false;
+      await guest.save();
+      if (!alreadyPaid) {
+        await Purchase.create({
+          eventId: guest.eventId,
+          guestId: guest._id,
+          method: "zelle",
+          amount: personalPhotoPriceCents(),
+          currency: personalPhotoCurrency(),
+          status: "paid",
+          stripeSessionId: `zelle_${guest._id}_${Date.now()}`,
+        });
+      }
+      await logAdminAction(request, "mark_guest_paid", {
+        guestId: body.guestId,
+        guestName: guest.name,
+        paid: true,
+        alreadyPaid,
+      });
+    } else {
+      guest.personalPhotosPaid = false;
+      guest.personalPhotosPaidAt = null;
+      guest.zellePaymentPending = false;
+      guest.zellePaymentPendingAt = null;
+      await guest.save();
+      await logAdminAction(request, "mark_guest_paid", {
+        guestId: body.guestId,
+        guestName: guest.name,
+        paid: false,
+      });
+    }
+
+    return NextResponse.json({
+      guest: {
+        _id: String(guest._id),
+        personalPhotosPaid: guest.personalPhotosPaid,
+        zellePaymentPending: false,
+      },
+    });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

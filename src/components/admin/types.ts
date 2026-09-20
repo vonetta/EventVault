@@ -26,6 +26,8 @@ export type GuestDoc = {
   tier: "vip" | "standard";
   ticketCode: string;
   groupIds?: string[];
+  personalPhotosPaid?: boolean;
+  zellePaymentPending?: boolean;
 };
 
 export type MediaDoc = {
@@ -43,6 +45,8 @@ export type MediaDoc = {
   published?: boolean;
   everyone?: boolean;
   groupIds?: string[];
+  taggedGuestIds?: string[];
+  needsEditing?: boolean;
   uploadedByName?: string;
 };
 

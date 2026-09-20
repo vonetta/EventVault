@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useMemo, useRef, useState } from "react";
+import { GuestTagPicker } from "@/components/GuestTagPicker";
 import { MediaGrid, type MediaItem } from "@/components/MediaGrid";
 import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName } from "@/components/admin/ui";
+import type { NameOnlyGuest } from "@/lib/guest-name-match";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
 import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 import type { AdminActions, AdminData, GuestDoc, MediaDoc, MediaFilter, SessionDoc } from "@/components/admin/types";
@@ -96,20 +98,35 @@ export function MediaTab({
   const [sending, setSending] = useState(false);
   const [sentSelected, setSentSelected] = useState<Set<string>>(new Set());
   const [unsending, setUnsending] = useState(false);
+  const [taggingId, setTaggingId] = useState<string | null>(null);
+  const [editingSelected, setEditingSelected] = useState<Set<string>>(new Set());
+  const [togglingEdit, setTogglingEdit] = useState(false);
 
   const groups = data.groups || [];
+
+  const nameOnlyGuests: NameOnlyGuest[] = useMemo(
+    () => data.guests.map((guest) => ({ _id: guest._id, name: guest.name })),
+    [data.guests],
+  );
 
   const vipGuests = useMemo(
     () => data.guests.filter((guest) => guest.tier === "vip"),
     [data.guests],
   );
 
+  const needsEditingPhotos = useMemo(
+    () => data.media.filter((item) => item.kind === "team_photo" && item.needsEditing),
+    [data.media],
+  );
   const stagedTeamPhotos = useMemo(
-    () => data.media.filter((item) => item.kind === "team_photo" && !item.published),
+    () =>
+      data.media.filter(
+        (item) => item.kind === "team_photo" && !item.published && !item.needsEditing,
+      ),
     [data.media],
   );
   const sentTeamPhotos = useMemo(
-    () => data.media.filter((item) => item.kind === "team_photo" && item.published),
+    () => data.media.filter((item) => item.kind === "team_photo" && item.published && !item.needsEditing),
     [data.media],
   );
 
@@ -122,12 +139,65 @@ export function MediaTab({
   }
 
   function toMediaItem(item: MediaDoc): MediaItem {
+    const tags = (item.taggedGuestIds || [])
+      .map((id) => data.guests.find((guest) => guest._id === id)?.name)
+      .filter(Boolean);
+    const base = item.uploadedByName
+      ? `${item.title || item.filename} · ${item.uploadedByName}`
+      : item.title || item.filename;
     return {
       id: item._id,
-      title: item.uploadedByName ? `${item.title || item.filename} · ${item.uploadedByName}` : item.title || item.filename,
+      title: tags.length ? `${base} · ${tags.join(", ")}` : base,
       contentType: item.contentType || "image/jpeg",
       url: `/api/media/${item._id}`,
     };
+  }
+
+  async function setNeedsEditing(mediaIds: string[], needsEditing: boolean) {
+    if (!mediaIds.length) return;
+    setTogglingEdit(true);
+    const json = await actions.postAction({
+      action: "set_needs_editing",
+      mediaIds,
+      needsEditing,
+    });
+    setTogglingEdit(false);
+    if (!json) return;
+    setEditingSelected(new Set());
+    setTeamSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of mediaIds) next.delete(id);
+      return next;
+    });
+    actions.setMessage(
+      needsEditing
+        ? "Moved to Needs editing."
+        : "Marked ready — back in the Main gallery.",
+    );
+    await actions.load(selectedEventId);
+  }
+
+  async function saveTags(mediaId: string, taggedGuestIds: string[]) {
+    const json = await actions.postAction({
+      action: "tag_media",
+      mediaId,
+      taggedGuestIds,
+    });
+    if (!json) return;
+    await actions.load(selectedEventId);
+  }
+
+  async function createGuestName(name: string): Promise<NameOnlyGuest | null> {
+    if (!data.event) return null;
+    const json = await actions.postAction({
+      action: "create_guest_name",
+      eventId: data.event._id,
+      name,
+    });
+    if (!json) return null;
+    const guest = (json as { guest: NameOnlyGuest }).guest;
+    await actions.load(selectedEventId);
+    return guest;
   }
 
   async function sendTeamPhotos() {
@@ -259,12 +329,67 @@ export function MediaTab({
   return (
     <>
       <AdminPanel
+        title="Needs editing"
+        description="Not ready for live view. Guests can’t see these, and they can’t be sent to a group until you mark them ready."
+      >
+        {needsEditingPhotos.length === 0 ? (
+          <p className="text-sm text-pine">Nothing waiting on edits.</p>
+        ) : (
+          <div className="space-y-4">
+            <MediaGrid
+              items={needsEditingPhotos.map(toMediaItem)}
+              selectable
+              selectedIds={editingSelected}
+              onToggleSelect={(id) =>
+                setEditingSelected((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                })
+              }
+              onRemove={deleteMedia}
+              showCaptions
+            />
+            <div className="flex flex-wrap gap-2">
+              <AdminButton
+                variant="primary"
+                disabled={togglingEdit || editingSelected.size === 0}
+                onClick={() => void setNeedsEditing([...editingSelected], false)}
+              >
+                {togglingEdit ? "Saving…" : `Mark ${editingSelected.size || ""} ready`.trim()}
+              </AdminButton>
+            </div>
+            {needsEditingPhotos.map((item) => (
+              <details key={`edit-tag-${item._id}`} className="rounded-lg border border-[color:var(--line)] bg-white p-3">
+                <summary className="cursor-pointer text-sm text-ink">
+                  Tag people — {item.title || item.filename}
+                  {(item.taggedGuestIds || []).length
+                    ? ` (${(item.taggedGuestIds || []).length})`
+                    : ""}
+                </summary>
+                <div className="mt-3">
+                  <GuestTagPicker
+                    compact
+                    guests={nameOnlyGuests}
+                    selectedIds={item.taggedGuestIds || []}
+                    onChange={(ids) => void saveTags(item._id, ids)}
+                    onCreateGuest={createGuestName}
+                  />
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
+      </AdminPanel>
+
+      <AdminPanel
         title="Main gallery — from the photo team"
-        description="Photos your team uploaded. Guests can’t see these until you send them to a group or to everyone."
+        description="Ready photos. Guests can’t see these until you send them to a group or everyone — or until someone is tagged (that person sees it in Your photos after unlock)."
       >
         {stagedTeamPhotos.length === 0 ? (
           <p className="text-sm text-pine">
-            No photos waiting. Anything your photo team uploads shows up here first.
+            No photos waiting. Anything your photo team uploads shows up here first (unless it’s marked Needs editing).
           </p>
         ) : (
           <div className="space-y-4">
@@ -281,8 +406,17 @@ export function MediaTab({
                 })
               }
               onRemove={deleteMedia}
-              showCaptions={false}
+              showCaptions
             />
+            <div className="flex flex-wrap gap-2">
+              <AdminButton
+                variant="secondary"
+                disabled={togglingEdit || teamSelected.size === 0}
+                onClick={() => void setNeedsEditing([...teamSelected], true)}
+              >
+                Move to Needs editing
+              </AdminButton>
+            </div>
             <div className="rounded-xl border border-[color:var(--line)] bg-white p-4">
               <p className="text-sm font-medium text-ink">
                 Send {teamSelected.size} selected {teamSelected.size === 1 ? "photo" : "photos"} to…
@@ -336,6 +470,33 @@ export function MediaTab({
                 {sending ? "Sending…" : `Send ${teamSelected.size || ""} to guests`.trim()}
               </AdminButton>
             </div>
+            {stagedTeamPhotos.map((item) => (
+              <details
+                key={`tag-${item._id}`}
+                open={taggingId === item._id}
+                className="rounded-lg border border-[color:var(--line)] bg-white p-3"
+                onToggle={(e) => {
+                  const open = (e.target as HTMLDetailsElement).open;
+                  setTaggingId(open ? item._id : taggingId === item._id ? null : taggingId);
+                }}
+              >
+                <summary className="cursor-pointer text-sm text-ink">
+                  Tag people — {item.title || item.filename}
+                  {(item.taggedGuestIds || []).length
+                    ? ` (${(item.taggedGuestIds || []).length})`
+                    : ""}
+                </summary>
+                <div className="mt-3">
+                  <GuestTagPicker
+                    compact
+                    guests={nameOnlyGuests}
+                    selectedIds={item.taggedGuestIds || []}
+                    onChange={(ids) => void saveTags(item._id, ids)}
+                    onCreateGuest={createGuestName}
+                  />
+                </div>
+              </details>
+            ))}
           </div>
         )}
       </AdminPanel>
@@ -349,7 +510,7 @@ export function MediaTab({
             <MediaGrid
               items={sentTeamPhotos.map((item) => ({
                 ...toMediaItem(item),
-                title: audienceLabel(item),
+                title: `${audienceLabel(item)}${(item.taggedGuestIds || []).length ? ` · tagged ${(item.taggedGuestIds || []).length}` : ""}`,
               }))}
               selectable
               selectedIds={sentSelected}
@@ -367,6 +528,22 @@ export function MediaTab({
                 {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
               </AdminButton>
             ) : null}
+            {sentTeamPhotos.map((item) => (
+              <details key={`sent-tag-${item._id}`} className="rounded-lg border border-[color:var(--line)] bg-white p-3">
+                <summary className="cursor-pointer text-sm text-ink">
+                  Tag people — {item.title || item.filename}
+                </summary>
+                <div className="mt-3">
+                  <GuestTagPicker
+                    compact
+                    guests={nameOnlyGuests}
+                    selectedIds={item.taggedGuestIds || []}
+                    onChange={(ids) => void saveTags(item._id, ids)}
+                    onCreateGuest={createGuestName}
+                  />
+                </div>
+              </details>
+            ))}
           </div>
         </AdminPanel>
       ) : null}

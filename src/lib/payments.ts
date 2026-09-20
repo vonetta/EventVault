@@ -1,10 +1,4 @@
-import Stripe from "stripe";
-
-/** Individual-photo paywall configuration (Stripe hosted Checkout). */
-
-export function paymentsConfigured() {
-  return Boolean(process.env.STRIPE_SECRET_KEY);
-}
+/** Individual-photo unlock via Zelle (no card processor fees). */
 
 export function personalPhotoPriceCents() {
   const raw = Number.parseInt(process.env.PERSONAL_PHOTOS_PRICE_CENTS || "1500", 10);
@@ -26,14 +20,41 @@ export function priceLabel() {
   }
 }
 
-let _stripe: Stripe | null = null;
+/** Zelle handle: email or US phone number the guest should send to. */
+export function zelleRecipient() {
+  return (process.env.ZELLE_RECIPIENT || "").trim();
+}
 
-export function getStripe(): Stripe {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    throw new Error("STRIPE_SECRET_KEY is not set");
-  }
-  if (!_stripe) {
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-  }
-  return _stripe;
+export function zelleRecipientName() {
+  return (process.env.ZELLE_RECIPIENT_NAME || "").trim();
+}
+
+export function zelleConfigured() {
+  return Boolean(zelleRecipient());
+}
+
+/** @deprecated use zelleConfigured — kept so older imports keep compiling during the switch. */
+export function paymentsConfigured() {
+  return zelleConfigured();
+}
+
+export type ZellePaymentInfo = {
+  enabled: boolean;
+  priceLabel: string;
+  priceCents: number;
+  recipient: string;
+  recipientName: string;
+  /** Memo guests should include so you can match the Zelle to their ticket. */
+  memoHint: string;
+};
+
+export function zellePaymentInfo(memoHint = ""): ZellePaymentInfo {
+  return {
+    enabled: zelleConfigured(),
+    priceLabel: priceLabel(),
+    priceCents: personalPhotoPriceCents(),
+    recipient: zelleRecipient(),
+    recipientName: zelleRecipientName(),
+    memoHint,
+  };
 }
