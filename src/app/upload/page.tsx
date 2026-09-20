@@ -450,6 +450,32 @@ export default function UploadPage() {
     return guest;
   }
 
+  async function renameGuest(guestId: string, name: string): Promise<NameOnlyGuest | null> {
+    const res = await fetch("/api/uploader/guests", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, guestId, name }),
+    });
+    if (res.status === 401) {
+      window.location.assign("/upload/login");
+      return null;
+    }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMessage(json.error || "Could not rename that person.");
+      return null;
+    }
+    const guest = json.guest as NameOnlyGuest;
+    setGuests((prev) =>
+      prev
+        .map((row) => (row._id === guest._id ? guest : row))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    await refreshGalleries(eventId);
+    await refreshAssistPhotos();
+    return guest;
+  }
+
   async function signOut() {
     await fetch("/api/auth/uploader/logout", { method: "POST" });
     window.location.assign("/upload/login");
@@ -522,6 +548,7 @@ export default function UploadPage() {
               disabled={savingId === photo.id}
               onChange={(ids) => void updatePhoto(photo.id, { taggedGuestIds: ids })}
               onCreateGuest={createGuest}
+              onRenameGuest={renameGuest}
             />
           ) : null}
         </div>
@@ -768,6 +795,7 @@ export default function UploadPage() {
                     guests={guests}
                     photos={assistPhotos}
                     onCreateGuest={createGuest}
+                    onRenameGuest={renameGuest}
                     onGuestsChanged={async () => {
                       await loadGuests(eventId);
                     }}
