@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 
-export default function AdminLoginPage() {
+export default function UploaderLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -12,7 +12,7 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError("");
 
-    const response = await fetch("/api/auth/admin", {
+    const response = await fetch("/api/auth/uploader", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ password }),
@@ -25,18 +25,27 @@ export default function AdminLoginPage() {
       return;
     }
 
-    window.location.assign("/admin");
+    window.location.assign("/upload");
   }
 
   return (
-    <main id="main" tabIndex={-1} className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12">
+    <main
+      id="main"
+      tabIndex={-1}
+      className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-12"
+    >
       <p className="font-[family-name:var(--font-fraunces)] text-3xl text-ink">EventVault</p>
-      <h1 className="mt-4 font-[family-name:var(--font-fraunces)] text-4xl text-ink">Admin</h1>
-      <p className="mt-2 text-pine">Manage guests, ticket codes, and media.</p>
+      <h1 className="mt-4 font-[family-name:var(--font-fraunces)] text-4xl text-ink">
+        Team photo upload
+      </h1>
+      <p className="mt-2 text-pine">
+        For the photo team. Sign in with the team upload password to add photos to an event
+        gallery. This is separate from the admin login.
+      </p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-3">
         <label className="text-sm font-medium text-pine" htmlFor="password">
-          Password
+          Team upload password
         </label>
         <input
           id="password"
@@ -47,7 +56,7 @@ export default function AdminLoginPage() {
           autoComplete="current-password"
           required
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? "admin-login-error" : undefined}
+          aria-describedby={error ? "uploader-login-error" : undefined}
           className="h-12 w-full rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 outline-none focus:ring-2 focus:ring-ink/20"
         />
         <button
@@ -58,18 +67,11 @@ export default function AdminLoginPage() {
           {loading ? "Checking…" : "Continue"}
         </button>
         {error ? (
-          <p id="admin-login-error" role="alert" className="text-sm text-red-700">
+          <p id="uploader-login-error" role="alert" className="text-sm text-red-700">
             {error}
           </p>
         ) : null}
       </form>
-
-      <p className="mt-8 text-sm text-pine">
-        On the photo team?{" "}
-        <a href="/upload/login" className="font-medium text-ink underline">
-          Upload event photos
-        </a>
-      </p>
     </main>
   );
 }

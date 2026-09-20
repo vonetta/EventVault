@@ -13,6 +13,7 @@ function mediaKindLabel(kind: string) {
   if (kind === "group_photo") return "Group gallery";
   if (kind === "personal_photo") return "VIP personal";
   if (kind === "session_video") return "Session";
+  if (kind === "team_photo") return "Team photo";
   return kind;
 }
 
@@ -88,13 +89,87 @@ export function MediaTab({
   const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // Main gallery curation (staged team photos -> groups/everyone)
+  const [teamSelected, setTeamSelected] = useState<Set<string>>(new Set());
+  const [sendEveryone, setSendEveryone] = useState(false);
+  const [sendGroupIds, setSendGroupIds] = useState<Set<string>>(new Set());
+  const [sending, setSending] = useState(false);
+  const [sentSelected, setSentSelected] = useState<Set<string>>(new Set());
+  const [unsending, setUnsending] = useState(false);
+
+  const groups = data.groups || [];
+
   const vipGuests = useMemo(
     () => data.guests.filter((guest) => guest.tier === "vip"),
     [data.guests],
   );
 
+  const stagedTeamPhotos = useMemo(
+    () => data.media.filter((item) => item.kind === "team_photo" && !item.published),
+    [data.media],
+  );
+  const sentTeamPhotos = useMemo(
+    () => data.media.filter((item) => item.kind === "team_photo" && item.published),
+    [data.media],
+  );
+
+  function audienceLabel(item: MediaDoc) {
+    if (item.everyone) return "Everyone";
+    const names = (item.groupIds || [])
+      .map((id) => groups.find((group) => group._id === id)?.name)
+      .filter(Boolean);
+    return names.length ? (names.join(", ") as string) : "No one yet";
+  }
+
+  function toMediaItem(item: MediaDoc): MediaItem {
+    return {
+      id: item._id,
+      title: item.uploadedByName ? `${item.title || item.filename} · ${item.uploadedByName}` : item.title || item.filename,
+      contentType: item.contentType || "image/jpeg",
+      url: `/api/media/${item._id}`,
+    };
+  }
+
+  async function sendTeamPhotos() {
+    if (teamSelected.size === 0) return;
+    if (!sendEveryone && sendGroupIds.size === 0) {
+      actions.setMessage("Pick at least one group, or choose Everyone.");
+      return;
+    }
+    setSending(true);
+    const json = await actions.postAction({
+      action: "publish_media",
+      mediaIds: [...teamSelected],
+      everyone: sendEveryone,
+      groupIds: sendEveryone ? [] : [...sendGroupIds],
+    });
+    setSending(false);
+    if (!json) return;
+    const count = (json as { sent?: number }).sent ?? teamSelected.size;
+    setTeamSelected(new Set());
+    setSendGroupIds(new Set());
+    setSendEveryone(false);
+    actions.setMessage(`Sent ${count} photo${count === 1 ? "" : "s"} to guests.`);
+    await actions.load(selectedEventId);
+  }
+
+  async function unsendTeamPhotos() {
+    if (sentSelected.size === 0) return;
+    setUnsending(true);
+    const json = await actions.postAction({
+      action: "unpublish_media",
+      mediaIds: [...sentSelected],
+    });
+    setUnsending(false);
+    if (!json) return;
+    setSentSelected(new Set());
+    actions.setMessage("Returned to the Main gallery.");
+    await actions.load(selectedEventId);
+  }
+
   const filteredMediaItems = useMemo(() => {
     return data.media
+      .filter((item) => item.kind !== "team_photo")
       .filter((item) => mediaFilter === "all" || item.kind === mediaFilter)
       .map((item) => mapAdminMediaItem(item, data.guests, data.sessions))
       .filter((item): item is MediaItem => Boolean(item));
@@ -183,6 +258,119 @@ export function MediaTab({
 
   return (
     <>
+      <AdminPanel
+        title="Main gallery — from the photo team"
+        description="Photos your team uploaded. Guests can’t see these until you send them to a group or to everyone."
+      >
+        {stagedTeamPhotos.length === 0 ? (
+          <p className="text-sm text-pine">
+            No photos waiting. Anything your photo team uploads shows up here first.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <MediaGrid
+              items={stagedTeamPhotos.map(toMediaItem)}
+              selectable
+              selectedIds={teamSelected}
+              onToggleSelect={(id) =>
+                setTeamSelected((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                })
+              }
+              onRemove={deleteMedia}
+              showCaptions={false}
+            />
+            <div className="rounded-xl border border-[color:var(--line)] bg-white p-4">
+              <p className="text-sm font-medium text-ink">
+                Send {teamSelected.size} selected {teamSelected.size === 1 ? "photo" : "photos"} to…
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <label className="flex items-center gap-2 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    checked={sendEveryone}
+                    onChange={(e) => setSendEveryone(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Everyone
+                </label>
+                {!sendEveryone
+                  ? groups.map((group) => (
+                      <label key={group._id} className="flex items-center gap-2 text-sm text-ink">
+                        <input
+                          type="checkbox"
+                          checked={sendGroupIds.has(group._id)}
+                          onChange={(e) =>
+                            setSendGroupIds((prev) => {
+                              const next = new Set(prev);
+                              if (e.target.checked) next.add(group._id);
+                              else next.delete(group._id);
+                              return next;
+                            })
+                          }
+                          className="h-4 w-4"
+                        />
+                        {group.name}
+                      </label>
+                    ))
+                  : null}
+                {!sendEveryone && groups.length === 0 ? (
+                  <span className="text-sm text-pine">
+                    No groups yet — create some on the Groups tab, or send to Everyone.
+                  </span>
+                ) : null}
+              </div>
+              <AdminButton
+                variant="primary"
+                className="mt-4"
+                disabled={
+                  sending ||
+                  teamSelected.size === 0 ||
+                  (!sendEveryone && sendGroupIds.size === 0)
+                }
+                onClick={sendTeamPhotos}
+              >
+                {sending ? "Sending…" : `Send ${teamSelected.size || ""} to guests`.trim()}
+              </AdminButton>
+            </div>
+          </div>
+        )}
+      </AdminPanel>
+
+      {sentTeamPhotos.length ? (
+        <AdminPanel
+          title="Sent team photos"
+          description="Already visible to the audience shown on each photo. Select and return them to the Main gallery to hide them again."
+        >
+          <div className="space-y-4">
+            <MediaGrid
+              items={sentTeamPhotos.map((item) => ({
+                ...toMediaItem(item),
+                title: audienceLabel(item),
+              }))}
+              selectable
+              selectedIds={sentSelected}
+              onToggleSelect={(id) =>
+                setSentSelected((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(id)) next.delete(id);
+                  else next.add(id);
+                  return next;
+                })
+              }
+            />
+            {sentSelected.size > 0 ? (
+              <AdminButton variant="secondary" disabled={unsending} onClick={unsendTeamPhotos}>
+                {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
+              </AdminButton>
+            ) : null}
+          </div>
+        </AdminPanel>
+      ) : null}
+
       <AdminPanel
         title="Media library"
         description={`${data.media.length} file${data.media.length === 1 ? "" : "s"} for this event`}

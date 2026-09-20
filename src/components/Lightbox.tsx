@@ -7,13 +7,14 @@ type LightboxProps = {
   images: { src: string; alt: string }[];
   startIndex?: number;
   onClose: () => void;
+  allowDownload?: boolean;
 };
 
 function downloadUrl(src: string) {
   return `${src}${src.includes("?") ? "&" : "?"}download=1`;
 }
 
-export function Lightbox({ images, startIndex = 0, onClose }: LightboxProps) {
+export function Lightbox({ images, startIndex = 0, onClose, allowDownload = true }: LightboxProps) {
   const [index, setIndex] = useState(startIndex);
   const image = images[index];
   const dialogRef = useDialog(true, onClose);
@@ -94,12 +95,14 @@ export function Lightbox({ images, startIndex = 0, onClose }: LightboxProps) {
               </button>
             </>
           ) : null}
-          <a
-            href={downloadUrl(image.src)}
-            className="rounded-full bg-white/15 px-4 py-2 text-sm transition hover:bg-white/25"
-          >
-            Download photo
-          </a>
+          {allowDownload ? (
+            <a
+              href={downloadUrl(image.src)}
+              className="rounded-full bg-white/15 px-4 py-2 text-sm transition hover:bg-white/25"
+            >
+              Download photo
+            </a>
+          ) : null}
         </div>
       </div>
     </div>

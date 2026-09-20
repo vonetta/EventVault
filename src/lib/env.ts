@@ -18,5 +18,17 @@ export function assertProductionSecrets() {
     throw new Error("ADMIN_PASSWORD must be at least 12 characters in production");
   }
 
+  // Team uploads are optional; when enabled they need the same password hygiene
+  // as admin, and must not reuse the admin password (they grant different access).
+  const uploaderPassword = process.env.UPLOADER_PASSWORD?.trim();
+  if (uploaderPassword) {
+    if (uploaderPassword.length < 12) {
+      throw new Error("UPLOADER_PASSWORD must be at least 12 characters in production");
+    }
+    if (uploaderPassword === adminPassword) {
+      throw new Error("UPLOADER_PASSWORD must be different from ADMIN_PASSWORD");
+    }
+  }
+
   requireProductionAppUrl();
 }
