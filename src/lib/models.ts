@@ -39,10 +39,11 @@ const GroupSchema = new Schema(
     eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
     name: { type: String, required: true },
     sortOrder: { type: Number, default: 0 },
+    // Shared vault login for the whole group — one code to email everyone.
+    loginCode: { type: String, index: true },
   },
   { timestamps: true },
 );
-
 const GuestSchema = new Schema(
   {
     eventId: { type: Schema.Types.ObjectId, ref: "Event", required: true, index: true },
@@ -53,6 +54,13 @@ const GuestSchema = new Schema(
     sessionVersion: { type: Number, default: 0 },
     // Group membership drives which curated team photos this guest can see.
     groupIds: { type: [{ type: Schema.Types.ObjectId, ref: "Group" }], default: [] },
+    // When set, this guest is the shared login identity for that group (not a person).
+    sharedGroupId: {
+      type: Schema.Types.ObjectId,
+      ref: "Group",
+      default: null,
+      index: true,
+    },
     // Paywall: individual (personal) photos unlock for full-size view + download
     // only after this guest pays (Zelle → admin marks paid). Free galleries are unaffected.
     personalPhotosPaid: { type: Boolean, default: false },
@@ -158,6 +166,8 @@ const FaceProfileSchema = new Schema(
 FaceProfileSchema.index({ eventId: 1, guestId: 1 }, { unique: true });
 
 GuestSchema.index({ eventId: 1, email: 1 });
+GuestSchema.index({ sharedGroupId: 1 }, { unique: true, sparse: true });
+GroupSchema.index({ loginCode: 1 }, { unique: true, sparse: true });
 MediaSchema.index({ eventId: 1, kind: 1 });
 MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
 MediaSchema.index({ eventId: 1, taggedGuestIds: 1 });

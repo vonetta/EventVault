@@ -45,16 +45,22 @@ export function GuestsTab({
   const [renamingGuestId, setRenamingGuestId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  // Shared group logins live on the Groups tab — keep them out of the people list.
+  const peopleGuests = useMemo(
+    () => data.guests.filter((guest) => !guest.isSharedLogin),
+    [data.guests],
+  );
+
   const filteredGuests = useMemo(() => {
-    if (!guestSearch.trim()) return data.guests;
+    if (!guestSearch.trim()) return peopleGuests;
     const q = guestSearch.toLowerCase();
-    return data.guests.filter(
+    return peopleGuests.filter(
       (g) =>
         g.name.toLowerCase().includes(q) ||
         g.email?.toLowerCase().includes(q) ||
         g.ticketCode.toLowerCase().includes(q),
     );
-  }, [data.guests, guestSearch]);
+  }, [peopleGuests, guestSearch]);
 
   async function importGuests(event: FormEvent) {
     event.preventDefault();
@@ -94,8 +100,8 @@ export function GuestsTab({
   }
 
   async function copyCodes() {
-    if (!data.guests.length) return;
-    const text = data.guests
+    if (!peopleGuests.length) return;
+    const text = peopleGuests
       .map((g) => `${g.name}\t${g.tier}\t${g.ticketCode}\t${g.email || ""}`)
       .join("\n");
     await navigator.clipboard.writeText(text);
@@ -160,8 +166,8 @@ export function GuestsTab({
   }
 
   const pendingZelle = useMemo(
-    () => data.guests.filter((guest) => guest.zellePaymentPending),
-    [data.guests],
+    () => peopleGuests.filter((guest) => guest.zellePaymentPending),
+    [peopleGuests],
   );
 
   async function previewGuest(guestId: string) {
@@ -206,7 +212,7 @@ export function GuestsTab({
         }}
       />
 
-      <HowTo title="How to import guests" defaultOpen={!data.guests.length}>
+      <HowTo title="How to import guests" defaultOpen={!peopleGuests.length}>
         <p>Paste one person per line, then click <strong>Import guests</strong>.</p>
         <pre className="overflow-x-auto rounded-xl bg-white/80 p-3 font-mono text-xs text-ink">
 {`Jane Doe, jane@email.com, vip
@@ -216,6 +222,10 @@ John Smith, john@email.com, standard`}
           VIP guests include personal photos and speaker sessions. Standard guests unlock those
           with Zelle (Mark paid after you confirm payment). Every guest sees the event gallery and
           group gallery. Use <strong>View vault</strong> to check what someone will see.
+        </p>
+        <p>
+          Shared group login codes (one code for a whole family/table) are on the{" "}
+          <strong>Groups</strong> tab — they are not listed here.
         </p>
       </HowTo>
 
@@ -285,10 +295,10 @@ John Smith, john@email.com, standard`}
       ) : null}
 
       <AdminPanel
-        title={`Guest list (${data.guests.length})`}
-        description="Preview what each guest sees with View vault. Mark paid after you receive their Zelle."
+        title={`Guest list (${peopleGuests.length})`}
+        description="Preview what each guest sees with View vault. Mark paid after you receive their Zelle. Group shared logins are on the Groups tab."
         action={
-          data.guests.length > 5 ? (
+          peopleGuests.length > 5 ? (
             <AdminField label="Search guests" className="min-w-[14rem]">
               <input
                 value={guestSearch}

@@ -409,6 +409,10 @@ export function MediaTab({
           to Everyone or a group. Tagging alone puts a photo in that guest’s Your photos — Send is
           what fills the shared group gallery.
         </p>
+        <p>
+          Fix a typo on a tagged name: open <strong>Tag people</strong> on a photo → tap{" "}
+          <strong>Rename</strong> on the name chip. It updates that person on every photo.
+        </p>
       </HowTo>
 
       <AdminPanel

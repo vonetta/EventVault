@@ -4,6 +4,11 @@ import { isAdminAuthenticated, unauthorized, assertSameOrigin } from "@/lib/auth
 import { logAdminAction } from "@/lib/audit";
 import { AuditLog, Day, Event, Group, Guest, Media, Session } from "@/lib/models";
 import { createTicketCode } from "@/lib/tickets";
+import {
+  deleteGroupSharedLogin,
+  ensureGroupSharedLogin,
+  regenerateGroupLoginCode,
+} from "@/lib/group-login";
 import { adminActionSchema } from "@/lib/validate";
 import { emailConfigured, getEmailConfigStatus, sendTicketEmail } from "@/lib/email";
 import { deleteStoredObject } from "@/lib/storage";
@@ -99,12 +104,24 @@ export async function GET(request: Request) {
     Group.find({ eventId: event._id }).sort({ sortOrder: 1, createdAt: 1 }),
   ]);
 
+  // Backfill shared login codes for older groups (one code to email the whole group).
+  let didBackfill = false;
+  for (const group of groups) {
+    if (!group.loginCode) {
+      await ensureGroupSharedLogin(group);
+      didBackfill = true;
+    }
+  }
+  const guestsFresh = didBackfill
+    ? await Guest.find({ eventId: event._id }).sort({ name: 1 })
+    : guests;
+
   return NextResponse.json({
     event,
     events,
     days,
     sessions,
-    guests: guests.map((guest) => ({
+    guests: guestsFresh.map((guest) => ({
       _id: guest._id,
       name: guest.name,
       email: guest.email,
@@ -113,11 +130,14 @@ export async function GET(request: Request) {
       groupIds: (guest.groupIds || []).map((id) => String(id)),
       personalPhotosPaid: Boolean(guest.personalPhotosPaid),
       zellePaymentPending: Boolean(guest.zellePaymentPending) && !guest.personalPhotosPaid,
+      isSharedLogin: Boolean(guest.sharedGroupId),
+      sharedGroupId: guest.sharedGroupId ? String(guest.sharedGroupId) : null,
     })),
     groups: groups.map((group) => ({
       _id: String(group._id),
       name: group.name,
       sortOrder: group.sortOrder,
+      loginCode: group.loginCode || "",
     })),
     media: media.map((item) => ({
       _id: item._id,
@@ -167,6 +187,7 @@ export async function POST(request: Request) {
     "delete_guest",
     "delete_media",
     "regenerate_code",
+    "regenerate_group_code",
     "import_guests",
     "email_ticket",
     "sync_days",
@@ -447,10 +468,17 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "delete_guest") {
-    const guest = await Guest.findByIdAndDelete(body.guestId);
+    const guest = await Guest.findById(body.guestId);
     if (!guest) {
       return NextResponse.json({ error: "Guest not found" }, { status: 404 });
     }
+    if (guest.sharedGroupId) {
+      return NextResponse.json(
+        { error: "Delete the group instead — shared logins are managed on the Groups tab" },
+        { status: 400 },
+      );
+    }
+    await Guest.deleteOne({ _id: guest._id });
     await Media.updateMany({ guestId: guest._id }, { $set: { guestId: null } });
     await Media.updateMany(
       { taggedGuestIds: guest._id },
@@ -466,6 +494,12 @@ export async function POST(request: Request) {
     const guest = await Guest.findById(body.guestId);
     if (!guest) {
       return NextResponse.json({ error: "Guest not found" }, { status: 404 });
+    }
+    if (guest.sharedGroupId) {
+      return NextResponse.json(
+        { error: "Use New code on the Groups tab for shared group logins" },
+        { status: 400 },
+      );
     }
     guest.ticketCode = await uniqueTicketCode();
     guest.sessionVersion = (guest.sessionVersion ?? 0) + 1;
@@ -678,9 +712,15 @@ export async function POST(request: Request) {
       name: body.name.trim(),
       sortOrder: count,
     });
-    await logAdminAction(request, "create_group", { name: group.name });
+    const { loginCode } = await ensureGroupSharedLogin(group);
+    await logAdminAction(request, "create_group", { name: group.name, loginCode });
     return NextResponse.json({
-      group: { _id: String(group._id), name: group.name, sortOrder: group.sortOrder },
+      group: {
+        _id: String(group._id),
+        name: group.name,
+        sortOrder: group.sortOrder,
+        loginCode,
+      },
     });
   }
 
@@ -691,8 +731,14 @@ export async function POST(request: Request) {
     }
     group.name = body.name.trim();
     await group.save();
+    await ensureGroupSharedLogin(group);
     return NextResponse.json({
-      group: { _id: String(group._id), name: group.name, sortOrder: group.sortOrder },
+      group: {
+        _id: String(group._id),
+        name: group.name,
+        sortOrder: group.sortOrder,
+        loginCode: group.loginCode || "",
+      },
     });
   }
 
@@ -701,6 +747,7 @@ export async function POST(request: Request) {
     if (!group) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
+    await deleteGroupSharedLogin(String(group._id));
     await Guest.updateMany(
       { eventId: group.eventId },
       { $pull: { groupIds: group._id } },
@@ -719,10 +766,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  if (body.action === "regenerate_group_code") {
+    const group = await Group.findById(body.groupId);
+    if (!group) {
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+    }
+    const loginCode = await regenerateGroupLoginCode(group);
+    await logAdminAction(request, "regenerate_group_code", {
+      groupId: String(group._id),
+      name: group.name,
+    });
+    return NextResponse.json({
+      group: {
+        _id: String(group._id),
+        name: group.name,
+        sortOrder: group.sortOrder,
+        loginCode,
+      },
+    });
+  }
+
   if (body.action === "set_guest_groups") {
     const guest = await Guest.findById(body.guestId);
     if (!guest) {
       return NextResponse.json({ error: "Guest not found" }, { status: 404 });
+    }
+    if (guest.sharedGroupId) {
+      return NextResponse.json(
+        { error: "Shared group logins are managed on the Groups tab" },
+        { status: 400 },
+      );
     }
     const validGroups = await Group.find({
       _id: { $in: body.groupIds },
