@@ -15,7 +15,9 @@ export async function POST(request: Request) {
     return unauthorized();
   }
 
-  const limited = await rateLimit(`uploader-upload:${clientIp(request)}`, 120, 60_000);
+  // Authenticated team uploads routinely batch 1000+ shots. Allow a high burst
+  // per IP (concurrent client workers + retries) without opening anonymous abuse.
+  const limited = await rateLimit(`uploader-upload:${clientIp(request)}`, 900, 60_000);
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many uploads. Try again shortly." },

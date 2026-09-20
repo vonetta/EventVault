@@ -10,6 +10,10 @@ import {
 } from "@/lib/face-client";
 import type { FaceLabeledProfile } from "@/lib/face-match";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
+import { mapPool } from "@/lib/photo-quality";
+
+const SCAN_CONCURRENCY = 2;
+const APPLY_CHUNK = 200;
 
 type GalleryPhoto = {
   id: string;
@@ -217,46 +221,52 @@ export function FaceAssistPanel({
     setScanning(true);
     setHits([]);
     setScanProgress({ done: 0, total: targets.length });
-    const nextHits: ScanHit[] = [];
 
-    for (let i = 0; i < targets.length; i++) {
-      const photo = targets[i];
-      setScanProgress({ done: i, total: targets.length });
-      try {
-        const detected = await detectFacesInImage(photo.url);
-        const matched = new Map<string, number>();
-        for (const face of detected) {
-          const hit = bestMatch(face.descriptor, profiles, 0.55);
-          if (!hit) continue;
-          const prev = matched.get(hit.guestId);
-          if (prev === undefined || hit.distance < prev) {
-            matched.set(hit.guestId, hit.distance);
+    const results = await mapPool(
+      targets,
+      SCAN_CONCURRENCY,
+      async (photo) => {
+        try {
+          const detected = await detectFacesInImage(photo.url);
+          const matched = new Map<string, number>();
+          for (const face of detected) {
+            const hit = bestMatch(face.descriptor, profiles, 0.55);
+            if (!hit) continue;
+            const prev = matched.get(hit.guestId);
+            if (prev === undefined || hit.distance < prev) {
+              matched.set(hit.guestId, hit.distance);
+            }
           }
+          if (!matched.size) return null;
+
+          // Skip if this photo already has exactly these tags.
+          const guestIds = [...matched.keys()];
+          const already = new Set(photo.taggedGuestIds);
+          if (guestIds.every((id) => already.has(id)) && guestIds.length === already.size) {
+            return null;
+          }
+
+          return {
+            mediaId: photo.id,
+            title: photo.title,
+            url: photo.url,
+            guestIds,
+            names: guestIds.map((id) => guestName(id)),
+            distances: guestIds.map((id) => matched.get(id) || 1),
+            selected: true,
+          } as ScanHit;
+        } catch {
+          // Skip failed images and continue the batch.
+          return null;
         }
-        if (!matched.size) continue;
+      },
+      (done, total) => {
+        setScanProgress({ done, total });
+      },
+    );
 
-        // Skip if this photo already has exactly these tags.
-        const guestIds = [...matched.keys()];
-        const already = new Set(photo.taggedGuestIds);
-        if (guestIds.every((id) => already.has(id)) && guestIds.length === already.size) {
-          continue;
-        }
-
-        nextHits.push({
-          mediaId: photo.id,
-          title: photo.title,
-          url: photo.url,
-          guestIds,
-          names: guestIds.map((id) => guestName(id)),
-          distances: guestIds.map((id) => matched.get(id) || 1),
-          selected: true,
-        });
-        setHits([...nextHits]);
-      } catch {
-        // Skip failed images and continue the batch.
-      }
-    }
-
+    const nextHits = results.filter((hit): hit is ScanHit => hit !== null);
+    setHits(nextHits);
     setScanProgress({ done: targets.length, total: targets.length });
     setScanning(false);
     onMessage(
@@ -274,23 +284,26 @@ export function FaceAssistPanel({
     }
     setApplying(true);
     try {
-      const res = await fetch("/api/uploader/faces/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId,
-          updates: selected.map((hit) => ({
-            mediaId: hit.mediaId,
-            guestIds: hit.guestIds,
-          })),
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        onMessage(json.error || "Could not apply tags");
-        return;
+      const updates = selected.map((hit) => ({
+        mediaId: hit.mediaId,
+        guestIds: hit.guestIds,
+      }));
+      let photosTagged = 0;
+      for (let i = 0; i < updates.length; i += APPLY_CHUNK) {
+        const chunk = updates.slice(i, i + APPLY_CHUNK);
+        const res = await fetch("/api/uploader/faces/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventId, updates: chunk }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          onMessage(json.error || "Could not apply tags");
+          return;
+        }
+        photosTagged += Number(json.photos) || 0;
       }
-      onMessage(`Tagged ${json.photos} photo${json.photos === 1 ? "" : "s"}.`);
+      onMessage(`Tagged ${photosTagged} photo${photosTagged === 1 ? "" : "s"}.`);
       setHits([]);
       await onPhotosChanged();
     } finally {

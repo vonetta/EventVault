@@ -21,7 +21,7 @@ const applySchema = z.object({
       }),
     )
     .min(1)
-    .max(500),
+    .max(2000),
   /** When true, replace tags; default merges with existing tags. */
   replace: z.boolean().optional(),
 });
