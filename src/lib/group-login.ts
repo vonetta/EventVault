@@ -23,8 +23,8 @@ export async function ensureGroupSharedLogin(group: GroupDoc) {
 
   if (!loginCode) {
     loginCode = shared?.ticketCode || (await uniqueGroupLoginCode());
+    await Group.updateOne({ _id: group._id }, { $set: { loginCode } });
     group.loginCode = loginCode;
-    await group.save();
   }
 
   if (!shared) {
@@ -61,8 +61,8 @@ export async function ensureGroupSharedLogin(group: GroupDoc) {
 
 export async function regenerateGroupLoginCode(group: GroupDoc) {
   const loginCode = await uniqueGroupLoginCode();
+  await Group.updateOne({ _id: group._id }, { $set: { loginCode } });
   group.loginCode = loginCode;
-  await group.save();
 
   const shared = await Guest.findOne({ sharedGroupId: group._id });
   if (shared) {
