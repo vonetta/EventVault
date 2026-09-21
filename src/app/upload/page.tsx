@@ -724,7 +724,7 @@ export default function UploadPage() {
         <li>
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
-            Group-photo AI finds multi-person shots for Everyone; face tagging is for personal
+            Group-photo AI finds multi-person shots for Whole event; face tagging is for personal
             galleries only. Typo? Open <span className="font-medium text-ink">Tag people</span> →
             tap the black <span className="font-medium text-ink">Fix spelling</span> button under
             the name.

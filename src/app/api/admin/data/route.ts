@@ -9,6 +9,10 @@ import {
   ensureGroupSharedLogin,
   regenerateGroupLoginCode,
 } from "@/lib/group-login";
+import {
+  consolidateGroupIntoEvent,
+  recompressEventPhotosBatch,
+} from "@/lib/consolidate-galleries";
 import { adminActionSchema } from "@/lib/validate";
 import { emailConfigured, getEmailConfigStatus, sendTicketEmail } from "@/lib/email";
 import { deleteStoredObject } from "@/lib/storage";
@@ -191,6 +195,8 @@ export async function POST(request: Request) {
     "import_guests",
     "email_ticket",
     "sync_days",
+    "consolidate_galleries",
+    "recompress_media",
   ]);
   if (sensitiveActions.has(body.action)) {
     const limited = await rateLimit(`admin-action:${clientIp(request)}`, 80, 60_000);
@@ -809,15 +815,7 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "publish_media") {
-    const everyone = Boolean(body.everyone);
-    const groupIds = everyone ? [] : body.groupIds || [];
-    if (!everyone && groupIds.length === 0) {
-      return NextResponse.json(
-        { error: "Pick at least one group, or send to everyone" },
-        { status: 400 },
-      );
-    }
-
+    // Whole-event album + tags only — publishing lands in event_photo.
     const media = await Media.find({ _id: { $in: body.mediaIds }, kind: "team_photo" });
     if (!media.length) {
       return NextResponse.json({ error: "No team photos to send" }, { status: 400 });
@@ -831,32 +829,40 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const eventId = media[0].eventId;
-    const validGroupIds = everyone
-      ? []
-      : (
-          await Group.find({ _id: { $in: groupIds }, eventId }).select("_id")
-        ).map((group) => group._id);
-    if (!everyone && validGroupIds.length === 0) {
-      return NextResponse.json({ error: "Those groups were not found" }, { status: 400 });
-    }
 
     await Media.updateMany(
       { _id: { $in: media.map((item) => item._id) }, kind: "team_photo" },
-      { $set: { published: true, everyone, groupIds: validGroupIds } },
+      {
+        $set: {
+          kind: "event_photo",
+          published: true,
+          everyone: true,
+          groupIds: [],
+        },
+      },
     );
     await logAdminAction(request, "publish_media", {
       count: media.length,
-      everyone,
-      groups: validGroupIds.length,
+      everyone: true,
+      asEventPhoto: true,
     });
     return NextResponse.json({ ok: true, sent: media.length });
   }
 
   if (body.action === "unpublish_media") {
     await Media.updateMany(
-      { _id: { $in: body.mediaIds }, kind: "team_photo" },
-      { $set: { published: false, everyone: false, groupIds: [] } },
+      {
+        _id: { $in: body.mediaIds },
+        kind: { $in: ["team_photo", "event_photo"] },
+      },
+      {
+        $set: {
+          kind: "team_photo",
+          published: false,
+          everyone: false,
+          groupIds: [],
+        },
+      },
     );
     await logAdminAction(request, "unpublish_media", { count: body.mediaIds.length });
     return NextResponse.json({ ok: true });
@@ -983,6 +989,32 @@ export async function POST(request: Request) {
         zellePaymentPending: false,
       },
     });
+  }
+
+  if (body.action === "consolidate_galleries") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    const result = await consolidateGroupIntoEvent(String(event._id));
+    await logAdminAction(request, "consolidate_galleries", {
+      eventId: String(event._id),
+      ...result,
+    });
+    return NextResponse.json({ ok: true, ...result });
+  }
+
+  if (body.action === "recompress_media") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    const result = await recompressEventPhotosBatch(String(event._id), body.limit ?? 20);
+    await logAdminAction(request, "recompress_media", {
+      eventId: String(event._id),
+      ...result,
+    });
+    return NextResponse.json({ ok: true, ...result });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

@@ -16,7 +16,7 @@ const SLIDES: {
     body: [
       "Guests open a private media vault with a ticket code. No passwords for guests.",
       "VIP guests see personal photos, speaker sessions, and the galleries.",
-      "Standard guests see the event gallery and group gallery.",
+      "Standard guests see the free whole-event album (and Photos of you if tagged).",
     ],
   },
   {

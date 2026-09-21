@@ -54,9 +54,20 @@ export function resolveLocalPath(storageKey: string) {
 }
 
 export async function storeFile(file: File, folder: string): Promise<StoredObject> {
-  const ext = path.extname(file.name).toLowerCase() || "";
-  const storageKey = `${folder}/${randomUUID()}${ext}`;
   const bytes = Buffer.from(await file.arrayBuffer());
+  return storeBytes(bytes, folder, file.name, file.type || "application/octet-stream");
+}
+
+/** Store raw bytes (used after server-side compression). */
+export async function storeBytes(
+  bytes: Buffer,
+  folder: string,
+  filename: string,
+  contentType: string,
+  forcedKey?: string,
+): Promise<StoredObject> {
+  const ext = path.extname(filename).toLowerCase() || "";
+  const storageKey = forcedKey || `${folder}/${randomUUID()}${ext}`;
 
   if (r2Configured()) {
     await r2Client().send(
@@ -64,7 +75,7 @@ export async function storeFile(file: File, folder: string): Promise<StoredObjec
         Bucket: process.env.R2_BUCKET_NAME!,
         Key: storageKey,
         Body: bytes,
-        ContentType: file.type || "application/octet-stream",
+        ContentType: contentType || "application/octet-stream",
       }),
     );
     return { storageKey, storageProvider: "r2" };

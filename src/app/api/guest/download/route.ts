@@ -7,7 +7,6 @@ import { unauthorized, assertSameOrigin } from "@/lib/auth";
 import { Event, Media, type MediaDoc } from "@/lib/models";
 import { openStoredObjectStream } from "@/lib/storage";
 import { resolveGuestSession } from "@/lib/guest-session";
-import { guestCanSeeTeamPhoto } from "@/lib/media-access";
 import { findIndividualPhotos } from "@/lib/individual-photos";
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
@@ -103,30 +102,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
 
-  const groupPhotos = await Media.find({
-    eventId: guest.eventId,
-    kind: "group_photo",
-    needsEditing: { $ne: true },
-  }).sort({ createdAt: -1 });
-
   const eventPhotos = await Media.find({
     eventId: guest.eventId,
-    kind: "event_photo",
+    kind: { $in: ["event_photo", "group_photo"] },
     needsEditing: { $ne: true },
   }).sort({ createdAt: -1 });
 
-  const guestGroupIds = (guest.groupIds || []).map((id) => String(id));
   const guestId = String(guest._id);
-  const teamPhotos = (
-    await Media.find({
-      eventId: guest.eventId,
-      kind: "team_photo",
-      published: true,
-      needsEditing: { $ne: true },
-    }).sort({ createdAt: -1 })
-  ).filter(
+  const eventForZip = eventPhotos.filter(
     (item) =>
-      guestCanSeeTeamPhoto(item, guestGroupIds) &&
+      isMediaAvailable(item.availableUntil) &&
       !(item.taggedGuestIds || []).some((id) => String(id) === guestId),
   );
 
@@ -138,10 +123,8 @@ export async function GET(request: Request) {
 
   const used = new Set<string>();
   const entries: ZipEntry[] = [];
-  await collectZipEntries(eventPhotos, "event-gallery", used, entries);
-  await collectZipEntries(groupPhotos, "group-gallery", used, entries);
-  await collectZipEntries(teamPhotos, "group-gallery", used, entries);
-  await collectZipEntries(personalPhotos, "personal", used, entries);
+  await collectZipEntries(eventForZip, "whole-event", used, entries);
+  await collectZipEntries(personalPhotos, "photos-of-you", used, entries);
 
   if (!entries.length) {
     return NextResponse.json(

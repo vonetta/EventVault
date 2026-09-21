@@ -192,6 +192,15 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     guestId: objectIdSchema,
     paid: z.boolean(),
   }),
+  z.object({
+    action: z.literal("consolidate_galleries"),
+    eventId: objectIdSchema,
+  }),
+  z.object({
+    action: z.literal("recompress_media"),
+    eventId: objectIdSchema,
+    limit: z.number().int().min(1).max(50).optional(),
+  }),
 ]);
 
 export const uploaderUpdateMediaSchema = z.object({

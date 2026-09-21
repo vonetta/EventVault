@@ -91,10 +91,8 @@ export function MediaTab({
   const [selectedMediaIds, setSelectedMediaIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  // Main gallery curation (staged team photos -> groups/everyone)
+  // Main gallery curation (staged team photos -> whole-event album)
   const [teamSelected, setTeamSelected] = useState<Set<string>>(new Set());
-  const [sendEveryone, setSendEveryone] = useState(false);
-  const [sendGroupIds, setSendGroupIds] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [sentSelected, setSentSelected] = useState<Set<string>>(new Set());
   const [unsending, setUnsending] = useState(false);
@@ -105,9 +103,8 @@ export function MediaTab({
   const [stagedVisibleCount, setStagedVisibleCount] = useState(60);
   const [sentVisibleCount, setSentVisibleCount] = useState(60);
   const [editingVisibleCount, setEditingVisibleCount] = useState(60);
-
-  const groups = data.groups || [];
-
+  const [consolidating, setConsolidating] = useState(false);
+  const [recompressing, setRecompressing] = useState(false);
   const nameOnlyGuests: NameOnlyGuest[] = useMemo(
     () =>
       data.guests
@@ -133,7 +130,10 @@ export function MediaTab({
     [data.media],
   );
   const sentTeamPhotos = useMemo(
-    () => data.media.filter((item) => item.kind === "team_photo" && item.published && !item.needsEditing),
+    () =>
+      data.media.filter(
+        (item) => item.kind === "event_photo" && item.published && !item.needsEditing,
+      ),
     [data.media],
   );
 
@@ -194,12 +194,8 @@ export function MediaTab({
     setTeamSelected(new Set());
   }
 
-  function audienceLabel(item: MediaDoc) {
-    if (item.everyone) return "Everyone";
-    const names = (item.groupIds || [])
-      .map((id) => groups.find((group) => group._id === id)?.name)
-      .filter(Boolean);
-    return names.length ? (names.join(", ") as string) : "No one yet";
+  function audienceLabel(_item: MediaDoc) {
+    return "Whole event";
   }
 
   function toMediaItem(item: MediaDoc): MediaItem {
@@ -285,24 +281,20 @@ export function MediaTab({
 
   async function sendTeamPhotos() {
     if (teamSelected.size === 0) return;
-    if (!sendEveryone && sendGroupIds.size === 0) {
-      actions.setMessage("Pick at least one group, or choose Everyone.");
-      return;
-    }
     setSending(true);
     const json = await actions.postAction({
       action: "publish_media",
       mediaIds: [...teamSelected],
-      everyone: sendEveryone,
-      groupIds: sendEveryone ? [] : [...sendGroupIds],
+      everyone: true,
+      groupIds: [],
     });
     setSending(false);
     if (!json) return;
     const count = (json as { sent?: number }).sent ?? teamSelected.size;
     setTeamSelected(new Set());
-    setSendGroupIds(new Set());
-    setSendEveryone(false);
-    actions.setMessage(`Sent ${count} photo${count === 1 ? "" : "s"} to guests.`);
+    actions.setMessage(
+      `Sent ${count} photo${count === 1 ? "" : "s"} to the whole-event album.`,
+    );
     await actions.load(selectedEventId);
   }
 
@@ -317,6 +309,71 @@ export function MediaTab({
     if (!json) return;
     setSentSelected(new Set());
     actions.setMessage("Returned to the Main gallery.");
+    await actions.load(selectedEventId);
+  }
+
+  async function consolidateGalleries() {
+    if (!data.event) return;
+    if (
+      !confirm(
+        "Move older Shared / group album photos into Whole event? Face tags stay. This cannot be undone from here.",
+      )
+    ) {
+      return;
+    }
+    setConsolidating(true);
+    const json = await actions.postAction({
+      action: "consolidate_galleries",
+      eventId: data.event._id,
+    });
+    setConsolidating(false);
+    if (!json) return;
+    const moved =
+      ((json as { groupPhotosMoved?: number }).groupPhotosMoved || 0) +
+      ((json as { teamPhotosMoved?: number }).teamPhotosMoved || 0);
+    actions.setMessage(
+      moved
+        ? `Moved ${moved} photo${moved === 1 ? "" : "s"} into Whole event.`
+        : "Nothing left to move — already in Whole event.",
+    );
+    await actions.load(selectedEventId);
+  }
+
+  async function recompressMedia() {
+    if (!data.event) return;
+    setRecompressing(true);
+    let totalSaved = 0;
+    let totalDone = 0;
+    let rounds = 0;
+    let hasMore = true;
+    while (hasMore && rounds < 25) {
+      rounds += 1;
+      const json = await actions.postAction({
+        action: "recompress_media",
+        eventId: data.event._id,
+        limit: 20,
+      });
+      if (!json) {
+        setRecompressing(false);
+        return;
+      }
+      const batch = json as {
+        recompressed?: number;
+        bytesSaved?: number;
+        hasMore?: boolean;
+      };
+      totalDone += batch.recompressed || 0;
+      totalSaved += batch.bytesSaved || 0;
+      hasMore = Boolean(batch.hasMore);
+      if (!(batch.recompressed || 0)) break;
+    }
+    setRecompressing(false);
+    const mb = (totalSaved / (1024 * 1024)).toFixed(1);
+    actions.setMessage(
+      totalDone
+        ? `Recompressed ${totalDone} photo${totalDone === 1 ? "" : "s"} (about ${mb} MB saved in R2).`
+        : "Photos are already small enough — nothing to recompress.",
+    );
     await actions.load(selectedEventId);
   }
 
@@ -411,15 +468,15 @@ export function MediaTab({
 
   return (
     <>
-      <HowTo title="Same person? Upload here, send groups here" defaultOpen={stagedTeamPhotos.length > 0}>
+      <HowTo title="Same person? Upload here, send to Whole event" defaultOpen={stagedTeamPhotos.length > 0}>
         <p>
           If you shoot and run the vault yourself: dump the weekend on{" "}
           <a href="/upload" className="underline hover:text-ink">
             Photo upload
           </a>
           , clean rejects and tag faces there, then come back to this Media tab to Send ready photos
-          to Everyone or a group. Tagging alone puts a photo in that guest’s Photos of you — Send is
-          what fills Shared with you.
+          to the whole-event album. Tagging alone puts a photo in that guest’s Photos of you — Send
+          is what fills Whole event for everyone.
         </p>
         <p>
           Fix a typo on a tagged name: open <strong>Tag people</strong> (opens a popup with the
@@ -429,8 +486,34 @@ export function MediaTab({
       </HowTo>
 
       <AdminPanel
+        title="Gallery tools"
+        description="One guest album (Whole event + Photos of you). Compress existing R2 files to cut storage cost."
+      >
+        <div className="flex flex-wrap gap-2">
+          <AdminButton
+            variant="secondary"
+            disabled={consolidating || !data.event}
+            onClick={() => void consolidateGalleries()}
+          >
+            {consolidating ? "Moving…" : "Move Shared → Whole event"}
+          </AdminButton>
+          <AdminButton
+            variant="secondary"
+            disabled={recompressing || !data.event}
+            onClick={() => void recompressMedia()}
+          >
+            {recompressing ? "Recompressing…" : "Recompress large photos"}
+          </AdminButton>
+        </div>
+        <p className="mt-3 text-xs text-pine">
+          Recompress rewrites oversized stills to ~1600px JPEG (quality 78). Run after a big upload
+          weekend; safe to click again — already-small files are skipped.
+        </p>
+      </AdminPanel>
+
+      <AdminPanel
         title="Needs editing"
-        description="Not ready for live view. Guests can’t see these, and they can’t be sent to a group until you mark them ready."
+        description="Not ready for live view. Guests can’t see these, and they can’t be sent to Whole event until you mark them ready."
       >
         {needsEditingPhotos.length === 0 ? (
           <p className="text-sm text-pine">Nothing waiting on edits.</p>
@@ -508,7 +591,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Main gallery — ready to send"
-        description="Photos waiting on this event. Guests don’t see them under Shared with you until you Send below. Tagged people can already unlock them under Photos of you."
+        description="Photos waiting on this event. Guests don’t see them under Whole event until you Send below. Tagged people can already unlock them under Photos of you."
       >
         {stagedTeamPhotos.length === 0 ? (
           <p className="text-sm text-pine">
@@ -590,59 +673,21 @@ export function MediaTab({
             <div className="rounded-xl border border-[color:var(--line)] bg-white p-4">
               <p className="text-sm font-medium text-ink">
                 Send {teamSelected.size} selected {teamSelected.size === 1 ? "photo" : "photos"} to
-                groups…
+                Whole event
               </p>
               <p className="mt-1 text-xs text-pine">
-                This is the step that fills the shared guest gallery. Pick Everyone or one/more
-                groups, then Send.
+                Every guest sees these in the free whole-event album. People you tagged still get
+                them under Photos of you.
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <label className="flex items-center gap-2 text-sm text-ink">
-                  <input
-                    type="checkbox"
-                    checked={sendEveryone}
-                    onChange={(e) => setSendEveryone(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  Everyone
-                </label>
-                {!sendEveryone
-                  ? groups.map((group) => (
-                      <label key={group._id} className="flex items-center gap-2 text-sm text-ink">
-                        <input
-                          type="checkbox"
-                          checked={sendGroupIds.has(group._id)}
-                          onChange={(e) =>
-                            setSendGroupIds((prev) => {
-                              const next = new Set(prev);
-                              if (e.target.checked) next.add(group._id);
-                              else next.delete(group._id);
-                              return next;
-                            })
-                          }
-                          className="h-4 w-4"
-                        />
-                        {group.name}
-                      </label>
-                    ))
-                  : null}
-                {!sendEveryone && groups.length === 0 ? (
-                  <span className="text-sm text-pine">
-                    No groups yet — create some on the Groups tab, or send to Everyone.
-                  </span>
-                ) : null}
-              </div>
               <AdminButton
                 variant="primary"
                 className="mt-4"
-                disabled={
-                  sending ||
-                  teamSelected.size === 0 ||
-                  (!sendEveryone && sendGroupIds.size === 0)
-                }
+                disabled={sending || teamSelected.size === 0}
                 onClick={sendTeamPhotos}
               >
-                {sending ? "Sending…" : `Send ${teamSelected.size || ""} to guests`.trim()}
+                {sending
+                  ? "Sending…"
+                  : `Send ${teamSelected.size || ""} to Whole event`.trim()}
               </AdminButton>
             </div>
 
@@ -675,8 +720,8 @@ export function MediaTab({
 
       {sentTeamPhotos.length ? (
         <AdminPanel
-          title="Sent team photos"
-          description="Already visible to the audience shown on each photo. Select and return them to the Main gallery to hide them again."
+          title="In Whole event"
+          description="Already visible to every guest. Select and return them to the Main gallery to hide them again."
         >
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
@@ -751,7 +796,6 @@ export function MediaTab({
                 [
                   ["all", "All"],
                   ["event_photo", "Whole event"],
-                  ["group_photo", "Shared"],
                   ["personal_photo", "Of you"],
                   ["session_video", "Sessions"],
                 ] as const
@@ -834,7 +878,7 @@ export function MediaTab({
         />
       </AdminPanel>
 
-      <AdminPanel title="Upload photos" description="Whole event = every guest. Shared album = optional second album. VIP = Photos of you for one guest.">
+      <AdminPanel title="Upload photos" description="Whole event = every guest. VIP = Photos of you for one guest.">
         <form onSubmit={uploadMedia} className="grid gap-4">
           <AdminField label="Photo type">
             <select
@@ -847,7 +891,6 @@ export function MediaTab({
               className={inputClassName}
             >
               <option value="event_photo">Whole-event photo (every guest)</option>
-              <option value="group_photo">Shared album photo</option>
               <option value="personal_photo">VIP — Photos of you</option>
               <option value="session_video">Session file (fallback)</option>
             </select>

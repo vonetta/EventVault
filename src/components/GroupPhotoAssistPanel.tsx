@@ -126,7 +126,7 @@ export function GroupPhotoAssistPanel({
       }
 
       onMessage(
-        `Published ${sent} group photo${sent === 1 ? "" : "s"} to Everyone — free for all guests.`,
+        `Published ${sent} photo${sent === 1 ? "" : "s"} to Whole event — free for all guests.`,
       );
       setHits((prev) => prev.filter((hit) => !hit.selected));
       await onPhotosChanged();
@@ -139,11 +139,11 @@ export function GroupPhotoAssistPanel({
     <section className="space-y-4 rounded-xl border border-[color:var(--line)] bg-white p-4">
       <div>
         <h2 className="font-[family-name:var(--font-fraunces)] text-xl text-ink">
-          Group photos → Everyone
+          Group photos → Whole event
         </h2>
         <p className="mt-1 text-sm text-pine">
           AI finds shots with several people (no tagging needed). Review the list, then one click
-          makes them free for everyone in the event gallery.
+          puts them in the free whole-event album.
         </p>
       </div>
 

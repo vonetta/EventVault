@@ -1,8 +1,8 @@
-/** Client-side image resize to stay under Vercel's ~4.5MB request limit. */
+/** Client-side image resize before upload — keeps payloads small and R2 cheaper. */
 
-const MAX_BYTES = 3.5 * 1024 * 1024;
-const MAX_DIMENSION = 2048;
-const INITIAL_QUALITY = 0.88;
+const MAX_BYTES = 2.2 * 1024 * 1024;
+const MAX_DIMENSION = 1600;
+const INITIAL_QUALITY = 0.78;
 const MIN_QUALITY = 0.55;
 
 function loadImage(file: File): Promise<HTMLImageElement> {
@@ -43,8 +43,8 @@ function scaledDimensions(width: number, height: number, maxDim: number) {
 }
 
 /**
- * Resize/compress photos before admin upload, and always re-encode stills so
- * EXIF/GPS is stripped. GIFs and non-images are returned unchanged.
+ * Resize/compress photos before upload, and always re-encode stills so
+ * EXIF/GPS is stripped. Prefer JPEG for R2 size. GIFs unchanged.
  */
 export async function resizeImageForUpload(file: File): Promise<File> {
   if (!file.type.startsWith("image/") || file.type === "image/gif") {
@@ -60,21 +60,21 @@ export async function resizeImageForUpload(file: File): Promise<File> {
   if (!ctx) return file;
   ctx.drawImage(img, 0, 0, width, height);
 
-  const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+  // Always JPEG for photos (PNG stays huge in R2).
+  const outputType = "image/jpeg";
   const baseName = file.name.replace(/\.[^.]+$/, "");
 
   let quality = INITIAL_QUALITY;
   let blob = await canvasToBlob(canvas, outputType, quality);
 
   while (blob && blob.size > MAX_BYTES && quality > MIN_QUALITY) {
-    quality -= 0.08;
+    quality -= 0.06;
     blob = await canvasToBlob(canvas, outputType, quality);
   }
 
   if (!blob) return file;
 
-  const ext = outputType === "image/png" ? "png" : "jpg";
-  return new File([blob], `${baseName}.${ext}`, { type: outputType, lastModified: Date.now() });
+  return new File([blob], `${baseName}.jpg`, { type: outputType, lastModified: Date.now() });
 }
 
 export function formatFileSize(bytes: number) {

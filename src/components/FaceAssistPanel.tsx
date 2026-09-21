@@ -360,7 +360,7 @@ export function FaceAssistPanel({
         </h2>
         <p className="mt-1 text-sm text-pine">
           For personal “Your photos” only — name faces on a seed shot and auto-tag lookalikes.
-          Big group shots belong in <span className="text-ink">Group photos → Everyone</span> above
+          Big group shots belong in <span className="text-ink">Group photos → Whole event</span> above
           (no tagging needed).
         </p>
         <p className="mt-1 text-xs text-pine">

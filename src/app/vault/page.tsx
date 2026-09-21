@@ -193,12 +193,11 @@ export default function VaultPage() {
   const zellePending = Boolean(data.zellePaymentPending);
   const zelleReady = Boolean(data.payments?.enabled && zelle?.recipient);
   const eventCount = photoCount(data.eventGallery || []);
-  const groupCount = photoCount(data.groupGallery);
   const downloadablePersonal = personalLocked ? 0 : personalCount;
-  const zipCount = downloadablePersonal + eventCount + groupCount;
+  const zipCount = downloadablePersonal + eventCount;
   const firstName = data.guest.name.trim().split(/\s+/)[0] || data.guest.name;
   const sessionCount = data.days.reduce((sum, day) => sum + day.sessions.length, 0);
-  const showJumpNav = personalCount > 0 || eventCount > 0 || groupCount > 0 || sessionCount > 0;
+  const showJumpNav = personalCount > 0 || eventCount > 0 || sessionCount > 0;
 
   function unlockPanel(kind: "photos" | "sessions") {
     const title =
@@ -311,10 +310,10 @@ export default function VaultPage() {
           <p className="mt-2 text-pine">
             {data.event.name}
             {isVip
-              ? " · Photos of you, sessions, and shared albums"
+              ? " · Photos of you, sessions, and the whole-event album"
               : hasPersonal
-                ? " · Photos of you and shared albums"
-                : " · Shared event albums"}
+                ? " · Photos of you and the whole-event album"
+                : " · Whole-event album"}
           </p>
           {data.event.description ? (
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine">
@@ -371,9 +370,6 @@ export default function VaultPage() {
           <a href="#event-gallery" className="underline-offset-4 hover:underline">
             Whole event{eventCount ? ` (${eventCount})` : ""}
           </a>
-          <a href="#group-gallery" className="underline-offset-4 hover:underline">
-            Shared with you{groupCount ? ` (${groupCount})` : ""}
-          </a>
         </nav>
       ) : null}
 
@@ -396,6 +392,7 @@ export default function VaultPage() {
             showDownload={!personalLocked}
             allowDownload={!personalLocked}
             showCaptions={false}
+            pageSize={24}
             emptyMessage="Photos of you will appear here when they’re ready."
           />
         </section>
@@ -464,36 +461,21 @@ export default function VaultPage() {
           {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
         </h2>
         <p className="text-sm text-pine">
-          Free for every guest — the shared album for the whole weekend. Not personal shots of you.
+          Free for every guest — one album for the whole weekend. Photos tagged to you stay under
+          Photos of you instead.
         </p>
         <MediaGrid
           items={data.eventGallery || []}
           showDownload
           showCaptions={false}
+          pageSize={24}
           emptyMessage="Whole-event photos will appear here after they’re uploaded."
-        />
-      </section>
-
-      <section id="group-gallery" className="space-y-4 scroll-mt-6">
-        <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
-          Shared with you
-          {groupCount ? <span className="ml-2 text-lg text-pine">{groupCount}</span> : null}
-        </h2>
-        <p className="text-sm text-pine">
-          Photos the team sent to your group (family/table), or marked for everyone. Separate from
-          the whole-event album above.
-        </p>
-        <MediaGrid
-          items={data.groupGallery}
-          showDownload
-          showCaptions={false}
-          emptyMessage="Shared photos will appear here after the team sends them."
         />
       </section>
 
       {!isVip ? (
         <p className="text-sm text-pine">
-          Whole-event and shared albums are included with your ticket.
+          The whole-event album is included with your ticket.
           {hasPersonal || hasSessions
             ? " Photos of you and speaker sessions can be unlocked above."
             : ""}

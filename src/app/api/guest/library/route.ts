@@ -6,7 +6,6 @@ import {
 } from "@/lib/auth";
 import { Day, Event, Media, Session } from "@/lib/models";
 import { resolveGuestSession } from "@/lib/guest-session";
-import { guestCanSeeTeamPhoto } from "@/lib/media-access";
 import { findIndividualPhotos } from "@/lib/individual-photos";
 import { mediaProxyUrl } from "@/lib/storage";
 import { zelleConfigured, zellePaymentInfo } from "@/lib/payments";
@@ -94,46 +93,25 @@ export async function GET(request: Request) {
   }
 
   const tier = guest.tier;
-
-  const groupPhotos = await Media.find({
-    eventId: guest.eventId,
-    kind: "group_photo",
-    needsEditing: { $ne: true },
-  }).sort({ createdAt: -1 });
-
-  const eventPhotos = await Media.find({
-    eventId: guest.eventId,
-    kind: "event_photo",
-    needsEditing: { $ne: true },
-  }).sort({ createdAt: -1 });
-
-  // Curated team photos the admin has sent to this guest's group(s) or everyone.
-  // Tagged photos for this guest are withheld here — they appear under "Your photos".
-  const guestGroupIds = (guest.groupIds || []).map((id) => String(id));
   const guestId = String(guest._id);
-  const teamPhotos = await Media.find({
+
+  // Whole-event album (includes former group/team shares after consolidate).
+  // Photos tagged to this guest stay under Photos of you only.
+  const eventPhotoDocs = await Media.find({
     eventId: guest.eventId,
-    kind: "team_photo",
-    published: true,
+    kind: { $in: ["event_photo", "group_photo"] },
     needsEditing: { $ne: true },
   }).sort({ createdAt: -1 });
-  const teamForGuest = teamPhotos.filter(
-    (item) =>
-      isMediaAvailable(item.availableUntil) &&
-      guestCanSeeTeamPhoto(item, guestGroupIds) &&
-      !(item.taggedGuestIds || []).some((id) => String(id) === guestId),
-  );
 
-  const group = [...groupPhotos, ...teamForGuest]
-    .filter((item) => isMediaAvailable(item.availableUntil))
-    .map(mapFileMedia);
-
-  const eventGallery = eventPhotos
-    .filter((item) => isMediaAvailable(item.availableUntil))
+  const eventGallery = eventPhotoDocs
+    .filter(
+      (item) =>
+        isMediaAvailable(item.availableUntil) &&
+        !(item.taggedGuestIds || []).some((id) => String(id) === guestId),
+    )
     .map(mapFileMedia);
 
   const preview = Boolean(session.adminPreview);
-  // VIP includes unlock; others unlock after Zelle is confirmed (or admin preview).
   const paid =
     Boolean(guest.personalPhotosPaid) || guest.tier === "vip" || preview;
 
@@ -178,7 +156,6 @@ export async function GET(request: Request) {
           startsAt: sessionItem.startsAt,
           description: sessionItem.description,
           videoCount: all.length,
-          // Video refs (YouTube embeds / files) are withheld until unlocked.
           videos: paid ? all : [],
         };
       }),
@@ -195,7 +172,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     guest: { name: guest.name, tier },
     event: { name: event.name, description: event.description },
-    groupGallery: group,
+    groupGallery: [],
     eventGallery,
     personalPhotos: personal,
     personalPhotosPaid: paid,
