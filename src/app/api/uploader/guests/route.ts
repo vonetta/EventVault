@@ -27,7 +27,13 @@ export async function GET(request: Request) {
   }
 
   await connectDB();
-  const guests = await Guest.find({ eventId }).select("_id name").sort({ name: 1 }).lean();
+  const guests = await Guest.find({
+    eventId,
+    $or: [{ sharedGroupId: null }, { sharedGroupId: { $exists: false } }],
+  })
+    .select("_id name")
+    .sort({ name: 1 })
+    .lean();
 
   return NextResponse.json(
     {

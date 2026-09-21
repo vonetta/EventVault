@@ -9,6 +9,87 @@ import type { NameOnlyGuest } from "@/lib/guest-name-match";
 import { mapPool } from "@/lib/photo-quality";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
 
+function FixPersonNamePanel({
+  guests,
+  onRename,
+  onMessage,
+}: {
+  guests: NameOnlyGuest[];
+  onRename: (guestId: string, name: string) => Promise<NameOnlyGuest | null>;
+  onMessage: (msg: string) => void;
+}) {
+  const [guestId, setGuestId] = useState("");
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const guest = guests.find((g) => g._id === guestId);
+    setName(guest?.name || "");
+  }, [guestId, guests]);
+
+  async function save() {
+    if (!guestId || !name.trim()) return;
+    setSaving(true);
+    const guest = await onRename(guestId, name.trim());
+    setSaving(false);
+    if (guest) {
+      onMessage(`Renamed to ${guest.name} on every photo.`);
+      setName(guest.name);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-ink bg-white p-4">
+      <h2 className="font-[family-name:var(--font-fraunces)] text-lg text-ink">
+        Fix a person’s name
+      </h2>
+      <p className="mt-1 text-sm text-pine">
+        Pick someone who was tagged with a typo. Saving updates every photo with that tag.
+      </p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+        <label className="block min-w-0 flex-1 text-xs font-medium uppercase tracking-wide text-pine">
+          Person
+          <select
+            value={guestId}
+            onChange={(e) => setGuestId(e.target.value)}
+            className="mt-1 h-10 w-full rounded-lg border border-[color:var(--line)] bg-white px-3 text-sm font-normal normal-case tracking-normal text-ink outline-none focus-visible:border-ink"
+          >
+            <option value="">Select a name…</option>
+            {guests.map((guest) => (
+              <option key={guest._id} value={guest._id}>
+                {guest.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block min-w-0 flex-1 text-xs font-medium uppercase tracking-wide text-pine">
+          Correct spelling
+          <input
+            value={name}
+            disabled={!guestId || saving}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void save();
+              }
+            }}
+            className="mt-1 h-10 w-full rounded-lg border border-[color:var(--line)] bg-white px-3 text-sm font-normal normal-case tracking-normal text-ink outline-none focus-visible:border-ink disabled:opacity-50"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={!guestId || !name.trim() || saving}
+          onClick={() => void save()}
+          className="h-10 shrink-0 rounded-lg bg-ink px-4 text-sm font-medium text-foam disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save name"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 type EventOption = { _id: string; name: string };
 
 type UploadStatus = "pending" | "working" | "done" | "error";
@@ -596,9 +677,9 @@ export default function UploadPage() {
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
             Group-photo AI finds multi-person shots for Everyone; face tagging is for personal
-            galleries only. To fix a typo: open <span className="font-medium text-ink">Tag people</span>{" "}
-            on a photo → tap <span className="font-medium text-ink">Rename</span> on the name chip
-            (updates every photo with that tag).
+            galleries only. Typo? Open <span className="font-medium text-ink">Tag people</span> →
+            tap the black <span className="font-medium text-ink">Fix spelling</span> button under
+            the name.
           </span>
         </li>
         <li>
@@ -821,6 +902,10 @@ export default function UploadPage() {
                 </>
               ) : null}
             </>
+          ) : null}
+
+          {eventId && guests.length > 0 ? (
+            <FixPersonNamePanel guests={guests} onRename={renameGuest} onMessage={setMessage} />
           ) : null}
 
           <section className="border-t border-[color:var(--line)] pt-6">

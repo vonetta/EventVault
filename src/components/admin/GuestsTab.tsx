@@ -382,6 +382,7 @@ John Smith, john@email.com, standard`}
                     <td className="py-3">
                       <div className="flex flex-wrap gap-1.5">
                         <AdminButton
+                          variant="primary"
                           className="!h-8 !px-2 !text-xs"
                           onClick={() => {
                             setRenamingGuestId(guest._id);
@@ -389,10 +390,9 @@ John Smith, john@email.com, standard`}
                           }}
                           aria-label={`Rename ${guest.name}`}
                         >
-                          Rename
+                          Fix spelling
                         </AdminButton>
                         <AdminButton
-                          variant="primary"
                           className="!h-8 !px-3 !text-xs"
                           disabled={previewingGuestId === guest._id}
                           onClick={() => previewGuest(guest._id)}
