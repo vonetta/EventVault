@@ -100,8 +100,11 @@ export async function POST(request: Request) {
     guestId: String(guest._id),
     eventId: String(guest.eventId),
     details: {
-      personalPhotos: personalCount,
-      sessions: sessionCount,
+      summary: `${guest.name} · waiting for payment confirm`,
+      meta: {
+        personalPhotos: personalCount,
+        sessions: sessionCount,
+      },
     },
   });
 

@@ -141,9 +141,12 @@ export async function GET(request: Request) {
     guestId: String(guest._id),
     eventId: String(guest.eventId),
     details: {
-      photoCount: entries.length,
-      wholeEvent: eventForZip.length,
-      photosOfYou: personalPhotos.length,
+      summary: `${guest.name} · ${entries.length} photos`,
+      meta: {
+        photoCount: entries.length,
+        wholeEvent: eventForZip.length,
+        photosOfYou: personalPhotos.length,
+      },
     },
   });
 

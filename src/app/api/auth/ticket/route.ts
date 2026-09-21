@@ -48,7 +48,10 @@ export async function POST(request: Request) {
         action: "guest_login_failed",
         actor: "guest",
         actorName: "Unknown",
-        details: { reason: "invalid_code" },
+        details: {
+          summary: "Wrong ticket code",
+          meta: { reason: "invalid_code" },
+        },
       });
       return NextResponse.json({ error: "Invalid ticket code" }, { status: 401 });
     }
@@ -60,6 +63,7 @@ export async function POST(request: Request) {
     await clearAdminSession();
     await setGuestSession(guestSessionPayload(guest));
 
+    const sharedLogin = Boolean(guest.sharedGroupId);
     await logActivity(request, {
       action: "guest_login",
       actor: "guest",
@@ -67,9 +71,14 @@ export async function POST(request: Request) {
       guestId: String(guest._id),
       eventId: String(guest.eventId),
       details: {
-        tier: guest.tier,
-        sharedLogin: Boolean(guest.sharedGroupId),
-        loginCount: guest.loginCount,
+        summary: sharedLogin
+          ? `${guest.name} · group shared login`
+          : `${guest.name} · ${String(guest.tier).toUpperCase()}`,
+        meta: {
+          tier: guest.tier,
+          sharedLogin,
+          loginCount: guest.loginCount,
+        },
       },
     });
 

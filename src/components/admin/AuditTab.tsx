@@ -63,17 +63,30 @@ function actorTone(actor?: ActivityActor) {
 
 function formatDetails(entry: AuditEntry) {
   const details = entry.details || {};
+  const meta =
+    details.meta && typeof details.meta === "object" && !Array.isArray(details.meta)
+      ? (details.meta as Record<string, unknown>)
+      : {};
+
+  // Prefer a human summary when present (also keeps older Activity UIs readable).
+  if (typeof details.summary === "string" && details.summary.trim()) {
+    return details.summary.trim();
+  }
+
+  const tier = details.tier ?? meta.tier;
+  const sharedLogin = details.sharedLogin ?? meta.sharedLogin;
+  const photoCount = details.photoCount ?? meta.photoCount;
+
   const parts: string[] = [];
 
-  if (entry.action === "guest_download") {
-    const count = details.photoCount;
-    if (typeof count === "number") parts.push(`${count} photos`);
+  if (entry.action === "guest_download" && typeof photoCount === "number") {
+    parts.push(`${photoCount} photos`);
   }
-  if (entry.action === "guest_login" && details.sharedLogin) {
+  if (entry.action === "guest_login" && sharedLogin) {
     parts.push("group shared login");
   }
-  if (entry.action === "guest_login" && details.tier) {
-    parts.push(String(details.tier).toUpperCase());
+  if (entry.action === "guest_login" && tier) {
+    parts.push(String(tier).toUpperCase());
   }
   if (entry.action === "guest_zelle_pending") {
     parts.push("waiting for payment confirm");
@@ -100,51 +113,14 @@ function formatDetails(entry: AuditEntry) {
     parts.push(details.name);
   }
   if (typeof details.title === "string" && details.title) parts.push(details.title);
-  if (details.reason === "invalid_code") parts.push("wrong ticket code");
-  if (details.reason === "incorrect_password") parts.push("wrong password");
-
-  // Fallback: include a few simple scalar fields we haven't already used.
-  const used = new Set([
-    "photoCount",
-    "wholeEvent",
-    "photosOfYou",
-    "sharedLogin",
-    "tier",
-    "loginCount",
-    "personalPhotos",
-    "sessions",
-    "count",
-    "sent",
-    "tags",
-    "recompressed",
-    "scanned",
-    "skipped",
-    "bytesSaved",
-    "hasMore",
-    "groupPhotosMoved",
-    "teamPhotosMoved",
-    "guestName",
-    "name",
-    "title",
-    "reason",
-    "actor",
-    "uploadedByName",
-    "eventId",
-    "mediaId",
-    "mediaIds",
-  ]);
-  for (const [key, value] of Object.entries(details)) {
-    if (used.has(key)) continue;
-    if (value === undefined || value === null || value === "") continue;
-    if (typeof value === "object") continue;
-    if (typeof value === "boolean") {
-      if (value) parts.push(key);
-      continue;
-    }
-    parts.push(String(value));
-    if (parts.length >= 4) break;
+  if (details.reason === "invalid_code" || meta.reason === "invalid_code") {
+    parts.push("wrong ticket code");
+  }
+  if (details.reason === "incorrect_password" || meta.reason === "incorrect_password") {
+    parts.push("wrong password");
   }
 
+  // Never dump leftover raw scalars (booleans, login counts, parallel photo totals).
   return parts.join(" · ");
 }
 
