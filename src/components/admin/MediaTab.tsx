@@ -513,7 +513,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Needs editing"
-        description="Not ready for live view. Guests can’t see these, and they can’t be sent to a group until you mark them ready."
+        description="Not ready for live view. Guests can’t see these, and they can’t be sent to Whole event until you mark them ready."
       >
         {needsEditingPhotos.length === 0 ? (
           <p className="text-sm text-pine">Nothing waiting on edits.</p>
