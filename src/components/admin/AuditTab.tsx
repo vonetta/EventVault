@@ -80,8 +80,18 @@ function formatDetails(entry: AuditEntry) {
   }
   if (typeof details.count === "number") parts.push(`${details.count} items`);
   if (typeof details.sent === "number") parts.push(`${details.sent} sent`);
+  if (typeof details.tags === "number") parts.push(`${details.tags} tagged`);
   if (typeof details.recompressed === "number" && details.recompressed) {
     parts.push(`${details.recompressed} recompressed`);
+  }
+  if (typeof details.bytesSaved === "number" && details.bytesSaved > 0) {
+    parts.push(`${(details.bytesSaved / (1024 * 1024)).toFixed(1)} MB saved`);
+  }
+  if (typeof details.groupPhotosMoved === "number" || typeof details.teamPhotosMoved === "number") {
+    const moved =
+      (typeof details.groupPhotosMoved === "number" ? details.groupPhotosMoved : 0) +
+      (typeof details.teamPhotosMoved === "number" ? details.teamPhotosMoved : 0);
+    parts.push(`${moved} moved`);
   }
   if (typeof details.guestName === "string" && details.guestName) {
     parts.push(details.guestName);
@@ -105,7 +115,14 @@ function formatDetails(entry: AuditEntry) {
     "sessions",
     "count",
     "sent",
+    "tags",
     "recompressed",
+    "scanned",
+    "skipped",
+    "bytesSaved",
+    "hasMore",
+    "groupPhotosMoved",
+    "teamPhotosMoved",
     "guestName",
     "name",
     "title",
@@ -113,6 +130,8 @@ function formatDetails(entry: AuditEntry) {
     "actor",
     "uploadedByName",
     "eventId",
+    "mediaId",
+    "mediaIds",
   ]);
   for (const [key, value] of Object.entries(details)) {
     if (used.has(key)) continue;
