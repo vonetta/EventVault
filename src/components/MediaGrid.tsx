@@ -17,6 +17,8 @@ type MediaGridProps = {
   items: MediaItem[];
   emptyMessage?: string;
   onRemove?: (id: string) => void;
+  /** Opens the tag-people flow for this photo (admin Media). */
+  onTag?: (id: string) => void;
   selectable?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -69,6 +71,7 @@ export function MediaGrid({
   items,
   emptyMessage = "Nothing here yet.",
   onRemove,
+  onTag,
   selectable,
   selectedIds,
   onToggleSelect,
@@ -156,6 +159,16 @@ export function MediaGrid({
                     Remove
                   </button>
                 ) : null}
+                {onTag ? (
+                  <button
+                    type="button"
+                    onClick={() => onTag(item.id)}
+                    className="absolute bottom-2 right-2 rounded-full bg-ink px-3 py-1 text-xs text-foam"
+                    aria-label={`Tag people in ${item.title}`}
+                  >
+                    Tag
+                  </button>
+                ) : null}
               </div>
             );
           }
@@ -202,6 +215,21 @@ export function MediaGrid({
                       <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
                     ) : null}
                   </button>
+                  {onTag ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTag(item.id);
+                      }}
+                      className={`absolute rounded-full bg-ink px-3 py-1 text-xs text-foam ${
+                        showDownload ? "bottom-2 left-2" : "bottom-2 right-2"
+                      }`}
+                      aria-label={`Tag people in ${item.title}`}
+                    >
+                      Tag
+                    </button>
+                  ) : null}
                   {showDownload ? (
                     <a
                       href={downloadUrl(item.url)}

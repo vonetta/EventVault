@@ -479,9 +479,9 @@ export function MediaTab({
           is what fills Whole event for everyone.
         </p>
         <p>
-          Fix a typo on a tagged name: open <strong>Tag people</strong> (opens a popup with the
-          photo) → tap the black <strong>Fix spelling</strong> button under the name. It updates
-          that person on every photo.
+          Fix a typo on a tagged name: tap <strong>Tag</strong> on the photo (opens a popup) → tap
+          the black <strong>Fix spelling</strong> button under the name. It updates that person on
+          every photo.
         </p>
       </HowTo>
 
@@ -513,7 +513,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Needs editing"
-        description="Not ready for live view. Guests can’t see these, and they can’t be sent to Whole event until you mark them ready."
+        description="Rejects / keep-out-of-live. Guests can’t see these. Tap Tag on a photo to name people, then Mark ready when they’re good to send."
       >
         {needsEditingPhotos.length === 0 ? (
           <p className="text-sm text-pine">Nothing waiting on edits.</p>
@@ -543,6 +543,7 @@ export function MediaTab({
               selectedIds={editingSelected}
               onToggleSelect={(id) => toggleIdInSet(setEditingSelected, id)}
               onRemove={deleteMedia}
+              onTag={setTaggingId}
               showCaptions
             />
             {editingVisibleCount < needsEditingPhotos.length ? (
@@ -561,29 +562,6 @@ export function MediaTab({
               >
                 {togglingEdit ? "Saving…" : `Mark ${editingSelected.size || ""} ready`.trim()}
               </AdminButton>
-            </div>
-            <div className="space-y-2">
-              {visibleNeedsEditing.map((item) => (
-                <div
-                  key={`edit-tag-${item._id}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--line)] bg-white px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-ink">{item.title || item.filename}</p>
-                    <p className="truncate text-xs text-pine">
-                      {(item.taggedGuestIds || []).length
-                        ? `${(item.taggedGuestIds || []).length} tagged`
-                        : "No one tagged"}
-                    </p>
-                  </div>
-                  <AdminButton
-                    className="!h-8 !px-3 !text-xs"
-                    onClick={() => setTaggingId(item._id)}
-                  >
-                    Tag people
-                  </AdminButton>
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -649,6 +627,7 @@ export function MediaTab({
               selectedIds={teamSelected}
               onToggleSelect={(id) => toggleIdInSet(setTeamSelected, id)}
               onRemove={deleteMedia}
+              onTag={setTaggingId}
               showCaptions
             />
             {stagedVisibleCount < filteredStagedPhotos.length ? (
@@ -677,7 +656,7 @@ export function MediaTab({
               </p>
               <p className="mt-1 text-xs text-pine">
                 Every guest sees these in the free whole-event album. People you tagged still get
-                them under Photos of you.
+                them under Photos of you. Tap <strong>Tag</strong> on a photo to name people.
               </p>
               <AdminButton
                 variant="primary"
@@ -689,30 +668,6 @@ export function MediaTab({
                   ? "Sending…"
                   : `Send ${teamSelected.size || ""} to Whole event`.trim()}
               </AdminButton>
-            </div>
-
-            <div className="space-y-2">
-              {visibleStagedPhotos.map((item) => (
-                <div
-                  key={`tag-${item._id}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--line)] bg-white px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-ink">{item.title || item.filename}</p>
-                    <p className="truncate text-xs text-pine">
-                      {(item.taggedGuestIds || []).length
-                        ? `${(item.taggedGuestIds || []).length} tagged`
-                        : "No one tagged"}
-                    </p>
-                  </div>
-                  <AdminButton
-                    className="!h-8 !px-3 !text-xs"
-                    onClick={() => setTaggingId(item._id)}
-                  >
-                    Tag people
-                  </AdminButton>
-                </div>
-              ))}
             </div>
           </div>
         )}
@@ -748,6 +703,7 @@ export function MediaTab({
               selectable
               selectedIds={sentSelected}
               onToggleSelect={(id) => toggleIdInSet(setSentSelected, id)}
+              onTag={setTaggingId}
             />
             {sentVisibleCount < sentTeamPhotos.length ? (
               <AdminButton variant="secondary" onClick={() => setSentVisibleCount((n) => n + 60)}>
@@ -759,29 +715,6 @@ export function MediaTab({
                 {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
               </AdminButton>
             ) : null}
-            <div className="space-y-2">
-              {visibleSentPhotos.map((item) => (
-                <div
-                  key={`sent-tag-${item._id}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--line)] bg-white px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-ink">{item.title || item.filename}</p>
-                    <p className="truncate text-xs text-pine">
-                      {(item.taggedGuestIds || []).length
-                        ? `${(item.taggedGuestIds || []).length} tagged`
-                        : "No one tagged"}
-                    </p>
-                  </div>
-                  <AdminButton
-                    className="!h-8 !px-3 !text-xs"
-                    onClick={() => setTaggingId(item._id)}
-                  >
-                    Tag people
-                  </AdminButton>
-                </div>
-              ))}
-            </div>
           </div>
         </AdminPanel>
       ) : null}
