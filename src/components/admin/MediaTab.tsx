@@ -11,9 +11,9 @@ import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 import type { AdminActions, AdminData, GuestDoc, MediaDoc, MediaFilter, SessionDoc } from "@/components/admin/types";
 
 function mediaKindLabel(kind: string) {
-  if (kind === "event_photo") return "Event gallery";
-  if (kind === "group_photo") return "Group gallery";
-  if (kind === "personal_photo") return "VIP personal";
+  if (kind === "event_photo") return "Whole event";
+  if (kind === "group_photo") return "Shared album";
+  if (kind === "personal_photo") return "Photos of you (VIP)";
   if (kind === "session_video") return "Session";
   if (kind === "team_photo") return "Team photo";
   return kind;
@@ -418,8 +418,8 @@ export function MediaTab({
             Photo upload
           </a>
           , clean rejects and tag faces there, then come back to this Media tab to Send ready photos
-          to Everyone or a group. Tagging alone puts a photo in that guest’s Your photos — Send is
-          what fills the shared group gallery.
+          to Everyone or a group. Tagging alone puts a photo in that guest’s Photos of you — Send is
+          what fills Shared with you.
         </p>
         <p>
           Fix a typo on a tagged name: open <strong>Tag people</strong> (opens a popup with the
@@ -508,7 +508,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Main gallery — ready to send"
-        description="Photos waiting on this event. Guests don’t see them in a group gallery until you Send below. Tagged people can already unlock them under Your photos."
+        description="Photos waiting on this event. Guests don’t see them under Shared with you until you Send below. Tagged people can already unlock them under Photos of you."
       >
         {stagedTeamPhotos.length === 0 ? (
           <p className="text-sm text-pine">
@@ -750,9 +750,9 @@ export function MediaTab({
               {(
                 [
                   ["all", "All"],
-                  ["event_photo", "Event"],
-                  ["group_photo", "Group"],
-                  ["personal_photo", "VIP"],
+                  ["event_photo", "Whole event"],
+                  ["group_photo", "Shared"],
+                  ["personal_photo", "Of you"],
                   ["session_video", "Sessions"],
                 ] as const
               ).map(([value, label]) => (
@@ -834,7 +834,7 @@ export function MediaTab({
         />
       </AdminPanel>
 
-      <AdminPanel title="Upload photos" description="Event gallery is for everyone and is not assigned to a VIP guest or the group album.">
+      <AdminPanel title="Upload photos" description="Whole event = every guest. Shared album = optional second album. VIP = Photos of you for one guest.">
         <form onSubmit={uploadMedia} className="grid gap-4">
           <AdminField label="Photo type">
             <select
@@ -846,9 +846,9 @@ export function MediaTab({
               }}
               className={inputClassName}
             >
-              <option value="event_photo">Event gallery photo (everyone)</option>
-              <option value="group_photo">Group gallery photo</option>
-              <option value="personal_photo">VIP personal photo</option>
+              <option value="event_photo">Whole-event photo (every guest)</option>
+              <option value="group_photo">Shared album photo</option>
+              <option value="personal_photo">VIP — Photos of you</option>
               <option value="session_video">Session file (fallback)</option>
             </select>
           </AdminField>

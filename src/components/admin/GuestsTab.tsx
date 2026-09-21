@@ -220,8 +220,8 @@ John Smith, john@email.com, standard`}
         </pre>
         <p>
           VIP guests include personal photos and speaker sessions. Standard guests unlock those
-          with Zelle (Mark paid after you confirm payment). Every guest sees the event gallery and
-          group gallery. Use <strong>View vault</strong> to check what someone will see.
+          with Zelle (Mark paid after you confirm payment). Every guest sees the whole-event album and
+          photos shared with their group. Use <strong>View vault</strong> to check what someone will see.
         </p>
         <p>
           Shared group login codes (one code for a whole family/table) are on the{" "}
