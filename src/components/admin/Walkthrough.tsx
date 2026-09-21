@@ -70,9 +70,9 @@ const SLIDES: {
     title: "5. Upload photos",
     body: [
       "On Media, use Upload photos.",
-      "Event gallery photo: everyone can see it. It is not assigned to a VIP guest or the group album.",
-      "Group gallery photo: optional second shared album, if you want group shots kept separate.",
-      "VIP personal photo: choose one VIP guest first, then upload.",
+      "Whole-event photo: every guest can see it (not personal shots).",
+      "Shared album photo: optional second album, or use Send on team photos for a group.",
+      "VIP — Photos of you: choose one VIP guest first, then upload.",
       "Large photos are resized automatically before upload.",
     ],
     tab: "media",

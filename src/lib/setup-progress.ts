@@ -75,7 +75,7 @@ export function getSetupProgress(data: AdminData) {
     {
       id: "photos",
       title: "Upload photos",
-      detail: "Event gallery for everyone. Group photos if you want them separate. VIP personal photos go to one guest.",
+      detail: "Whole-event album for every guest. Shared album if you want a second set. VIP Photos of you go to one guest.",
       done: photosUploaded,
       tab: "media",
       actionLabel: "Upload photos",

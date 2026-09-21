@@ -100,7 +100,7 @@ export default function VaultPage() {
         return;
       }
       if (json.paid) {
-        setUnlockMessage("Your photos are already unlocked.");
+        setUnlockMessage("Photos of you are already unlocked.");
         window.location.reload();
         return;
       }
@@ -311,10 +311,10 @@ export default function VaultPage() {
           <p className="mt-2 text-pine">
             {data.event.name}
             {isVip
-              ? " · Your photos, sessions, and galleries"
+              ? " · Photos of you, sessions, and shared albums"
               : hasPersonal
-                ? " · Your photos and galleries"
-                : " · Event and group galleries"}
+                ? " · Photos of you and shared albums"
+                : " · Shared event albums"}
           </p>
           {data.event.description ? (
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine">
@@ -360,7 +360,7 @@ export default function VaultPage() {
         <nav aria-label="Vault sections" className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-pine">
           {hasPersonal ? (
             <a href="#personal-photos" className="underline-offset-4 hover:underline">
-              Your photos{personalCount ? ` (${personalCount})` : ""}
+              Photos of you{personalCount ? ` (${personalCount})` : ""}
             </a>
           ) : null}
           {hasSessions ? (
@@ -369,10 +369,10 @@ export default function VaultPage() {
             </a>
           ) : null}
           <a href="#event-gallery" className="underline-offset-4 hover:underline">
-            Event gallery{eventCount ? ` (${eventCount})` : ""}
+            Whole event{eventCount ? ` (${eventCount})` : ""}
           </a>
           <a href="#group-gallery" className="underline-offset-4 hover:underline">
-            Group gallery{groupCount ? ` (${groupCount})` : ""}
+            Shared with you{groupCount ? ` (${groupCount})` : ""}
           </a>
         </nav>
       ) : null}
@@ -380,20 +380,23 @@ export default function VaultPage() {
       {hasPersonal ? (
         <section id="personal-photos" className="space-y-4 scroll-mt-6">
           <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
-            Your photos
+            Photos of you
             {personalCount ? <span className="ml-2 text-lg text-pine">{personalCount}</span> : null}
           </h2>
           {personalLocked ? (
             unlockPanel("photos")
           ) : (
-            <p className="text-sm text-pine">Tap a photo to view it larger, or download one at a time.</p>
+            <p className="text-sm text-pine">
+              Shots where you were tagged (or uploaded as your personal set). Tap to enlarge or
+              download one at a time.
+            </p>
           )}
           <MediaGrid
             items={data.personalPhotos}
             showDownload={!personalLocked}
             allowDownload={!personalLocked}
             showCaptions={false}
-            emptyMessage="Your personal photos will appear here when they’re ready."
+            emptyMessage="Photos of you will appear here when they’re ready."
           />
         </section>
       ) : null}
@@ -406,7 +409,7 @@ export default function VaultPage() {
           {sessionsLocked ? (
             hasPersonal && personalLocked ? (
               <p className="text-sm text-pine">
-                Locked until your Zelle payment is confirmed — same unlock as Your photos above.
+                Locked until your Zelle payment is confirmed — same unlock as Photos of you above.
               </p>
             ) : (
               unlockPanel("sessions")
@@ -457,36 +460,42 @@ export default function VaultPage() {
 
       <section id="event-gallery" className="space-y-4 scroll-mt-6">
         <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
-          Event gallery
+          Whole event
           {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
         </h2>
-        <p className="text-sm text-pine">Photos from the event for every guest. Not assigned to VIP or the group album.</p>
+        <p className="text-sm text-pine">
+          Free for every guest — the shared album for the whole weekend. Not personal shots of you.
+        </p>
         <MediaGrid
           items={data.eventGallery || []}
           showDownload
           showCaptions={false}
-          emptyMessage="Event gallery photos will appear here after they’re uploaded."
+          emptyMessage="Whole-event photos will appear here after they’re uploaded."
         />
       </section>
 
       <section id="group-gallery" className="space-y-4 scroll-mt-6">
         <h2 className="font-[family-name:var(--font-fraunces)] text-2xl text-ink">
-          Group gallery
+          Shared with you
           {groupCount ? <span className="ml-2 text-lg text-pine">{groupCount}</span> : null}
         </h2>
+        <p className="text-sm text-pine">
+          Photos the team sent to your group (family/table), or marked for everyone. Separate from
+          the whole-event album above.
+        </p>
         <MediaGrid
           items={data.groupGallery}
           showDownload
           showCaptions={false}
-          emptyMessage="The group gallery will appear here after photos are uploaded."
+          emptyMessage="Shared photos will appear here after the team sends them."
         />
       </section>
 
       {!isVip ? (
         <p className="text-sm text-pine">
-          The event and group galleries are included with your ticket.
+          Whole-event and shared albums are included with your ticket.
           {hasPersonal || hasSessions
-            ? " Your individual photos and speaker sessions can be unlocked above."
+            ? " Photos of you and speaker sessions can be unlocked above."
             : ""}
         </p>
       ) : null}
