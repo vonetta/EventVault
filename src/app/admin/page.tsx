@@ -236,7 +236,7 @@ export default function AdminPage() {
     groups: <GroupsTab data={data} actions={actions} />,
     media: <MediaTab data={data} selectedEventId={selectedEventId} actions={actions} />,
     email: <EmailTab data={data} setMessage={setMessage} />,
-    audit: <AuditTab />,
+    audit: <AuditTab eventId={selectedEventId || data.event?._id} />,
   }[activeTab];
 
   return (

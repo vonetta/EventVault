@@ -68,6 +68,9 @@ const GuestSchema = new Schema(
     // Guest tapped “I’ve sent Zelle” — waiting for admin to confirm and unlock.
     zellePaymentPending: { type: Boolean, default: false },
     zellePaymentPendingAt: { type: Date, default: null },
+    // Vault engagement — updated on successful ticket login.
+    lastLoginAt: { type: Date, default: null },
+    loginCount: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
@@ -98,6 +101,16 @@ const RateLimitBucketSchema = new Schema(
 const AuditLogSchema = new Schema(
   {
     action: { type: String, required: true, index: true },
+    // Who performed the action (guest ticket, admin, photo team, …).
+    actor: {
+      type: String,
+      enum: ["guest", "admin", "uploader", "system"],
+      default: "admin",
+      index: true,
+    },
+    actorName: { type: String, default: "" },
+    guestId: { type: Schema.Types.ObjectId, ref: "Guest", default: null, index: true },
+    eventId: { type: Schema.Types.ObjectId, ref: "Event", default: null, index: true },
     details: { type: Schema.Types.Mixed, default: {} },
     ip: { type: String, default: "" },
   },
