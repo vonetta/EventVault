@@ -37,6 +37,7 @@ yarn-error.log*
 
 # local media (dev fallback when R2 is not configured)
 /uploads
+.local-media/
 
 # typescript
 *.tsbuildinfo
