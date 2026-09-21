@@ -10,6 +10,7 @@ import { resolveGuestSession } from "@/lib/guest-session";
 import { findIndividualPhotos } from "@/lib/individual-photos";
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { logActivity } from "@/lib/audit";
 
 const MAX_ZIP_FILES = 300;
 const MAX_ZIP_BYTES = 150 * 1024 * 1024;
@@ -132,6 +133,22 @@ export async function GET(request: Request) {
       { status: 404 },
     );
   }
+
+  await logActivity(request, {
+    action: "guest_download",
+    actor: "guest",
+    actorName: guest.name,
+    guestId: String(guest._id),
+    eventId: String(guest.eventId),
+    details: {
+      summary: `${guest.name} · ${entries.length} photos`,
+      meta: {
+        photoCount: entries.length,
+        wholeEvent: eventForZip.length,
+        photosOfYou: personalPhotos.length,
+      },
+    },
+  });
 
   const eventSlug = safeName(event.slug || event.name, "event").replace(/\s+/g, "-");
   const guestSlug = safeName(guest.name, "guest").replace(/\s+/g, "-");

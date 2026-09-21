@@ -35,6 +35,8 @@ export type GuestDoc = {
   zellePaymentPending?: boolean;
   isSharedLogin?: boolean;
   sharedGroupId?: string | null;
+  lastLoginAt?: string | null;
+  loginCount?: number;
 };
 
 export type MediaDoc = {

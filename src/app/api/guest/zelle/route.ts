@@ -6,6 +6,7 @@ import { Guest, Media } from "@/lib/models";
 import { countIndividualPhotos } from "@/lib/individual-photos";
 import { zelleConfigured, zellePaymentInfo } from "@/lib/payments";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { logActivity } from "@/lib/audit";
 
 /** Return Zelle unlock instructions for the current guest (no Stripe). */
 export async function GET(request: Request) {
@@ -91,6 +92,21 @@ export async function POST(request: Request) {
       },
     },
   );
+
+  await logActivity(request, {
+    action: "guest_zelle_pending",
+    actor: "guest",
+    actorName: guest.name,
+    guestId: String(guest._id),
+    eventId: String(guest.eventId),
+    details: {
+      summary: `${guest.name} · waiting for payment confirm`,
+      meta: {
+        personalPhotos: personalCount,
+        sessions: sessionCount,
+      },
+    },
+  });
 
   return NextResponse.json({
     pending: true,

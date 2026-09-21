@@ -71,17 +71,34 @@ export async function GET(request: Request) {
 
   if (searchParams.get("auditLog") === "1") {
     try {
-      const logs = await AuditLog.find()
+      const eventFilter = searchParams.get("eventId");
+      const query =
+        eventFilter && /^[a-f\d]{24}$/i.test(eventFilter)
+          ? {
+              $or: [
+                { eventId: eventFilter },
+                { eventId: null },
+                { eventId: { $exists: false } },
+              ],
+            }
+          : {};
+      const logs = await AuditLog.find(query)
         .sort({ createdAt: -1 })
-        .limit(100)
+        .limit(200)
         .lean();
       return NextResponse.json({
         logs: logs.map((entry) => ({
           _id: String(entry._id),
           action: entry.action,
+          actor: entry.actor || "admin",
+          actorName: entry.actorName || "",
+          guestId: entry.guestId ? String(entry.guestId) : null,
+          eventId: entry.eventId ? String(entry.eventId) : null,
           details: entry.details || {},
           ip: entry.ip || "",
-          createdAt: entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString(),
+          createdAt: entry.createdAt
+            ? new Date(entry.createdAt).toISOString()
+            : new Date().toISOString(),
         })),
       });
     } catch (error) {
@@ -136,6 +153,10 @@ export async function GET(request: Request) {
       zellePaymentPending: Boolean(guest.zellePaymentPending) && !guest.personalPhotosPaid,
       isSharedLogin: Boolean(guest.sharedGroupId),
       sharedGroupId: guest.sharedGroupId ? String(guest.sharedGroupId) : null,
+      lastLoginAt: guest.lastLoginAt
+        ? new Date(guest.lastLoginAt).toISOString()
+        : null,
+      loginCount: guest.loginCount || 0,
     })),
     groups: groups.map((group) => ({
       _id: String(group._id),

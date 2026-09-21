@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { setAdminSession, clearGuestSession, secureEqual, assertSameOrigin } from "@/lib/auth";
 import { assertProductionSecrets } from "@/lib/env";
 import { adminLoginSchema } from "@/lib/validate";
+import { logActivity } from "@/lib/audit";
 import { z } from "zod";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -17,7 +18,10 @@ export async function POST(request: Request) {
   if (!limited.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Try again shortly." },
-      { status: 429, headers: { "Retry-After": String(limited.retryAfterSec) } },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limited.retryAfterSec) },
+      },
     );
   }
 
@@ -33,6 +37,12 @@ export async function POST(request: Request) {
     }
 
     if (!secureEqual(body.password, expected)) {
+      await logActivity(request, {
+        action: "admin_login_failed",
+        actor: "admin",
+        actorName: "Admin",
+        details: { reason: "incorrect_password" },
+      });
       return NextResponse.json({ error: "Incorrect password" }, { status: 401 });
     }
 
@@ -45,6 +55,11 @@ export async function POST(request: Request) {
 
     await clearGuestSession();
     await setAdminSession();
+    await logActivity(request, {
+      action: "admin_login",
+      actor: "admin",
+      actorName: "Admin",
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof z.ZodError) {

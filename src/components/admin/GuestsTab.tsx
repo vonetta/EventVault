@@ -22,6 +22,20 @@ function parseGuestLines(text: string) {
     .filter((row) => row.name);
 }
 
+function formatLastSeen(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  const diffMs = Date.now() - date.getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 14) return `${days}d ago`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 export function GuestsTab({
   data,
   selectedEventId,
@@ -319,6 +333,7 @@ John Smith, john@email.com, standard`}
                 <th scope="col" className="py-3 pr-4">Tier</th>
                 <th scope="col" className="py-3 pr-4">Photos</th>
                 <th scope="col" className="py-3 pr-4">Ticket</th>
+                <th scope="col" className="py-3 pr-4">Last seen</th>
                 <th scope="col" className="py-3">Actions</th>
               </tr>
             </thead>
@@ -379,6 +394,18 @@ John Smith, john@email.com, standard`}
                       )}
                     </td>
                     <td className="py-3 pr-4 font-mono text-xs tracking-wider">{guest.ticketCode}</td>
+                    <td className="py-3 pr-4 text-xs text-pine">
+                      {guest.lastLoginAt ? (
+                        <span title={new Date(guest.lastLoginAt).toLocaleString()}>
+                          {formatLastSeen(guest.lastLoginAt)}
+                          {guest.loginCount && guest.loginCount > 1
+                            ? ` · ${guest.loginCount}×`
+                            : ""}
+                        </span>
+                      ) : (
+                        <span className="text-pine/70">Never</span>
+                      )}
+                    </td>
                     <td className="py-3">
                       <div className="flex flex-wrap gap-1.5">
                         <AdminButton
