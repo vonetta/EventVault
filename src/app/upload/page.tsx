@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FaceAssistPanel } from "@/components/FaceAssistPanel";
-import { GuestTagPicker } from "@/components/GuestTagPicker";
 import { GroupPhotoAssistPanel } from "@/components/GroupPhotoAssistPanel";
 import { QualityAssistPanel } from "@/components/QualityAssistPanel";
+import { TagPhotoModal } from "@/components/TagPhotoModal";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
 import { mapPool } from "@/lib/photo-quality";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
@@ -153,6 +153,7 @@ export default function UploadPage() {
   const [bucket, setBucket] = useState<GalleryBucket>("ready");
   const [taggingId, setTaggingId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [tagSaveHint, setTagSaveHint] = useState("");
   const [visibleCount, setVisibleCount] = useState(GALLERY_PAGE_SIZE);
   const [assistPhotos, setAssistPhotos] = useState<StagedPhoto[]>([]);
   const [assistLoading, setAssistLoading] = useState(false);
@@ -344,8 +345,59 @@ export default function UploadPage() {
       status: "pending",
     }));
     setItems((prev) => [...prev, ...next]);
-    setMessage("");
+    setMessage(
+      next.length === 1
+        ? `Added 1 photo to the queue. Tap Upload when ready.`
+        : `Added ${next.length} photos to the queue. Tap Upload when ready.`,
+    );
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function patchGalleryTags(id: string, taggedGuestIds: string[]) {
+    const taggedNames = taggedGuestIds
+      .map((guestId) => guests.find((g) => g._id === guestId)?.name)
+      .filter((name): name is string => Boolean(name));
+    const apply = (list: StagedPhoto[]) =>
+      list.map((photo) =>
+        photo.id === id ? { ...photo, taggedGuestIds, taggedNames } : photo,
+      );
+    setReadyGallery(apply);
+    setEditingGallery(apply);
+    setAssistPhotos((prev) => apply(prev));
+  }
+
+  async function updatePhoto(
+    id: string,
+    patch: { taggedGuestIds?: string[]; needsEditing?: boolean },
+  ) {
+    if (patch.taggedGuestIds) {
+      patchGalleryTags(id, patch.taggedGuestIds);
+      setTagSaveHint("Saved");
+    }
+    setSavingId(id);
+    const res = await fetch("/api/uploader/media/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mediaId: id, ...patch }),
+    });
+    setSavingId(null);
+    if (res.status === 401) {
+      window.location.assign("/upload/login");
+      return;
+    }
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setMessage(json.error || "Could not update that photo.");
+      setTagSaveHint("");
+      // Re-sync if the optimistic tag write failed.
+      if (patch.taggedGuestIds) await refreshGalleries(eventId);
+      return;
+    }
+    // Only reload galleries when the photo changes bucket (ready ↔ editing).
+    if (typeof patch.needsEditing === "boolean") {
+      await refreshGalleries(eventId);
+      if (taggingId === id) setTaggingId(null);
+    }
   }
 
   function updateItem(id: string, patch: Partial<UploadItem>) {
@@ -360,12 +412,33 @@ export default function UploadPage() {
     if (cancelUploadRef.current) return false;
     updateItem(item.id, { status: "working", message: "Preparing…" });
 
+    const lower = item.file.name.toLowerCase();
+    const looksHeic =
+      item.file.type === "image/heic" ||
+      item.file.type === "image/heif" ||
+      lower.endsWith(".heic") ||
+      lower.endsWith(".heif");
+    if (looksHeic) {
+      updateItem(item.id, {
+        status: "error",
+        message: "HEIC not supported — in Photos, share/export as JPEG, then upload.",
+      });
+      return false;
+    }
+
     let toSend: File = item.file;
-    if (item.file.type.startsWith("image/")) {
+    if (item.file.type.startsWith("image/") || !item.file.type) {
       try {
-        toSend = await resizeImageForUpload(item.file);
+        const fileForResize = item.file.type
+          ? item.file
+          : new File([item.file], item.file.name, { type: "image/jpeg" });
+        toSend = await resizeImageForUpload(fileForResize);
       } catch {
-        toSend = item.file;
+        updateItem(item.id, {
+          status: "error",
+          message: "Could not read that image. Try JPEG or PNG.",
+        });
+        return false;
       }
     }
 
@@ -486,29 +559,6 @@ export default function UploadPage() {
     if (taggingId === id) setTaggingId(null);
   }
 
-  async function updatePhoto(
-    id: string,
-    patch: { taggedGuestIds?: string[]; needsEditing?: boolean },
-  ) {
-    setSavingId(id);
-    const res = await fetch("/api/uploader/media/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mediaId: id, ...patch }),
-    });
-    setSavingId(null);
-    if (res.status === 401) {
-      window.location.assign("/upload/login");
-      return;
-    }
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      setMessage(json.error || "Could not update that photo.");
-      return;
-    }
-    await refreshGalleries(eventId);
-  }
-
   async function createGuest(name: string): Promise<NameOnlyGuest | null> {
     const res = await fetch("/api/uploader/guests", {
       method: "POST",
@@ -575,7 +625,6 @@ export default function UploadPage() {
   const visibleGallery = activeGallery.slice(0, visibleCount);
 
   function renderPhotoCard(photo: StagedPhoto) {
-    const isTagging = taggingId === photo.id;
     return (
       <div
         key={photo.id}
@@ -606,10 +655,13 @@ export default function UploadPage() {
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={() => setTaggingId(isTagging ? null : photo.id)}
+              onClick={() => {
+                setTagSaveHint("");
+                setTaggingId(photo.id);
+              }}
               className="rounded-md border border-[color:var(--line)] px-2 py-1 text-xs text-ink hover:bg-mist"
             >
-              {isTagging ? "Close tags" : "Tag people"}
+              Tag people
             </button>
             <button
               type="button"
@@ -622,21 +674,17 @@ export default function UploadPage() {
               {photo.needsEditing ? "Mark ready" : "Needs editing"}
             </button>
           </div>
-          {isTagging ? (
-            <GuestTagPicker
-              compact
-              guests={guests}
-              selectedIds={photo.taggedGuestIds}
-              disabled={savingId === photo.id}
-              onChange={(ids) => void updatePhoto(photo.id, { taggedGuestIds: ids })}
-              onCreateGuest={createGuest}
-              onRenameGuest={renameGuest}
-            />
-          ) : null}
         </div>
       </div>
     );
   }
+
+  const taggingPhoto =
+    taggingId == null
+      ? null
+      : readyGallery.find((p) => p.id === taggingId) ||
+        editingGallery.find((p) => p.id === taggingId) ||
+        null;
 
   return (
     <main id="main" tabIndex={-1} className="mx-auto w-full max-w-3xl px-6 py-10">
@@ -731,23 +779,28 @@ export default function UploadPage() {
             ref={fileInputRef}
             id="uploader-file-input"
             type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif"
+            accept="image/*,image/jpeg,image/png,image/webp,image/gif,.heic,.heif"
             multiple
             onChange={(e) => addFiles(e.target.files)}
             className="sr-only"
           />
-          <label
-            htmlFor="uploader-file-input"
-            className="flex min-h-[9rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[color:var(--line)] bg-white px-4 py-6 text-center transition hover:border-ink/30"
-          >
-            <span className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-foam">
+          <div className="flex min-h-[9rem] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[color:var(--line)] bg-white px-4 py-6 text-center">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-foam"
+            >
               Choose photos
-            </span>
+            </button>
             <span className="text-sm text-pine">
-              JPEG, PNG, WebP, or GIF · pick hundreds at once · large photos auto-resize · 4 at a
-              time upload
+              Pick many at once · JPEG/PNG/WebP/GIF · large photos auto-resize · uploads 4 at a
+              time
             </span>
-          </label>
+            <span className="max-w-md text-xs text-pine">
+              On iPhone: tap Choose photos → Select (top right) → tap several photos → Add. If
+              uploads stall, try again or convert HEIC to JPEG in Photos first.
+            </span>
+          </div>
 
           <label className="flex items-center gap-2 text-sm text-ink">
             <input
@@ -980,6 +1033,26 @@ export default function UploadPage() {
           </section>
         </div>
       )}
+
+      <TagPhotoModal
+        open={Boolean(taggingPhoto)}
+        photoUrl={taggingPhoto?.url || ""}
+        photoTitle={taggingPhoto?.title || ""}
+        guests={guests}
+        selectedIds={taggingPhoto?.taggedGuestIds || []}
+        disabled={savingId === taggingPhoto?.id}
+        saveHint={tagSaveHint}
+        onClose={() => {
+          setTaggingId(null);
+          setTagSaveHint("");
+        }}
+        onChange={(ids) => {
+          if (!taggingPhoto) return;
+          void updatePhoto(taggingPhoto.id, { taggedGuestIds: ids });
+        }}
+        onCreateGuest={createGuest}
+        onRenameGuest={renameGuest}
+      />
     </main>
   );
 }

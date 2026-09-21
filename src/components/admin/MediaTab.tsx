@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useMemo, useRef, useState } from "react";
-import { GuestTagPicker } from "@/components/GuestTagPicker";
 import { MediaGrid, type MediaItem } from "@/components/MediaGrid";
+import { TagPhotoModal } from "@/components/TagPhotoModal";
 import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName } from "@/components/admin/ui";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
@@ -109,7 +109,10 @@ export function MediaTab({
   const groups = data.groups || [];
 
   const nameOnlyGuests: NameOnlyGuest[] = useMemo(
-    () => data.guests.map((guest) => ({ _id: guest._id, name: guest.name })),
+    () =>
+      data.guests
+        .filter((guest) => !guest.isSharedLogin)
+        .map((guest) => ({ _id: guest._id, name: guest.name })),
     [data.guests],
   );
 
@@ -136,13 +139,16 @@ export function MediaTab({
 
   const filteredStagedPhotos = useMemo(() => {
     if (stagedFilter === "untagged") {
-      return stagedTeamPhotos.filter((item) => !(item.taggedGuestIds || []).length);
+      // Keep the photo you're actively tagging visible so it doesn't jump away mid-edit.
+      return stagedTeamPhotos.filter(
+        (item) => !(item.taggedGuestIds || []).length || item._id === taggingId,
+      );
     }
     if (stagedFilter === "tagged") {
       return stagedTeamPhotos.filter((item) => (item.taggedGuestIds || []).length > 0);
     }
     return stagedTeamPhotos;
-  }, [stagedTeamPhotos, stagedFilter]);
+  }, [stagedTeamPhotos, stagedFilter, taggingId]);
 
   const visibleStagedPhotos = useMemo(
     () => filteredStagedPhotos.slice(0, stagedVisibleCount),
@@ -164,6 +170,11 @@ export function MediaTab({
   const taggedStagedCount = useMemo(
     () => stagedTeamPhotos.filter((item) => (item.taggedGuestIds || []).length > 0).length,
     [stagedTeamPhotos],
+  );
+
+  const taggingMedia = useMemo(
+    () => (taggingId ? data.media.find((item) => item._id === taggingId) || null : null),
+    [data.media, taggingId],
   );
 
   function toggleIdInSet(setter: (fn: (prev: Set<string>) => Set<string>) => void, id: string) {
@@ -237,6 +248,7 @@ export function MediaTab({
       taggedGuestIds,
     });
     if (!json) return;
+    // Reload data but keep the tagging modal open on this photo.
     await actions.load(selectedEventId);
   }
 
@@ -410,8 +422,9 @@ export function MediaTab({
           what fills the shared group gallery.
         </p>
         <p>
-          Fix a typo on a tagged name: open <strong>Tag people</strong> on a photo → tap the black{" "}
-          <strong>Fix spelling</strong> button under the name. It updates that person on every photo.
+          Fix a typo on a tagged name: open <strong>Tag people</strong> (opens a popup with the
+          photo) → tap the black <strong>Fix spelling</strong> button under the name. It updates
+          that person on every photo.
         </p>
       </HowTo>
 
@@ -466,26 +479,29 @@ export function MediaTab({
                 {togglingEdit ? "Saving…" : `Mark ${editingSelected.size || ""} ready`.trim()}
               </AdminButton>
             </div>
-            {visibleNeedsEditing.map((item) => (
-              <details key={`edit-tag-${item._id}`} className="rounded-lg border border-[color:var(--line)] bg-white p-3">
-                <summary className="cursor-pointer text-sm text-ink">
-                  Tag people — {item.title || item.filename}
-                  {(item.taggedGuestIds || []).length
-                    ? ` (${(item.taggedGuestIds || []).length})`
-                    : ""}
-                </summary>
-                <div className="mt-3">
-                  <GuestTagPicker
-                    compact
-                    guests={nameOnlyGuests}
-                    selectedIds={item.taggedGuestIds || []}
-                    onChange={(ids) => void saveTags(item._id, ids)}
-                    onCreateGuest={createGuestName}
-                    onRenameGuest={renameGuestName}
-                  />
+            <div className="space-y-2">
+              {visibleNeedsEditing.map((item) => (
+                <div
+                  key={`edit-tag-${item._id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--line)] bg-white px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-ink">{item.title || item.filename}</p>
+                    <p className="truncate text-xs text-pine">
+                      {(item.taggedGuestIds || []).length
+                        ? `${(item.taggedGuestIds || []).length} tagged`
+                        : "No one tagged"}
+                    </p>
+                  </div>
+                  <AdminButton
+                    className="!h-8 !px-3 !text-xs"
+                    onClick={() => setTaggingId(item._id)}
+                  >
+                    Tag people
+                  </AdminButton>
                 </div>
-              </details>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </AdminPanel>
@@ -630,34 +646,29 @@ export function MediaTab({
               </AdminButton>
             </div>
 
-            {visibleStagedPhotos.map((item) => (
-              <details
-                key={`tag-${item._id}`}
-                open={taggingId === item._id}
-                className="rounded-lg border border-[color:var(--line)] bg-white p-3"
-                onToggle={(e) => {
-                  const open = (e.target as HTMLDetailsElement).open;
-                  setTaggingId(open ? item._id : taggingId === item._id ? null : taggingId);
-                }}
-              >
-                <summary className="cursor-pointer text-sm text-ink">
-                  Tag people — {item.title || item.filename}
-                  {(item.taggedGuestIds || []).length
-                    ? ` (${(item.taggedGuestIds || []).length})`
-                    : ""}
-                </summary>
-                <div className="mt-3">
-                  <GuestTagPicker
-                    compact
-                    guests={nameOnlyGuests}
-                    selectedIds={item.taggedGuestIds || []}
-                    onChange={(ids) => void saveTags(item._id, ids)}
-                    onCreateGuest={createGuestName}
-                    onRenameGuest={renameGuestName}
-                  />
+            <div className="space-y-2">
+              {visibleStagedPhotos.map((item) => (
+                <div
+                  key={`tag-${item._id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--line)] bg-white px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-ink">{item.title || item.filename}</p>
+                    <p className="truncate text-xs text-pine">
+                      {(item.taggedGuestIds || []).length
+                        ? `${(item.taggedGuestIds || []).length} tagged`
+                        : "No one tagged"}
+                    </p>
+                  </div>
+                  <AdminButton
+                    className="!h-8 !px-3 !text-xs"
+                    onClick={() => setTaggingId(item._id)}
+                  >
+                    Tag people
+                  </AdminButton>
                 </div>
-              </details>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </AdminPanel>
@@ -703,23 +714,29 @@ export function MediaTab({
                 {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
               </AdminButton>
             ) : null}
-            {visibleSentPhotos.map((item) => (
-              <details key={`sent-tag-${item._id}`} className="rounded-lg border border-[color:var(--line)] bg-white p-3">
-                <summary className="cursor-pointer text-sm text-ink">
-                  Tag people — {item.title || item.filename}
-                </summary>
-                <div className="mt-3">
-                  <GuestTagPicker
-                    compact
-                    guests={nameOnlyGuests}
-                    selectedIds={item.taggedGuestIds || []}
-                    onChange={(ids) => void saveTags(item._id, ids)}
-                    onCreateGuest={createGuestName}
-                    onRenameGuest={renameGuestName}
-                  />
+            <div className="space-y-2">
+              {visibleSentPhotos.map((item) => (
+                <div
+                  key={`sent-tag-${item._id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[color:var(--line)] bg-white px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-ink">{item.title || item.filename}</p>
+                    <p className="truncate text-xs text-pine">
+                      {(item.taggedGuestIds || []).length
+                        ? `${(item.taggedGuestIds || []).length} tagged`
+                        : "No one tagged"}
+                    </p>
+                  </div>
+                  <AdminButton
+                    className="!h-8 !px-3 !text-xs"
+                    onClick={() => setTaggingId(item._id)}
+                  >
+                    Tag people
+                  </AdminButton>
                 </div>
-              </details>
-            ))}
+              ))}
+            </div>
           </div>
         </AdminPanel>
       ) : null}
@@ -925,6 +942,21 @@ export function MediaTab({
           </AdminButton>
         </form>
       </AdminPanel>
+
+      <TagPhotoModal
+        open={Boolean(taggingMedia)}
+        photoUrl={taggingMedia ? `/api/media/${taggingMedia._id}` : ""}
+        photoTitle={taggingMedia ? taggingMedia.title || taggingMedia.filename : ""}
+        guests={nameOnlyGuests}
+        selectedIds={taggingMedia?.taggedGuestIds || []}
+        onClose={() => setTaggingId(null)}
+        onChange={(ids) => {
+          if (!taggingMedia) return;
+          void saveTags(taggingMedia._id, ids);
+        }}
+        onCreateGuest={createGuestName}
+        onRenameGuest={renameGuestName}
+      />
     </>
   );
 }
