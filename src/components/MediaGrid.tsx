@@ -23,6 +23,8 @@ type MediaGridProps = {
   showDownload?: boolean;
   showCaptions?: boolean;
   allowDownload?: boolean;
+  /** When set, show this many photos first with a Load more control. */
+  pageSize?: number;
 };
 
 function downloadUrl(src: string) {
@@ -73,14 +75,23 @@ export function MediaGrid({
   showDownload = false,
   showCaptions = true,
   allowDownload = true,
+  pageSize,
 }: MediaGridProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [visibleCount, setVisibleCount] = useState(pageSize && pageSize > 0 ? pageSize : items.length);
+
+  useEffect(() => {
+    setVisibleCount(pageSize && pageSize > 0 ? pageSize : items.length);
+  }, [items, pageSize]);
 
   if (!items.length) {
     return <p className="text-sm text-pine">{emptyMessage}</p>;
   }
 
-  const imageItems = items
+  const visibleItems = pageSize && pageSize > 0 ? items.slice(0, visibleCount) : items;
+  const hasMore = Boolean(pageSize && pageSize > 0 && visibleCount < items.length);
+
+  const imageItems = visibleItems
     .map((item, idx) => ({ item, idx }))
     .filter(
       ({ item }) =>
@@ -91,7 +102,7 @@ export function MediaGrid({
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((item, idx) => {
+        {visibleItems.map((item, idx) => {
           const isYouTube =
             item.provider === "youtube" ||
             item.contentType === "video/youtube" ||
@@ -239,6 +250,25 @@ export function MediaGrid({
           );
         })}
       </div>
+
+      {hasMore ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((n) => n + (pageSize || 24))}
+            className="rounded-full border border-[color:var(--line)] bg-white px-4 py-2 text-sm text-ink hover:bg-mist"
+          >
+            Show more ({items.length - visibleCount} left)
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisibleCount(items.length)}
+            className="text-sm text-pine underline-offset-2 hover:underline"
+          >
+            Show all {items.length}
+          </button>
+        </div>
+      ) : null}
 
       {lightboxIndex !== null ? (
         <Lightbox

@@ -4,6 +4,7 @@ import { assertSameOrigin } from "@/lib/auth";
 import { Event, Guest, Media, Session } from "@/lib/models";
 import { logAdminAction } from "@/lib/audit";
 import { storeFile } from "@/lib/storage";
+import { compressImageForStorage } from "@/lib/compress-image";
 import { assertFileMatchesMime } from "@/lib/file-sniff";
 import {
   IMAGE_MIME,
@@ -170,23 +171,35 @@ export async function processMediaUpload(
   }
 
   try {
+    let uploadBytes = bytes;
+    let uploadMime = verifiedMime || "application/octet-stream";
+    let uploadName = file.name;
+
+    if (isImage) {
+      const compressed = await compressImageForStorage(bytes, verifiedMime);
+      if (compressed) {
+        uploadBytes = Buffer.from(compressed.buffer);
+        uploadMime = compressed.contentType;
+        uploadName = file.name.replace(/\.[^.]+$/, "") + compressed.extension;
+      }
+    }
+
     const stored = await storeFile(
-      new File([bytes], file.name, { type: verifiedMime }),
+      new File([uploadBytes], uploadName, { type: uploadMime }),
       `events/${eventId.data}/${kind}`,
     );
 
     // team_photo lands in the admin "Main gallery" (staged, hidden from guests)
-    // until an admin sends it to groups/everyone. All other kinds stay visible
-    // as before.
+    // until an admin sends it — publish converts to event_photo (whole-event album).
     const isTeamPhoto = kind === "team_photo";
 
     const media = await Media.create({
       eventId: eventId.data,
       kind,
       title: title || file.name,
-      filename: file.name,
-      contentType: verifiedMime || "application/octet-stream",
-      size: file.size,
+      filename: uploadName,
+      contentType: uploadMime,
+      size: uploadBytes.length,
       storageKey: stored.storageKey,
       storageProvider: stored.storageProvider,
       guestId,

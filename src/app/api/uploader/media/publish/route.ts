@@ -73,7 +73,14 @@ export async function POST(request: Request) {
   if (readyIds.length) {
     await Media.updateMany(
       { _id: { $in: readyIds.map((item) => item._id) } },
-      { $set: { published: true, everyone: true, groupIds: [] } },
+      {
+        $set: {
+          kind: "event_photo",
+          published: true,
+          everyone: true,
+          groupIds: [],
+        },
+      },
     );
     sent = readyIds.length;
   }
