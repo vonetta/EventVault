@@ -916,11 +916,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No media found" }, { status: 404 });
     }
     if (body.needsEditing) {
-      // Returning to editing also pulls published team photos out of guest view.
+      // Pull out of guest view and land in the Needs editing pile.
+      // Must reset kind to team_photo — otherwise event_photo + needsEditing
+      // matches no Admin section (edit pile required team_photo before).
       await Media.updateMany(
         { _id: { $in: media.map((item) => item._id) } },
         {
           $set: {
+            kind: "team_photo",
             needsEditing: true,
             published: false,
             everyone: false,

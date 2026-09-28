@@ -121,7 +121,14 @@ export function MediaTab({
   );
 
   const needsEditingPhotos = useMemo(
-    () => data.media.filter((item) => item.kind === "team_photo" && item.needsEditing),
+    () =>
+      data.media.filter(
+        (item) =>
+          item.needsEditing &&
+          (item.kind === "team_photo" ||
+            item.kind === "event_photo" ||
+            item.kind === "group_photo"),
+      ),
     [data.media],
   );
   const stagedTeamPhotos = useMemo(
@@ -275,6 +282,11 @@ export function MediaTab({
     if (!json) return;
     setEditingSelected(new Set());
     setTeamSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of mediaIds) next.delete(id);
+      return next;
+    });
+    setSentSelected((prev) => {
       const next = new Set(prev);
       for (const id of mediaIds) next.delete(id);
       return next;
@@ -563,8 +575,9 @@ export function MediaTab({
             Photo upload
           </a>
           , clean rejects and tag faces there, then come back to this Media tab to Send ready photos
-          to the whole-event album. Tagging alone puts a photo in that guest’s Photos of you — Send
-          is what fills Whole event for everyone.
+          to the whole-event album. Tag 1–2 people on a personal shot for Photos of you
+          (watermarked until unlock). Big group shots: use Group photos → Whole event on upload so
+          they stay free for everyone.
         </p>
         <p>
           Fix a typo on a tagged name: tap <strong>Tag</strong> on the photo (opens a popup) → tap
@@ -601,7 +614,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Needs editing"
-        description="Rejects / keep-out-of-live. Guests can’t see these. Use Untagged to finish naming, then Mark ready."
+        description="Rejects / keep-out-of-live (quality flags, duplicates, or Move to Needs editing). Guests can’t see these. Use Tagged / Untagged to filter, then Mark ready."
       >
         {needsEditingPhotos.length === 0 ? (
           <p className="text-sm text-pine">Nothing waiting on edits.</p>
@@ -768,8 +781,8 @@ export function MediaTab({
                 Whole event
               </p>
               <p className="mt-1 text-xs text-pine">
-                Every guest sees these in the free whole-event album. People you tagged still get
-                them under Photos of you. Tap <strong>Tag</strong> on a photo to name people.
+                Every guest sees these in the free whole-event album. Tag 1–2 people on a personal
+                shot for Photos of you (watermarked until unlock). Crowd tags stay Whole event only.
               </p>
               <AdminButton
                 variant="primary"
@@ -849,9 +862,20 @@ export function MediaTab({
               </AdminButton>
             ) : null}
             {sentSelected.size > 0 ? (
-              <AdminButton variant="secondary" disabled={unsending} onClick={unsendTeamPhotos}>
-                {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
-              </AdminButton>
+              <div className="flex flex-wrap gap-2">
+                <AdminButton variant="secondary" disabled={unsending} onClick={unsendTeamPhotos}>
+                  {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
+                </AdminButton>
+                <AdminButton
+                  variant="secondary"
+                  disabled={togglingEdit}
+                  onClick={() => void setNeedsEditing([...sentSelected], true)}
+                >
+                  {togglingEdit
+                    ? "Saving…"
+                    : `Move ${sentSelected.size} to Needs editing`}
+                </AdminButton>
+              </div>
             ) : null}
           </div>
         </AdminPanel>

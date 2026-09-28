@@ -383,8 +383,8 @@ export default function VaultPage() {
             unlockPanel("photos")
           ) : (
             <p className="text-sm text-pine">
-              Shots where you were tagged (or uploaded as your personal set). Tap to enlarge or
-              download one at a time.
+              Personalized shots of you (solo or small groups) — not large group photos. Those stay
+              free in Whole event below. Tap to enlarge or download one at a time.
             </p>
           )}
           <MediaGrid
@@ -461,8 +461,8 @@ export default function VaultPage() {
           {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
         </h2>
         <p className="text-sm text-pine">
-          Free for every guest — one album for the whole weekend. Photos tagged to you stay under
-          Photos of you instead.
+          Free for every guest — including group shots from the weekend. Personalized photos of you
+          are under Photos of you above (watermarked until unlocked).
         </p>
         <MediaGrid
           items={data.eventGallery || []}

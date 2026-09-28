@@ -397,6 +397,16 @@ export default function UploadPage() {
     if (typeof patch.needsEditing === "boolean") {
       await refreshGalleries(eventId);
       if (taggingId === id) setTaggingId(null);
+      // Show the pile the photo just moved into.
+      if (patch.needsEditing) {
+        setBucket("editing");
+        setTagFilter("all");
+        setVisibleCount(GALLERY_PAGE_SIZE);
+      } else {
+        setBucket("ready");
+        setTagFilter("all");
+        setVisibleCount(GALLERY_PAGE_SIZE);
+      }
     }
   }
 
@@ -734,9 +744,10 @@ export default function UploadPage() {
         <li>
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
-            Group-photo AI finds multi-person shots for Whole event. Tag people on a photo for
-            Photos of you. Typo? Open <span className="font-medium text-ink">Tag</span> → tap the
-            black <span className="font-medium text-ink">Fix spelling</span> button under the name.
+            Group-photo AI → free Whole event. Tag people on a photo for personalized Photos of you
+            (watermarked until unlock). Typo? Open{" "}
+            <span className="font-medium text-ink">Tag</span> on a photo → tap the black{" "}
+            <span className="font-medium text-ink">Fix spelling</span> button under the name.
           </span>
         </li>
         <li>
@@ -945,6 +956,11 @@ export default function UploadPage() {
                       await refreshAssistPhotos();
                     }}
                     onMessage={setMessage}
+                    onMovedToEditing={() => {
+                      setBucket("editing");
+                      setTagFilter("all");
+                      setVisibleCount(GALLERY_PAGE_SIZE);
+                    }}
                   />
                 </>
               ) : null}
