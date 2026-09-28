@@ -563,8 +563,9 @@ export function MediaTab({
             Photo upload
           </a>
           , clean rejects and tag faces there, then come back to this Media tab to Send ready photos
-          to the whole-event album. Tagging alone puts a photo in that guest’s Photos of you — Send
-          is what fills Whole event for everyone.
+          to the whole-event album. Tag 1–2 people on a personal shot for Photos of you
+          (watermarked until unlock). Big group shots: use Group photos → Whole event on upload so
+          they stay free for everyone.
         </p>
         <p>
           Fix a typo on a tagged name: tap <strong>Tag</strong> on the photo (opens a popup) → tap
@@ -768,8 +769,8 @@ export function MediaTab({
                 Whole event
               </p>
               <p className="mt-1 text-xs text-pine">
-                Every guest sees these in the free whole-event album. People you tagged still get
-                them under Photos of you. Tap <strong>Tag</strong> on a photo to name people.
+                Every guest sees these in the free whole-event album. Tag 1–2 people on a personal
+                shot for Photos of you (watermarked until unlock). Crowd tags stay Whole event only.
               </p>
               <AdminButton
                 variant="primary"

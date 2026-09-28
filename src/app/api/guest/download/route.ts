@@ -7,7 +7,10 @@ import { unauthorized, assertSameOrigin } from "@/lib/auth";
 import { Event, Media, type MediaDoc } from "@/lib/models";
 import { openStoredObjectStream } from "@/lib/storage";
 import { resolveGuestSession } from "@/lib/guest-session";
-import { findIndividualPhotos } from "@/lib/individual-photos";
+import {
+  findIndividualPhotos,
+  isPersonalizedForGuest,
+} from "@/lib/individual-photos";
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { logActivity } from "@/lib/audit";
@@ -113,7 +116,7 @@ export async function GET(request: Request) {
   const eventForZip = eventPhotos.filter(
     (item) =>
       isMediaAvailable(item.availableUntil) &&
-      !(item.taggedGuestIds || []).some((id) => String(id) === guestId),
+      !isPersonalizedForGuest(item, guestId),
   );
 
   // Individual photos (assigned + tagged) only once unlocked (VIP included).

@@ -14,6 +14,8 @@ import { mapPool } from "@/lib/photo-quality";
 
 const SCAN_CONCURRENCY = 2;
 const APPLY_CHUNK = 200;
+/** Crowd shots belong in Whole event — do not auto-tag into Photos of you. */
+const GROUP_FACE_SKIP = 3;
 
 type GalleryPhoto = {
   id: string;
@@ -283,6 +285,10 @@ export function FaceAssistPanel({
       async (photo) => {
         try {
           const detected = await detectFacesInImage(photo.url);
+          // Group / crowd frames stay free in Whole event — never auto-tag into
+          // watermarked Photos of you.
+          if (detected.length >= GROUP_FACE_SKIP) return null;
+
           const matched = new Map<string, number>();
           for (const face of detected) {
             const hit = bestMatch(face.descriptor, profileList, 0.55);
@@ -359,9 +365,9 @@ export function FaceAssistPanel({
           AI face tagging
         </h2>
         <p className="mt-1 text-sm text-pine">
-          For personal “Your photos” only — name faces on a seed shot and auto-tag lookalikes.
-          Big group shots belong in <span className="text-ink">Group photos → Whole event</span> above
-          (no tagging needed).
+          For personalized Photos of you only (watermarked until unlock) — name faces on a seed shot
+          and auto-tag lookalikes. Skips photos with {GROUP_FACE_SKIP}+ faces; put those in{" "}
+          <span className="text-ink">Group photos → Whole event</span> above.
         </p>
         <p className="mt-1 text-xs text-pine">
           Models:{" "}
