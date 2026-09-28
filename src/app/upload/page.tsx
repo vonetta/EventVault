@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FaceAssistPanel } from "@/components/FaceAssistPanel";
 import { GroupPhotoAssistPanel } from "@/components/GroupPhotoAssistPanel";
 import { QualityAssistPanel } from "@/components/QualityAssistPanel";
 import { TagPhotoModal } from "@/components/TagPhotoModal";
@@ -745,8 +744,8 @@ export default function UploadPage() {
         <li>
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
-            Group-photo AI → free Whole event. Face tagging → personalized Photos of you
-            (watermarked until unlock; skips crowd shots). Typo? Open{" "}
+            Group-photo AI → free Whole event. Tag people on a photo for personalized Photos of you
+            (watermarked until unlock). Typo? Open{" "}
             <span className="font-medium text-ink">Tag</span> on a photo → tap the black{" "}
             <span className="font-medium text-ink">Fix spelling</span> button under the name.
           </span>
@@ -962,21 +961,6 @@ export default function UploadPage() {
                       setTagFilter("all");
                       setVisibleCount(GALLERY_PAGE_SIZE);
                     }}
-                  />
-                  <FaceAssistPanel
-                    eventId={eventId}
-                    guests={guests}
-                    photos={assistPhotos}
-                    onCreateGuest={createGuest}
-                    onRenameGuest={renameGuest}
-                    onGuestsChanged={async () => {
-                      await loadGuests(eventId);
-                    }}
-                    onPhotosChanged={async () => {
-                      await refreshGalleries(eventId);
-                      await refreshAssistPhotos();
-                    }}
-                    onMessage={setMessage}
                   />
                 </>
               ) : null}

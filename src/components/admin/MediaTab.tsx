@@ -378,7 +378,7 @@ export function MediaTab({
     if (!data.event) return;
     if (
       !confirm(
-        "Move older Shared / group album photos into Whole event? Face tags stay. This cannot be undone from here.",
+        "Move older Shared / group album photos into Whole event? Person tags stay. This cannot be undone from here.",
       )
     ) {
       return;
