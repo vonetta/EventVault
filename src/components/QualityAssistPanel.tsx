@@ -19,6 +19,8 @@ type QualityAssistPanelProps = {
   photos: GalleryPhoto[];
   onPhotosChanged: () => Promise<void>;
   onMessage: (message: string) => void;
+  /** Jump the gallery UI to Needs editing after marks land in that pile. */
+  onMovedToEditing?: () => void;
 };
 
 type SoftHit = {
@@ -43,6 +45,7 @@ export function QualityAssistPanel({
   photos,
   onPhotosChanged,
   onMessage,
+  onMovedToEditing,
 }: QualityAssistPanelProps) {
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
@@ -206,6 +209,7 @@ export function QualityAssistPanel({
       setSoftHits([]);
       setDupGroups([]);
       await onPhotosChanged();
+      onMovedToEditing?.();
     } finally {
       setApplying(false);
     }

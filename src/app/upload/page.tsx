@@ -398,6 +398,16 @@ export default function UploadPage() {
     if (typeof patch.needsEditing === "boolean") {
       await refreshGalleries(eventId);
       if (taggingId === id) setTaggingId(null);
+      // Show the pile the photo just moved into.
+      if (patch.needsEditing) {
+        setBucket("editing");
+        setTagFilter("all");
+        setVisibleCount(GALLERY_PAGE_SIZE);
+      } else {
+        setBucket("ready");
+        setTagFilter("all");
+        setVisibleCount(GALLERY_PAGE_SIZE);
+      }
     }
   }
 
@@ -947,6 +957,11 @@ export default function UploadPage() {
                       await refreshAssistPhotos();
                     }}
                     onMessage={setMessage}
+                    onMovedToEditing={() => {
+                      setBucket("editing");
+                      setTagFilter("all");
+                      setVisibleCount(GALLERY_PAGE_SIZE);
+                    }}
                   />
                   <FaceAssistPanel
                     eventId={eventId}

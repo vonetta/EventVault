@@ -70,6 +70,8 @@ export async function POST(request: Request) {
   if (body.needsEditing !== undefined) {
     media.needsEditing = body.needsEditing;
     if (body.needsEditing) {
+      // Stay/return in the Needs editing pile (unpublished team photo).
+      media.kind = "team_photo";
       media.published = false;
       media.everyone = false;
       media.groupIds = [];
