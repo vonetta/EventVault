@@ -1,4 +1,5 @@
 import { isAdminAuthenticated, isUploaderAuthenticated } from "@/lib/auth";
+import { isPersonalizedForGuest } from "@/lib/individual-photos";
 import { type MediaDoc } from "@/lib/models";
 import { resolveGuestSession } from "@/lib/guest-session";
 import { isMediaAvailable } from "@/lib/youtube";
@@ -33,14 +34,10 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
     if (media.needsEditing) return "none";
 
     const guestId = String(guest._id);
-    const isTagged = (media.taggedGuestIds || []).some((id) => String(id) === guestId);
-    const isAssignedPersonal =
-      media.kind === "personal_photo" && String(media.guestId) === guestId;
 
-    // Tagged / assigned individual photos use the paywall — checked before free
-    // group galleries so a tagged share stays a paid individual photo.
-    // VIP tickets include unlock (documented product behavior); others pay via Zelle.
-    if (isAssignedPersonal || isTagged) {
+    // Personalized Photos of you (solo/couple tags or assigned VIP) use the
+    // watermark paywall. Crowd / multi-tag group shots stay free in Whole event.
+    if (isPersonalizedForGuest(media, guestId)) {
       if (session.adminPreview) return "full";
       if (guest.tier === "vip" || guest.personalPhotosPaid) return "full";
       return "preview";

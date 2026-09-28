@@ -79,6 +79,9 @@ export async function POST(request: Request) {
           published: true,
           everyone: true,
           groupIds: [],
+          // Group shots are free Whole event — clear person tags so they do not
+          // land in watermarked Photos of you for everyone in the frame.
+          taggedGuestIds: [],
         },
       },
     );

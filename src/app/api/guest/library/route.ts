@@ -6,7 +6,10 @@ import {
 } from "@/lib/auth";
 import { Day, Event, Media, Session } from "@/lib/models";
 import { resolveGuestSession } from "@/lib/guest-session";
-import { findIndividualPhotos } from "@/lib/individual-photos";
+import {
+  findIndividualPhotos,
+  isPersonalizedForGuest,
+} from "@/lib/individual-photos";
 import { mediaProxyUrl } from "@/lib/storage";
 import { zelleConfigured, zellePaymentInfo } from "@/lib/payments";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
@@ -96,7 +99,8 @@ export async function GET(request: Request) {
   const guestId = String(guest._id);
 
   // Whole-event album (includes former group/team shares after consolidate).
-  // Photos tagged to this guest stay under Photos of you only.
+  // Personalized tags (solo/couple) live under Photos of you only; crowd tags
+  // stay here so group shots are not sold as “photos of you”.
   const eventPhotoDocs = await Media.find({
     eventId: guest.eventId,
     kind: { $in: ["event_photo", "group_photo"] },
@@ -107,7 +111,7 @@ export async function GET(request: Request) {
     .filter(
       (item) =>
         isMediaAvailable(item.availableUntil) &&
-        !(item.taggedGuestIds || []).some((id) => String(id) === guestId),
+        !isPersonalizedForGuest(item, guestId),
     )
     .map(mapFileMedia);
 

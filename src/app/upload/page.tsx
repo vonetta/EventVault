@@ -735,10 +735,10 @@ export default function UploadPage() {
         <li>
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
-            Group-photo AI finds multi-person shots for Whole event; face tagging is for personal
-            galleries only. Typo? Open <span className="font-medium text-ink">Tag people</span> →
-            tap the black <span className="font-medium text-ink">Fix spelling</span> button under
-            the name.
+            Group-photo AI → free Whole event. Face tagging → personalized Photos of you
+            (watermarked until unlock; skips crowd shots). Typo? Open{" "}
+            <span className="font-medium text-ink">Tag</span> on a photo → tap the black{" "}
+            <span className="font-medium text-ink">Fix spelling</span> button under the name.
           </span>
         </li>
         <li>
