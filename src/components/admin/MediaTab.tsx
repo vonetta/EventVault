@@ -121,7 +121,14 @@ export function MediaTab({
   );
 
   const needsEditingPhotos = useMemo(
-    () => data.media.filter((item) => item.kind === "team_photo" && item.needsEditing),
+    () =>
+      data.media.filter(
+        (item) =>
+          item.needsEditing &&
+          (item.kind === "team_photo" ||
+            item.kind === "event_photo" ||
+            item.kind === "group_photo"),
+      ),
     [data.media],
   );
   const stagedTeamPhotos = useMemo(
@@ -275,6 +282,11 @@ export function MediaTab({
     if (!json) return;
     setEditingSelected(new Set());
     setTeamSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of mediaIds) next.delete(id);
+      return next;
+    });
+    setSentSelected((prev) => {
       const next = new Set(prev);
       for (const id of mediaIds) next.delete(id);
       return next;
@@ -602,7 +614,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Needs editing"
-        description="Rejects / keep-out-of-live. Guests can’t see these. Use Untagged to finish naming, then Mark ready."
+        description="Rejects / keep-out-of-live (quality flags, duplicates, or Move to Needs editing). Guests can’t see these. Use Tagged / Untagged to filter, then Mark ready."
       >
         {needsEditingPhotos.length === 0 ? (
           <p className="text-sm text-pine">Nothing waiting on edits.</p>
@@ -850,9 +862,20 @@ export function MediaTab({
               </AdminButton>
             ) : null}
             {sentSelected.size > 0 ? (
-              <AdminButton variant="secondary" disabled={unsending} onClick={unsendTeamPhotos}>
-                {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
-              </AdminButton>
+              <div className="flex flex-wrap gap-2">
+                <AdminButton variant="secondary" disabled={unsending} onClick={unsendTeamPhotos}>
+                  {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
+                </AdminButton>
+                <AdminButton
+                  variant="secondary"
+                  disabled={togglingEdit}
+                  onClick={() => void setNeedsEditing([...sentSelected], true)}
+                >
+                  {togglingEdit
+                    ? "Saving…"
+                    : `Move ${sentSelected.size} to Needs editing`}
+                </AdminButton>
+              </div>
             ) : null}
           </div>
         </AdminPanel>

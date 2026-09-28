@@ -66,6 +66,7 @@ export async function POST(request: Request) {
 
     media.needsEditing = update.needsEditing;
     if (update.needsEditing) {
+      media.kind = "team_photo";
       media.published = false;
       media.everyone = false;
       media.groupIds = [];
