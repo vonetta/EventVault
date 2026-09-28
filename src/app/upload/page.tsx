@@ -151,6 +151,7 @@ export default function UploadPage() {
   const [guests, setGuests] = useState<NameOnlyGuest[]>([]);
   const [markNeedsEditing, setMarkNeedsEditing] = useState(false);
   const [bucket, setBucket] = useState<GalleryBucket>("ready");
+  const [tagFilter, setTagFilter] = useState<"all" | "untagged" | "tagged">("all");
   const [taggingId, setTaggingId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [tagSaveHint, setTagSaveHint] = useState("");
@@ -622,7 +623,17 @@ export default function UploadPage() {
   const activeGallery = bucket === "ready" ? readyGallery : editingGallery;
   const activeTotal = bucket === "ready" ? galleryTotals.ready : galleryTotals.editing;
   const activeHasMore = bucket === "ready" ? readyHasMore : editingHasMore;
-  const visibleGallery = activeGallery.slice(0, visibleCount);
+  const filteredGallery =
+    tagFilter === "untagged"
+      ? activeGallery.filter(
+          (photo) => photo.taggedGuestIds.length === 0 || photo.id === taggingId,
+        )
+      : tagFilter === "tagged"
+        ? activeGallery.filter((photo) => photo.taggedGuestIds.length > 0)
+        : activeGallery;
+  const untaggedInBucket = activeGallery.filter((p) => p.taggedGuestIds.length === 0).length;
+  const taggedInBucket = activeGallery.filter((p) => p.taggedGuestIds.length > 0).length;
+  const visibleGallery = filteredGallery.slice(0, visibleCount);
 
   function renderPhotoCard(photo: StagedPhoto) {
     return (
@@ -967,6 +978,7 @@ export default function UploadPage() {
                 type="button"
                 onClick={() => {
                   setBucket("ready");
+                  setTagFilter("all");
                   setVisibleCount(GALLERY_PAGE_SIZE);
                 }}
                 aria-pressed={bucket === "ready"}
@@ -980,6 +992,7 @@ export default function UploadPage() {
                 type="button"
                 onClick={() => {
                   setBucket("editing");
+                  setTagFilter("all");
                   setVisibleCount(GALLERY_PAGE_SIZE);
                 }}
                 aria-pressed={bucket === "editing"}
@@ -993,26 +1006,54 @@ export default function UploadPage() {
                 <span className="text-xs text-pine">Refreshing…</span>
               ) : null}
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {(
+                [
+                  { id: "all" as const, label: `All (${activeGallery.length})` },
+                  { id: "untagged" as const, label: `Untagged (${untaggedInBucket})` },
+                  { id: "tagged" as const, label: `Tagged (${taggedInBucket})` },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={tagFilter === option.id}
+                  onClick={() => {
+                    setTagFilter(option.id);
+                    setVisibleCount(GALLERY_PAGE_SIZE);
+                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    tagFilter === option.id ? "bg-ink text-foam" : "bg-mist text-pine"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <p className="mt-2 text-sm text-pine">
               {bucket === "ready"
-                ? "Ready for the admin to send to groups, or already tagged for someone’s personal gallery."
-                : "Hidden from guests. Tag people here if you like, then mark ready when the edit is done."}
+                ? "Ready for Admin → Media to send. Tap Untagged to finish naming what’s left."
+                : "Hidden from guests. Tap Untagged to finish naming, then mark ready."}
             </p>
-            {activeGallery.length === 0 ? (
-              <p className="mt-4 text-sm text-pine">Nothing here yet.</p>
+            {filteredGallery.length === 0 ? (
+              <p className="mt-4 text-sm text-pine">
+                {tagFilter === "untagged"
+                  ? "No untagged photos in this loaded batch — try Load more from server, or switch buckets."
+                  : "Nothing here yet."}
+              </p>
             ) : (
               <>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {visibleGallery.map(renderPhotoCard)}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  {visibleCount < activeGallery.length ? (
+                  {visibleCount < filteredGallery.length ? (
                     <button
                       type="button"
                       onClick={() => setVisibleCount((n) => n + GALLERY_PAGE_SIZE)}
                       className="rounded-lg border border-[color:var(--line)] px-3 py-2 text-sm text-ink hover:bg-mist"
                     >
-                      Show more ({activeGallery.length - visibleCount} loaded)
+                      Show more ({filteredGallery.length - visibleCount} loaded)
                     </button>
                   ) : null}
                   {activeHasMore ? (
