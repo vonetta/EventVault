@@ -10,8 +10,10 @@ export type PhotoQuality = {
   /** Too dark / bright / soft for live gallery. */
   needsEditing: boolean;
   reasons: string[];
-  /** 64-bit average-hash hex (16 chars) for near-duplicate detection. */
+  /** 64-bit average-hash hex (16 chars). */
   aHash: string;
+  /** 64-bit difference-hash hex (16 chars) — better for near-duplicate bursts. */
+  dHash: string;
 };
 
 function loadImage(fileOrUrl: File | string): Promise<HTMLImageElement> {
@@ -28,27 +30,61 @@ function loadImage(fileOrUrl: File | string): Promise<HTMLImageElement> {
   });
 }
 
-function sampleToCanvas(img: HTMLImageElement, size: number) {
+/**
+ * Draw the image into a canvas letterboxed (not stretched) so hashes keep
+ * composition. Mid-gray padding avoids black/white bias.
+ */
+function sampleLetterboxed(img: HTMLImageElement, width: number, height = width) {
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("Canvas unavailable");
-  ctx.drawImage(img, 0, 0, size, size);
-  return { canvas, ctx, data: ctx.getImageData(0, 0, size, size).data };
+  ctx.fillStyle = "#808080";
+  ctx.fillRect(0, 0, width, height);
+  const scale = Math.min(width / img.naturalWidth, height / img.naturalHeight);
+  const w = Math.max(1, Math.round(img.naturalWidth * scale));
+  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const x = Math.floor((width - w) / 2);
+  const y = Math.floor((height - h) / 2);
+  ctx.drawImage(img, x, y, w, h);
+  return { canvas, ctx, data: ctx.getImageData(0, 0, width, height).data };
 }
 
-/** 8×8 average hash — good enough to catch near-identical burst shots. */
-export function averageHashFromImageData(data: Uint8ClampedArray, size = 8) {
-  const grays: number[] = [];
-  for (let i = 0; i < size * size; i++) {
+function toGray(data: Uint8ClampedArray, pixelCount: number) {
+  const grays = new Array<number>(pixelCount);
+  for (let i = 0; i < pixelCount; i++) {
     const o = i * 4;
-    grays.push(0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2]);
+    grays[i] = 0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2];
   }
+  return grays;
+}
+
+/** 8×8 average hash (letterboxed). */
+export function averageHashFromImageData(data: Uint8ClampedArray, size = 8) {
+  const grays = toGray(data, size * size);
   const avg = grays.reduce((a, b) => a + b, 0) / grays.length;
   let bits = BigInt(0);
   for (let i = 0; i < grays.length; i++) {
     if (grays[i] >= avg) bits |= BigInt(1) << BigInt(i);
+  }
+  return bits.toString(16).padStart(16, "0");
+}
+
+/**
+ * Difference hash: compare each pixel to its right neighbor on a 9×8 grid.
+ * Much better than aHash at rejecting unrelated scenes with similar brightness.
+ */
+export function differenceHashFromImageData(data: Uint8ClampedArray, width = 9, height = 8) {
+  const grays = toGray(data, width * height);
+  let bits = BigInt(0);
+  let bit = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width - 1; x++) {
+      const i = y * width + x;
+      if (grays[i] < grays[i + 1]) bits |= BigInt(1) << BigInt(bit);
+      bit += 1;
+    }
   }
   return bits.toString(16).padStart(16, "0");
 }
@@ -64,8 +100,31 @@ export function hammingHex64(a: string, b: string) {
   return count;
 }
 
-/** Photos with hamming distance ≤ this are treated as near-duplicates. */
-export const DUPLICATE_HAMMING_MAX = 6;
+/**
+ * Near-duplicate thresholds (AND both must pass).
+ * Tuned for burst / bracket shots — not “same room, different framing”.
+ */
+export const DUPLICATE_DHASH_MAX = 4;
+export const DUPLICATE_AHASH_MAX = 8;
+
+/** @deprecated use isNearDuplicate / DUPLICATE_DHASH_MAX */
+export const DUPLICATE_HAMMING_MAX = DUPLICATE_DHASH_MAX;
+
+export function isNearDuplicate(
+  a: Pick<PhotoQuality, "aHash" | "dHash">,
+  b: Pick<PhotoQuality, "aHash" | "dHash">,
+) {
+  if (!a.dHash || !b.dHash || a.dHash.length !== 16 || b.dHash.length !== 16) {
+    return false;
+  }
+  if (!a.aHash || !b.aHash || a.aHash.length !== 16 || b.aHash.length !== 16) {
+    return false;
+  }
+  return (
+    hammingHex64(a.dHash, b.dHash) <= DUPLICATE_DHASH_MAX &&
+    hammingHex64(a.aHash, b.aHash) <= DUPLICATE_AHASH_MAX
+  );
+}
 
 /**
  * Quick quality pass: blur + exposure heuristics.
@@ -75,8 +134,8 @@ export const DUPLICATE_HAMMING_MAX = 6;
 export async function analyzePhotoQuality(source: File | string): Promise<PhotoQuality> {
   const img = await loadImage(source);
   try {
-    // Small sample for hash + brightness
-    const small = sampleToCanvas(img, 8);
+    // Letterboxed 8×8 for aHash + brightness
+    const small = sampleLetterboxed(img, 8, 8);
     const aHash = averageHashFromImageData(small.data, 8);
 
     let brightnessSum = 0;
@@ -86,13 +145,13 @@ export async function analyzePhotoQuality(source: File | string): Promise<PhotoQ
     }
     const brightness = brightnessSum / 64;
 
+    // Classic dHash grid: 9×8 letterboxed (not stretched, not cropped from square)
+    const dSample = sampleLetterboxed(img, 9, 8);
+    const dHash = differenceHashFromImageData(dSample.data, 9, 8);
+
     // Larger sample for sharpness (gradient magnitude variance proxy)
-    const mid = sampleToCanvas(img, 64);
-    const g: number[] = [];
-    for (let i = 0; i < 64 * 64; i++) {
-      const o = i * 4;
-      g.push(0.299 * mid.data[o] + 0.587 * mid.data[o + 1] + 0.114 * mid.data[o + 2]);
-    }
+    const mid = sampleLetterboxed(img, 64, 64);
+    const g = toGray(mid.data, 64 * 64);
     let gradSum = 0;
     let gradSq = 0;
     let n = 0;
@@ -121,6 +180,7 @@ export async function analyzePhotoQuality(source: File | string): Promise<PhotoQ
       needsEditing: reasons.length > 0,
       reasons,
       aHash,
+      dHash,
     };
   } finally {
     if (typeof source !== "string" && img.src.startsWith("blob:")) {
