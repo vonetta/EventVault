@@ -214,6 +214,14 @@ export function MediaTab({
     [sentTeamPhotos],
   );
 
+  const untaggedTotal =
+    untaggedEditingCount + untaggedStagedCount + untaggedSentCount;
+  const taggedPhotoTotal =
+    taggedEditingCount + taggedStagedCount + taggedSentCount;
+  const taggablePhotoTotal =
+    needsEditingPhotos.length + stagedTeamPhotos.length + sentTeamPhotos.length;
+
+
   const taggingMedia = useMemo(
     () => (taggingId ? data.media.find((item) => item._id === taggingId) || null : null),
     [data.media, taggingId],
@@ -510,6 +518,44 @@ export function MediaTab({
 
   return (
     <>
+      <AdminPanel
+        title="Tagging progress"
+        description="Live count across Needs editing, Main gallery, and Whole event — so you know what’s left."
+      >
+        <div className="flex flex-wrap items-end gap-6">
+          <div>
+            <p className="text-3xl font-[family-name:var(--font-fraunces)] text-ink">
+              {untaggedTotal}
+            </p>
+            <p className="text-sm text-pine">untagged left</p>
+          </div>
+          <div>
+            <p className="text-2xl font-[family-name:var(--font-fraunces)] text-ink">
+              {taggedPhotoTotal}
+              <span className="ml-1 text-base text-pine">/ {taggablePhotoTotal}</span>
+            </p>
+            <p className="text-sm text-pine">photos with at least one name</p>
+          </div>
+        </div>
+        <ul className="mt-4 grid gap-1 text-sm text-pine sm:grid-cols-3">
+          <li>
+            Needs editing:{" "}
+            <strong className="text-ink">{untaggedEditingCount}</strong> untagged
+          </li>
+          <li>
+            Main gallery:{" "}
+            <strong className="text-ink">{untaggedStagedCount}</strong> untagged
+          </li>
+          <li>
+            Whole event:{" "}
+            <strong className="text-ink">{untaggedSentCount}</strong> untagged
+          </li>
+        </ul>
+        <p className="mt-3 text-xs text-pine">
+          In each section below, tap <strong>Untagged</strong> to work only the leftovers.
+        </p>
+      </AdminPanel>
+
       <HowTo title="Same person? Upload here, send to Whole event" defaultOpen={stagedTeamPhotos.length > 0}>
         <p>
           If you shoot and run the vault yourself: dump the weekend on{" "}
