@@ -15,7 +15,7 @@ export type ConsolidateGalleriesResult = {
 
 /**
  * Fold the old group / shared team album into the whole-event album.
- * Keeps face tags. Leaves staged / needs-editing team photos alone.
+ * Keeps person tags. Leaves staged / needs-editing team photos alone.
  */
 export async function consolidateGroupIntoEvent(
   eventId: string,

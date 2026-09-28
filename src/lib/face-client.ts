@@ -1,28 +1,15 @@
 "use client";
 
-import {
-  isValidDescriptor,
-  matchFace,
-  type FaceDescriptor,
-  type FaceLabeledProfile,
-} from "@/lib/face-match";
-
-export type DetectedFace = {
-  id: string;
-  box: { x: number; y: number; width: number; height: number };
-  descriptor: FaceDescriptor;
-};
-
 type FaceApiModule = typeof import("@vladmandic/face-api");
 
 let modelsReady: Promise<FaceApiModule> | null = null;
 
-/** Load tiny face detector + landmarks + recognition nets once per session. */
+/** Load tiny face detector only (group-shot counting — no recognition / tagging). */
 export async function loadFaceModels() {
   if (!modelsReady) {
     modelsReady = (async () => {
       const faceapi = await import("@vladmandic/face-api");
-      // Prefer CPU so tagging works on machines without WebGL (common in VMs / CI).
+      // Prefer CPU so scanning works on machines without WebGL (common in VMs / CI).
       // face-api's bundled tf typings omit setBackend/ready — runtime still has them.
       try {
         const tf = faceapi.tf as unknown as {
@@ -34,12 +21,7 @@ export async function loadFaceModels() {
       } catch {
         // Fall through to whatever backend tfjs picks.
       }
-      const modelUrl = "/models/face-api";
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
-        faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
-        faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
-      ]);
+      await faceapi.nets.tinyFaceDetector.loadFromUri("/models/face-api");
       return faceapi;
     })();
   }
@@ -56,33 +38,8 @@ export async function loadImageElement(url: string): Promise<HTMLImageElement> {
   });
 }
 
-export async function detectFacesInImage(url: string): Promise<DetectedFace[]> {
-  const faceapi = await loadFaceModels();
-  const img = await loadImageElement(url);
-  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
-  const results = await faceapi
-    .detectAllFaces(img, options)
-    .withFaceLandmarks()
-    .withFaceDescriptors();
-
-  return results.map((result, index) => {
-    const box = result.detection.box;
-    return {
-      id: `face-${index}-${Math.round(box.x)}-${Math.round(box.y)}`,
-      box: {
-        x: box.x,
-        y: box.y,
-        width: box.width,
-        height: box.height,
-      },
-      descriptor: Array.from(result.descriptor) as FaceDescriptor,
-    };
-  });
-}
-
 /**
- * Fast face count only (no landmarks / descriptors) — for spotting group shots
- * across large galleries without the full recognition cost.
+ * Fast face count only — for spotting group shots across large galleries.
  */
 export async function countFacesInImage(url: string): Promise<number> {
   const faceapi = await loadFaceModels();
@@ -90,16 +47,4 @@ export async function countFacesInImage(url: string): Promise<number> {
   const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
   const results = await faceapi.detectAllFaces(img, options);
   return results.length;
-}
-
-export function bestMatch(
-  descriptor: FaceDescriptor,
-  profiles: FaceLabeledProfile[],
-  threshold = 0.55,
-) {
-  return matchFace(descriptor, profiles, threshold);
-}
-
-export function descriptorFromUnknown(value: unknown): FaceDescriptor | null {
-  return isValidDescriptor(value) ? value : null;
 }

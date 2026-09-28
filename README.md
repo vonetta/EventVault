@@ -107,4 +107,4 @@ Production requires `SESSION_SECRET` (≥32 chars), `ADMIN_PASSWORD` (≥12 char
 
 - Ticket email via personal Gmail SMTP (import + per-guest send)
 - Multi-event create/switch in admin
-- Still later: face tagging, payments, richer standard-tier session packs
+- Still later: payments, richer standard-tier session packs

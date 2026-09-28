@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FaceAssistPanel } from "@/components/FaceAssistPanel";
 import { GroupPhotoAssistPanel } from "@/components/GroupPhotoAssistPanel";
 import { QualityAssistPanel } from "@/components/QualityAssistPanel";
 import { TagPhotoModal } from "@/components/TagPhotoModal";
@@ -735,10 +734,9 @@ export default function UploadPage() {
         <li>
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
-            Group-photo AI finds multi-person shots for Whole event; face tagging is for personal
-            galleries only. Typo? Open <span className="font-medium text-ink">Tag people</span> →
-            tap the black <span className="font-medium text-ink">Fix spelling</span> button under
-            the name.
+            Group-photo AI finds multi-person shots for Whole event. Tag people on a photo for
+            Photos of you. Typo? Open <span className="font-medium text-ink">Tag</span> → tap the
+            black <span className="font-medium text-ink">Fix spelling</span> button under the name.
           </span>
         </li>
         <li>
@@ -942,21 +940,6 @@ export default function UploadPage() {
                   <QualityAssistPanel
                     eventId={eventId}
                     photos={assistPhotos}
-                    onPhotosChanged={async () => {
-                      await refreshGalleries(eventId);
-                      await refreshAssistPhotos();
-                    }}
-                    onMessage={setMessage}
-                  />
-                  <FaceAssistPanel
-                    eventId={eventId}
-                    guests={guests}
-                    photos={assistPhotos}
-                    onCreateGuest={createGuest}
-                    onRenameGuest={renameGuest}
-                    onGuestsChanged={async () => {
-                      await loadGuests(eventId);
-                    }}
                     onPhotosChanged={async () => {
                       await refreshGalleries(eventId);
                       await refreshAssistPhotos();
