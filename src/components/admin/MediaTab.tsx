@@ -100,6 +100,8 @@ export function MediaTab({
   const [editingSelected, setEditingSelected] = useState<Set<string>>(new Set());
   const [togglingEdit, setTogglingEdit] = useState(false);
   const [stagedFilter, setStagedFilter] = useState<"all" | "untagged" | "tagged">("all");
+  const [editingFilter, setEditingFilter] = useState<"all" | "untagged" | "tagged">("all");
+  const [sentFilter, setSentFilter] = useState<"all" | "untagged" | "tagged">("all");
   const [stagedVisibleCount, setStagedVisibleCount] = useState(60);
   const [sentVisibleCount, setSentVisibleCount] = useState(60);
   const [editingVisibleCount, setEditingVisibleCount] = useState(60);
@@ -150,17 +152,41 @@ export function MediaTab({
     return stagedTeamPhotos;
   }, [stagedTeamPhotos, stagedFilter, taggingId]);
 
+  const filteredNeedsEditing = useMemo(() => {
+    if (editingFilter === "untagged") {
+      return needsEditingPhotos.filter(
+        (item) => !(item.taggedGuestIds || []).length || item._id === taggingId,
+      );
+    }
+    if (editingFilter === "tagged") {
+      return needsEditingPhotos.filter((item) => (item.taggedGuestIds || []).length > 0);
+    }
+    return needsEditingPhotos;
+  }, [needsEditingPhotos, editingFilter, taggingId]);
+
+  const filteredSentPhotos = useMemo(() => {
+    if (sentFilter === "untagged") {
+      return sentTeamPhotos.filter(
+        (item) => !(item.taggedGuestIds || []).length || item._id === taggingId,
+      );
+    }
+    if (sentFilter === "tagged") {
+      return sentTeamPhotos.filter((item) => (item.taggedGuestIds || []).length > 0);
+    }
+    return sentTeamPhotos;
+  }, [sentTeamPhotos, sentFilter, taggingId]);
+
   const visibleStagedPhotos = useMemo(
     () => filteredStagedPhotos.slice(0, stagedVisibleCount),
     [filteredStagedPhotos, stagedVisibleCount],
   );
   const visibleNeedsEditing = useMemo(
-    () => needsEditingPhotos.slice(0, editingVisibleCount),
-    [needsEditingPhotos, editingVisibleCount],
+    () => filteredNeedsEditing.slice(0, editingVisibleCount),
+    [filteredNeedsEditing, editingVisibleCount],
   );
   const visibleSentPhotos = useMemo(
-    () => sentTeamPhotos.slice(0, sentVisibleCount),
-    [sentTeamPhotos, sentVisibleCount],
+    () => filteredSentPhotos.slice(0, sentVisibleCount),
+    [filteredSentPhotos, sentVisibleCount],
   );
 
   const untaggedStagedCount = useMemo(
@@ -170,6 +196,22 @@ export function MediaTab({
   const taggedStagedCount = useMemo(
     () => stagedTeamPhotos.filter((item) => (item.taggedGuestIds || []).length > 0).length,
     [stagedTeamPhotos],
+  );
+  const untaggedEditingCount = useMemo(
+    () => needsEditingPhotos.filter((item) => !(item.taggedGuestIds || []).length).length,
+    [needsEditingPhotos],
+  );
+  const taggedEditingCount = useMemo(
+    () => needsEditingPhotos.filter((item) => (item.taggedGuestIds || []).length > 0).length,
+    [needsEditingPhotos],
+  );
+  const untaggedSentCount = useMemo(
+    () => sentTeamPhotos.filter((item) => !(item.taggedGuestIds || []).length).length,
+    [sentTeamPhotos],
+  );
+  const taggedSentCount = useMemo(
+    () => sentTeamPhotos.filter((item) => (item.taggedGuestIds || []).length > 0).length,
+    [sentTeamPhotos],
   );
 
   const taggingMedia = useMemo(
@@ -513,23 +555,48 @@ export function MediaTab({
 
       <AdminPanel
         title="Needs editing"
-        description="Rejects / keep-out-of-live. Guests can’t see these. Tap Tag on a photo to name people, then Mark ready when they’re good to send."
+        description="Rejects / keep-out-of-live. Guests can’t see these. Use Untagged to finish naming, then Mark ready."
       >
         {needsEditingPhotos.length === 0 ? (
           <p className="text-sm text-pine">Nothing waiting on edits.</p>
         ) : (
           <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {(
+                [
+                  { id: "all" as const, label: `All (${needsEditingPhotos.length})` },
+                  { id: "untagged" as const, label: `Untagged (${untaggedEditingCount})` },
+                  { id: "tagged" as const, label: `Tagged (${taggedEditingCount})` },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={editingFilter === option.id}
+                  onClick={() => {
+                    setEditingFilter(option.id);
+                    setEditingVisibleCount(60);
+                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    editingFilter === option.id ? "bg-ink text-foam" : "bg-mist text-pine"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
               <span>
-                Showing {visibleNeedsEditing.length} of {needsEditingPhotos.length}
+                Showing {visibleNeedsEditing.length} of {filteredNeedsEditing.length}
+                {editingSelected.size ? ` · ${editingSelected.size} selected` : ""}
               </span>
               <AdminButton
                 variant="secondary"
                 onClick={() =>
-                  setEditingSelected(new Set(needsEditingPhotos.map((item) => item._id)))
+                  setEditingSelected(new Set(filteredNeedsEditing.map((item) => item._id)))
                 }
               >
-                Select all
+                Select all {editingFilter === "all" ? "" : editingFilter}
               </AdminButton>
               {editingSelected.size > 0 ? (
                 <AdminButton variant="secondary" onClick={() => setEditingSelected(new Set())}>
@@ -546,12 +613,12 @@ export function MediaTab({
               onTag={setTaggingId}
               showCaptions
             />
-            {editingVisibleCount < needsEditingPhotos.length ? (
+            {editingVisibleCount < filteredNeedsEditing.length ? (
               <AdminButton
                 variant="secondary"
                 onClick={() => setEditingVisibleCount((n) => n + 60)}
               >
-                Show more ({needsEditingPhotos.length - editingVisibleCount} left)
+                Show more ({filteredNeedsEditing.length - editingVisibleCount} left)
               </AdminButton>
             ) : null}
             <div className="flex flex-wrap gap-2">
@@ -569,7 +636,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Main gallery — ready to send"
-        description="Photos waiting on this event. Guests don’t see them under Whole event until you Send below. Tagged people can already unlock them under Photos of you."
+        description="Photos waiting to go live. Tap Untagged to see what’s left to name, then Send to Whole event."
       >
         {stagedTeamPhotos.length === 0 ? (
           <p className="text-sm text-pine">
@@ -676,18 +743,43 @@ export function MediaTab({
       {sentTeamPhotos.length ? (
         <AdminPanel
           title="In Whole event"
-          description="Already visible to every guest. Select and return them to the Main gallery to hide them again."
+          description="Already visible to every guest. Tap Untagged if you still need to name people on live photos."
         >
           <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {(
+                [
+                  { id: "all" as const, label: `All (${sentTeamPhotos.length})` },
+                  { id: "untagged" as const, label: `Untagged (${untaggedSentCount})` },
+                  { id: "tagged" as const, label: `Tagged (${taggedSentCount})` },
+                ] as const
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={sentFilter === option.id}
+                  onClick={() => {
+                    setSentFilter(option.id);
+                    setSentVisibleCount(60);
+                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    sentFilter === option.id ? "bg-ink text-foam" : "bg-mist text-pine"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
               <span>
-                Showing {visibleSentPhotos.length} of {sentTeamPhotos.length}
+                Showing {visibleSentPhotos.length} of {filteredSentPhotos.length}
+                {sentSelected.size ? ` · ${sentSelected.size} selected` : ""}
               </span>
               <AdminButton
                 variant="secondary"
-                onClick={() => setSentSelected(new Set(sentTeamPhotos.map((item) => item._id)))}
+                onClick={() => setSentSelected(new Set(filteredSentPhotos.map((item) => item._id)))}
               >
-                Select all
+                Select all {sentFilter === "all" ? "" : sentFilter}
               </AdminButton>
               {sentSelected.size > 0 ? (
                 <AdminButton variant="secondary" onClick={() => setSentSelected(new Set())}>
@@ -705,9 +797,9 @@ export function MediaTab({
               onToggleSelect={(id) => toggleIdInSet(setSentSelected, id)}
               onTag={setTaggingId}
             />
-            {sentVisibleCount < sentTeamPhotos.length ? (
+            {sentVisibleCount < filteredSentPhotos.length ? (
               <AdminButton variant="secondary" onClick={() => setSentVisibleCount((n) => n + 60)}>
-                Show more ({sentTeamPhotos.length - sentVisibleCount} left)
+                Show more ({filteredSentPhotos.length - sentVisibleCount} left)
               </AdminButton>
             ) : null}
             {sentSelected.size > 0 ? (
