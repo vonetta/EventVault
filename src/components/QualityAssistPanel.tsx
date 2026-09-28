@@ -3,8 +3,7 @@
 import { useState } from "react";
 import {
   analyzePhotoQuality,
-  DUPLICATE_HAMMING_MAX,
-  hammingHex64,
+  isNearDuplicate,
   mapPool,
 } from "@/lib/photo-quality";
 
@@ -65,6 +64,8 @@ export function QualityAssistPanel({
     type Analyzed = {
       photo: GalleryPhoto;
       aHash: string;
+      dHash: string;
+      sharpness: number;
       needsEditing: boolean;
       reasons: string[];
     };
@@ -78,6 +79,8 @@ export function QualityAssistPanel({
           return {
             photo,
             aHash: quality.aHash,
+            dHash: quality.dHash,
+            sharpness: quality.sharpness,
             needsEditing: quality.needsEditing,
             reasons: quality.reasons,
           } satisfies Analyzed;
@@ -85,6 +88,8 @@ export function QualityAssistPanel({
           return {
             photo,
             aHash: "",
+            dHash: "",
+            sharpness: 0,
             needsEditing: false,
             reasons: [],
           } satisfies Analyzed;
@@ -103,8 +108,11 @@ export function QualityAssistPanel({
         selected: true,
       }));
 
-    // Greedy near-duplicate clustering by aHash Hamming distance.
-    const withHash = analyzed.filter((item) => item.aHash.length === 16);
+    // Greedy clusters: both dHash and aHash must agree (rejects unrelated scenes
+    // that only share overall brightness — the old aHash-only false positives).
+    const withHash = analyzed.filter(
+      (item) => item.aHash.length === 16 && item.dHash.length === 16,
+    );
     const used = new Set<string>();
     const groups: DupGroup[] = [];
 
@@ -116,22 +124,25 @@ export function QualityAssistPanel({
       for (let j = i + 1; j < withHash.length; j++) {
         const other = withHash[j];
         if (used.has(other.photo.id)) continue;
-        if (hammingHex64(seed.aHash, other.aHash) <= DUPLICATE_HAMMING_MAX) {
+        if (isNearDuplicate(seed, other)) {
           members.push(other);
           used.add(other.photo.id);
         }
       }
       if (members.length < 2) continue;
-      // Keep the first (newest in gallery sort) as the keeper; flag the rest.
-      const keep = members[0];
+      // Keep the sharpest frame; flag the rest as near-duplicates.
+      const keep = members.reduce((best, item) =>
+        item.sharpness > best.sharpness ? item : best,
+      );
+      const ordered = [keep, ...members.filter((m) => m.photo.id !== keep.photo.id)];
       groups.push({
         key: keep.photo.id,
         keepId: keep.photo.id,
-        members: members.map((member, index) => ({
+        members: ordered.map((member) => ({
           mediaId: member.photo.id,
           title: member.photo.title,
           url: member.photo.url,
-          selected: index > 0 && !member.photo.needsEditing,
+          selected: member.photo.id !== keep.photo.id && !member.photo.needsEditing,
         })),
       });
     }
