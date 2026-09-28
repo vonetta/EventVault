@@ -286,6 +286,11 @@ export function MediaTab({
       for (const id of mediaIds) next.delete(id);
       return next;
     });
+    setSentSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of mediaIds) next.delete(id);
+      return next;
+    });
     actions.setMessage(
       needsEditing
         ? "Moved to Needs editing."
