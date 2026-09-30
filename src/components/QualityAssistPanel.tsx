@@ -189,6 +189,7 @@ export function QualityAssistPanel({
         needsEditing,
       }));
       let photosUpdated = 0;
+      let skippedPublished = 0;
       for (let i = 0; i < entries.length; i += APPLY_CHUNK) {
         const chunk = entries.slice(i, i + APPLY_CHUNK);
         const res = await fetch("/api/uploader/media/bulk", {
@@ -202,9 +203,21 @@ export function QualityAssistPanel({
           return;
         }
         photosUpdated += Number(json.photos) || 0;
+        skippedPublished += Number(json.skippedPublished) || 0;
+      }
+      if (!photosUpdated) {
+        onMessage(
+          skippedPublished
+            ? "Could not move those photos — they were already sent. Use Admin → Media → Move to Needs editing."
+            : "Could not move those photos to Needs editing. Refresh and try again.",
+        );
+        return;
       }
       onMessage(
-        `Moved ${photosUpdated} photo${photosUpdated === 1 ? "" : "s"} to Needs editing.`,
+        `Moved ${photosUpdated} photo${photosUpdated === 1 ? "" : "s"} to Needs editing.` +
+          (skippedPublished
+            ? ` (${skippedPublished} already-sent skipped — move those from Admin.)`
+            : ""),
       );
       setSoftHits([]);
       setDupGroups([]);

@@ -165,7 +165,7 @@ export async function GET(request: Request) {
       loginCode: group.loginCode || "",
     })),
     media: media.map((item) => ({
-      _id: item._id,
+      _id: String(item._id),
       kind: item.kind,
       title: item.title,
       filename: item.filename,
@@ -911,30 +911,30 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "set_needs_editing") {
+    const { needsEditingPileSet } = await import("@/lib/needs-editing");
     const media = await Media.find({ _id: { $in: body.mediaIds } });
     if (!media.length) {
       return NextResponse.json({ error: "No media found" }, { status: 404 });
     }
     if (body.needsEditing) {
       // Pull out of guest view and land in the Needs editing pile.
-      // Must reset kind to team_photo — otherwise event_photo + needsEditing
-      // matches no Admin section (edit pile required team_photo before).
+      await Media.updateMany(
+        { _id: { $in: media.map((item) => item._id) } },
+        { $set: needsEditingPileSet() },
+      );
+    } else {
+      // Mark ready → Main gallery (unpublished team photo).
       await Media.updateMany(
         { _id: { $in: media.map((item) => item._id) } },
         {
           $set: {
             kind: "team_photo",
-            needsEditing: true,
+            needsEditing: false,
             published: false,
             everyone: false,
             groupIds: [],
           },
         },
-      );
-    } else {
-      await Media.updateMany(
-        { _id: { $in: media.map((item) => item._id) } },
-        { $set: { needsEditing: false } },
       );
     }
     await logAdminAction(request, "set_needs_editing", {
