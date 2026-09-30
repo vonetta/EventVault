@@ -6,6 +6,7 @@ import { TagPhotoModal } from "@/components/TagPhotoModal";
 import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName } from "@/components/admin/ui";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
+import { editGuestIdsFrom, showsInNeedsEditing } from "@/lib/needs-editing";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
 import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 import type { AdminActions, AdminData, GuestDoc, MediaDoc, MediaFilter, SessionDoc } from "@/components/admin/types";
@@ -120,30 +121,38 @@ export function MediaTab({
     [data.guests],
   );
 
+  const editGuestIds = useMemo(() => editGuestIdsFrom(data.guests), [data.guests]);
+
   const needsEditingPhotos = useMemo(
     () =>
       data.media.filter(
         (item) =>
-          Boolean(item.needsEditing) &&
           (item.kind === "team_photo" ||
             item.kind === "event_photo" ||
-            item.kind === "group_photo"),
+            item.kind === "group_photo") &&
+          showsInNeedsEditing(item, editGuestIds),
       ),
-    [data.media],
+    [data.media, editGuestIds],
   );
   const stagedTeamPhotos = useMemo(
     () =>
       data.media.filter(
-        (item) => item.kind === "team_photo" && !item.published && !item.needsEditing,
+        (item) =>
+          item.kind === "team_photo" &&
+          !item.published &&
+          !showsInNeedsEditing(item, editGuestIds),
       ),
-    [data.media],
+    [data.media, editGuestIds],
   );
   const sentTeamPhotos = useMemo(
     () =>
       data.media.filter(
-        (item) => item.kind === "event_photo" && item.published && !item.needsEditing,
+        (item) =>
+          item.kind === "event_photo" &&
+          item.published &&
+          !showsInNeedsEditing(item, editGuestIds),
       ),
-    [data.media],
+    [data.media, editGuestIds],
   );
 
   const filteredStagedPhotos = useMemo(() => {
@@ -313,10 +322,10 @@ export function MediaTab({
       taggedGuestIds,
     });
     if (!json) return;
-    if ((json as { media?: { movedByEditTag?: boolean } }).media?.movedByEditTag) {
+    if ((json as { media?: { hasEditTag?: boolean } }).media?.hasEditTag) {
       setEditingFilter("all");
       setEditingVisibleCount(60);
-      actions.setMessage("Tagged Edit — moved to Needs editing.");
+      actions.setMessage("Tagged Edit — showing under Needs editing (tag kept).");
       setTaggingId(null);
     }
     // Reload data but keep the tagging modal open on this photo (unless moved).
@@ -589,9 +598,9 @@ export function MediaTab({
           </a>
           , clean rejects and tag faces there, then come back to this Media tab to Send ready photos
           to the whole-event album. Tag 1–2 people on a personal shot for Photos of you
-          (watermarked until unlock). Tag <strong>Edit</strong> on a photo to send it to Needs
-          editing (it leaves Main gallery). Big group shots: use Group photos → Whole event on
-          upload so they stay free for everyone.
+          (watermarked until unlock). Tag <strong>Edit</strong> to park a photo under Needs
+          editing (the Edit tag stays visible — remove it to put the photo back in Main gallery).
+          Big group shots: use Group photos → Whole event on upload so they stay free for everyone.
         </p>
         <p>
           Fix a typo on a tagged name: tap <strong>Tag</strong> on the photo (opens a popup) → tap
@@ -628,7 +637,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Needs editing"
-        description="Rejects / keep-out-of-live (quality flags, duplicates, or Move to Needs editing). Guests can’t see these. Use Tagged / Untagged to filter, then Mark ready."
+        description="Quality rejects, Move to Needs editing, or photos tagged Edit. Edit-tagged shots keep the Edit name — remove that tag to return them to Main gallery. Guests can’t see these."
       >
         {needsEditingPhotos.length === 0 ? (
           <p className="text-sm text-pine">Nothing waiting on edits.</p>

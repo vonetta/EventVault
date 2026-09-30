@@ -9,16 +9,16 @@ import {
 import { Guest, Media } from "@/lib/models";
 import { logAdminAction } from "@/lib/audit";
 import {
+  isEditTagName,
   isEditablePhotoKind,
   needsEditingPileSet,
-  partitionEditTagGuests,
 } from "@/lib/needs-editing";
 import { uploaderUpdateMediaSchema } from "@/lib/validate";
 
 /**
  * Photo team (or admin) updates tags / needs-editing on a still.
- * A guest named "Edit" is a workflow tag: move the photo to Needs editing
- * and strip that name so it does not show as a person under the thumbnail.
+ * A guest named "Edit" stays as a visible tag and is used by gallery filters
+ * to park the photo under Needs editing (not converted into needsEditing).
  */
 export async function POST(request: Request) {
   if (!(await isUploaderAuthenticated()) && !(await isAdminAuthenticated())) {
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   }
 
   const asAdmin = await isAdminAuthenticated();
-  let movedByEditTag = false;
+  let hasEditTag = false;
 
   if (body.taggedGuestIds !== undefined) {
     if (!asAdmin && media.kind !== "team_photo") {
@@ -69,17 +69,11 @@ export async function POST(request: Request) {
       _id: { $in: body.taggedGuestIds },
       eventId: media.eventId,
     }).select("_id name");
-    const { editGuests, personGuests } = partitionEditTagGuests(validGuests);
-    media.taggedGuestIds = personGuests.map((guest) => guest._id);
-    if (editGuests.length) {
-      Object.assign(media, needsEditingPileSet());
-      movedByEditTag = true;
-    }
+    media.taggedGuestIds = validGuests.map((guest) => guest._id);
+    hasEditTag = validGuests.some((guest) => isEditTagName(guest.name || ""));
   }
 
-  // Match delete policy: once sent to guests, only admin can change it —
-  // unless we're pulling it back into Needs editing (button or Edit tag).
-  const pullingToEdit = body.needsEditing === true || movedByEditTag;
+  const pullingToEdit = body.needsEditing === true;
   if (media.published && !asAdmin && !pullingToEdit) {
     return NextResponse.json(
       {
@@ -103,12 +97,23 @@ export async function POST(request: Request) {
   }
 
   await media.save();
+
+  if (!hasEditTag && (media.taggedGuestIds || []).length) {
+    const tagged = await Guest.find({
+      _id: { $in: media.taggedGuestIds || [] },
+      eventId: media.eventId,
+    })
+      .select("name")
+      .lean();
+    hasEditTag = tagged.some((guest) => isEditTagName(guest.name || ""));
+  }
+
   await logAdminAction(request, "update_team_media", {
     mediaId: body.mediaId,
     tags: media.taggedGuestIds?.length || 0,
     needsEditing: media.needsEditing,
     kind: media.kind,
-    movedByEditTag,
+    hasEditTag,
     actor: asAdmin ? "admin" : "uploader",
   });
 
@@ -118,7 +123,7 @@ export async function POST(request: Request) {
       taggedGuestIds: (media.taggedGuestIds || []).map((id) => String(id)),
       needsEditing: Boolean(media.needsEditing),
       kind: media.kind,
-      movedByEditTag,
+      hasEditTag,
     },
   });
 }
