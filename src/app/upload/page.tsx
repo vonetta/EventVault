@@ -371,7 +371,12 @@ export default function UploadPage() {
     patch: { taggedGuestIds?: string[]; needsEditing?: boolean },
   ) {
     if (patch.taggedGuestIds) {
-      patchGalleryTags(id, patch.taggedGuestIds);
+      // Optimistic names — strip workflow tag "Edit" from the label immediately.
+      const withoutEdit = patch.taggedGuestIds.filter((guestId) => {
+        const name = guests.find((g) => g._id === guestId)?.name || "";
+        return name.trim().toLowerCase() !== "edit";
+      });
+      patchGalleryTags(id, withoutEdit);
       setTagSaveHint("Saved");
     }
     setSavingId(id);
@@ -385,28 +390,44 @@ export default function UploadPage() {
       window.location.assign("/upload/login");
       return;
     }
+    const json = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      media?: {
+        taggedGuestIds?: string[];
+        needsEditing?: boolean;
+        movedByEditTag?: boolean;
+      };
+    };
     if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
       setMessage(json.error || "Could not update that photo.");
       setTagSaveHint("");
       // Re-sync if the optimistic tag write failed.
       if (patch.taggedGuestIds) await refreshGalleries(eventId);
       return;
     }
-    // Only reload galleries when the photo changes bucket (ready ↔ editing).
-    if (typeof patch.needsEditing === "boolean") {
+    const movedToEditing =
+      patch.needsEditing === true || Boolean(json.media?.movedByEditTag);
+    const leftEditing = patch.needsEditing === false;
+    // Reload when the photo changes bucket (ready ↔ editing), including when
+    // the "Edit" person-tag auto-moves it into Needs editing.
+    if (movedToEditing || leftEditing) {
       await refreshGalleries(eventId);
       if (taggingId === id) setTaggingId(null);
-      // Show the pile the photo just moved into.
-      if (patch.needsEditing) {
+      if (movedToEditing) {
         setBucket("editing");
         setTagFilter("all");
         setVisibleCount(GALLERY_PAGE_SIZE);
+        if (json.media?.movedByEditTag) {
+          setMessage("Tagged Edit — moved to Needs editing.");
+          setTagSaveHint("Moved to Needs editing");
+        }
       } else {
         setBucket("ready");
         setTagFilter("all");
         setVisibleCount(GALLERY_PAGE_SIZE);
       }
+    } else if (patch.taggedGuestIds && json.media?.taggedGuestIds) {
+      patchGalleryTags(id, json.media.taggedGuestIds);
     }
   }
 
@@ -744,10 +765,11 @@ export default function UploadPage() {
         <li>
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
-            Group-photo AI → free Whole event. Tag people on a photo for personalized Photos of you
-            (watermarked until unlock). Typo? Open{" "}
-            <span className="font-medium text-ink">Tag</span> on a photo → tap the black{" "}
-            <span className="font-medium text-ink">Fix spelling</span> button under the name.
+            Group-photo AI → free Whole event. Tag people for Photos of you. Tag{" "}
+            <span className="font-medium text-ink">Edit</span> to send a photo to Needs editing
+            (it leaves Main gallery). Typo? Open{" "}
+            <span className="font-medium text-ink">Tag</span> →{" "}
+            <span className="font-medium text-ink">Fix spelling</span>.
           </span>
         </li>
         <li>

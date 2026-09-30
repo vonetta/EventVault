@@ -117,6 +117,10 @@ export async function GET(request: Request) {
   const event =
     (eventId && events.find((item) => String(item._id) === eventId)) || events[0];
 
+  // Convert leftover "Edit" person-tags into Needs editing before listing.
+  const { migrateEditTaggedPhotos } = await import("@/lib/migrate-edit-tags");
+  await migrateEditTaggedPhotos(event._id);
+
   const [days, sessions, guests, media, groups] = await Promise.all([
     Day.find({ eventId: event._id }).sort({ sortOrder: 1 }),
     Session.find({ eventId: event._id }).sort({ sortOrder: 1 }),
@@ -888,6 +892,9 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "tag_media") {
+    const { needsEditingPileSet, partitionEditTagGuests } = await import(
+      "@/lib/needs-editing"
+    );
     const media = await Media.findById(body.mediaId);
     if (!media) {
       return NextResponse.json({ error: "Media not found" }, { status: 404 });
@@ -895,17 +902,26 @@ export async function POST(request: Request) {
     const validGuests = await Guest.find({
       _id: { $in: body.taggedGuestIds },
       eventId: media.eventId,
-    }).select("_id");
-    media.taggedGuestIds = validGuests.map((guest) => guest._id);
+    }).select("_id name");
+    const { editGuests, personGuests } = partitionEditTagGuests(validGuests);
+    media.taggedGuestIds = personGuests.map((guest) => guest._id);
+    let movedByEditTag = false;
+    if (editGuests.length) {
+      Object.assign(media, needsEditingPileSet());
+      movedByEditTag = true;
+    }
     await media.save();
     await logAdminAction(request, "tag_media", {
       mediaId: body.mediaId,
       tags: media.taggedGuestIds.length,
+      movedByEditTag,
     });
     return NextResponse.json({
       media: {
         _id: String(media._id),
         taggedGuestIds: media.taggedGuestIds.map((id) => String(id)),
+        needsEditing: Boolean(media.needsEditing),
+        movedByEditTag,
       },
     });
   }
