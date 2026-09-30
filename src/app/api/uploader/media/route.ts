@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { isAdminAuthenticated, isUploaderAuthenticated, unauthorized } from "@/lib/auth";
 import { Guest, Media } from "@/lib/models";
+import { editGuestIdsFrom } from "@/lib/needs-editing";
 import { mediaProxyUrl } from "@/lib/storage";
 import { objectIdSchema } from "@/lib/validate";
 
@@ -40,47 +41,69 @@ export async function GET(request: Request) {
 
   await connectDB();
 
-  // Convert any leftover "Edit" person-tags into the Needs editing pile so
-  // those photos leave Main gallery immediately on load.
-  const { migrateEditTaggedPhotos } = await import("@/lib/migrate-edit-tags");
-  await migrateEditTaggedPhotos(eventId);
+  const guests = await Guest.find({ eventId }).select("_id name").lean();
+  const editIds = editGuestIdsFrom(guests);
 
-  const filter: {
-    eventId: string;
-    kind: "team_photo";
-    published: boolean;
-    needsEditing?: boolean;
-    _id?: { $lt: mongoose.Types.ObjectId };
-  } = {
+  const base: Record<string, unknown> = {
     eventId,
     kind: "team_photo",
     published: false,
   };
-  if (bucket === "ready") filter.needsEditing = false;
-  if (bucket === "editing") filter.needsEditing = true;
   if (cursor) {
-    // ObjectId order ≈ insert time; walk older pages with $lt while sorting _id desc.
-    filter._id = { $lt: new mongoose.Types.ObjectId(cursor) };
+    base._id = { $lt: new mongoose.Types.ObjectId(cursor) };
   }
 
-  const [media, guests, totalReady, totalEditing] = await Promise.all([
+  // Main gallery: not flagged needsEditing and not tagged Edit.
+  // Needs editing: flagged OR tagged Edit (Edit tag stays visible on the photo).
+  let filter: Record<string, unknown> = { ...base };
+  if (bucket === "ready") {
+    filter = {
+      ...base,
+      needsEditing: false,
+      ...(editIds.length ? { taggedGuestIds: { $nin: editIds } } : {}),
+    };
+  } else if (bucket === "editing") {
+    filter = {
+      ...base,
+      $or: [
+        { needsEditing: true },
+        ...(editIds.length ? [{ taggedGuestIds: { $in: editIds } }] : []),
+      ],
+    };
+    // If there is no Edit guest yet, editing is just the needsEditing flag.
+    if (!editIds.length) {
+      filter = { ...base, needsEditing: true };
+    }
+  }
+
+  const readyFilter = {
+    eventId,
+    kind: "team_photo" as const,
+    published: false,
+    needsEditing: false,
+    ...(editIds.length ? { taggedGuestIds: { $nin: editIds } } : {}),
+  };
+  const editingFilter = editIds.length
+    ? {
+        eventId,
+        kind: "team_photo" as const,
+        published: false,
+        $or: [{ needsEditing: true }, { taggedGuestIds: { $in: editIds } }],
+      }
+    : {
+        eventId,
+        kind: "team_photo" as const,
+        published: false,
+        needsEditing: true,
+      };
+
+  const [media, totalReady, totalEditing] = await Promise.all([
     Media.find(filter)
       .sort({ _id: -1 })
       .limit(limit + 1)
       .lean(),
-    Guest.find({ eventId }).select("_id name").lean(),
-    Media.countDocuments({
-      eventId,
-      kind: "team_photo",
-      published: false,
-      needsEditing: false,
-    }),
-    Media.countDocuments({
-      eventId,
-      kind: "team_photo",
-      published: false,
-      needsEditing: true,
-    }),
+    Media.countDocuments(readyFilter),
+    Media.countDocuments(editingFilter),
   ]);
 
   const hasMore = media.length > limit;
@@ -88,9 +111,11 @@ export async function GET(request: Request) {
   const nextCursor = hasMore ? String(page[page.length - 1]?._id || "") : null;
 
   const nameById = new Map(guests.map((guest) => [String(guest._id), guest.name]));
+  const editIdSet = new Set(editIds);
 
   function mapPhoto(item: (typeof media)[number]) {
     const taggedGuestIds = (item.taggedGuestIds || []).map((id) => String(id));
+    const hasEditTag = taggedGuestIds.some((id) => editIdSet.has(id));
     return {
       id: String(item._id),
       title: item.title || item.filename || "Photo",
@@ -98,6 +123,7 @@ export async function GET(request: Request) {
       url: mediaProxyUrl(String(item._id)),
       uploadedByName: item.uploadedByName || "",
       needsEditing: Boolean(item.needsEditing),
+      hasEditTag,
       taggedGuestIds,
       taggedNames: taggedGuestIds.map((id) => nameById.get(id) || "Unknown").filter(Boolean),
       createdAt: item.createdAt,
@@ -105,13 +131,14 @@ export async function GET(request: Request) {
   }
 
   const mapped = page.map(mapPhoto);
-  const ready = mapped.filter((item) => !item.needsEditing);
-  const needsEditing = mapped.filter((item) => item.needsEditing);
+  // For bucket=all, split client-side using the same rules.
+  const ready = mapped.filter((item) => !item.needsEditing && !item.hasEditTag);
+  const needsEditing = mapped.filter((item) => item.needsEditing || item.hasEditTag);
 
   return NextResponse.json(
     {
-      media: ready,
-      needsEditing,
+      media: bucket === "editing" ? [] : bucket === "ready" ? mapped : ready,
+      needsEditing: bucket === "ready" ? [] : bucket === "editing" ? mapped : needsEditing,
       all: mapped,
       page: {
         limit,

@@ -371,12 +371,7 @@ export default function UploadPage() {
     patch: { taggedGuestIds?: string[]; needsEditing?: boolean },
   ) {
     if (patch.taggedGuestIds) {
-      // Optimistic names — strip workflow tag "Edit" from the label immediately.
-      const withoutEdit = patch.taggedGuestIds.filter((guestId) => {
-        const name = guests.find((g) => g._id === guestId)?.name || "";
-        return name.trim().toLowerCase() !== "edit";
-      });
-      patchGalleryTags(id, withoutEdit);
+      patchGalleryTags(id, patch.taggedGuestIds);
       setTagSaveHint("Saved");
     }
     setSavingId(id);
@@ -395,39 +390,36 @@ export default function UploadPage() {
       media?: {
         taggedGuestIds?: string[];
         needsEditing?: boolean;
-        movedByEditTag?: boolean;
+        hasEditTag?: boolean;
       };
     };
     if (!res.ok) {
       setMessage(json.error || "Could not update that photo.");
       setTagSaveHint("");
-      // Re-sync if the optimistic tag write failed.
       if (patch.taggedGuestIds) await refreshGalleries(eventId);
       return;
     }
-    const movedToEditing =
-      patch.needsEditing === true || Boolean(json.media?.movedByEditTag);
-    const leftEditing = patch.needsEditing === false;
-    // Reload when the photo changes bucket (ready ↔ editing), including when
-    // the "Edit" person-tag auto-moves it into Needs editing.
-    if (movedToEditing || leftEditing) {
+
+    // Tags or needsEditing can change which bucket lists the photo (Edit tag
+    // parks under Needs editing but stays on the photo).
+    if (typeof patch.needsEditing === "boolean" || patch.taggedGuestIds) {
       await refreshGalleries(eventId);
-      if (taggingId === id) setTaggingId(null);
-      if (movedToEditing) {
+      const hasEditTag = Boolean(json.media?.hasEditTag);
+      if (patch.needsEditing === true || hasEditTag) {
         setBucket("editing");
         setTagFilter("all");
         setVisibleCount(GALLERY_PAGE_SIZE);
-        if (json.media?.movedByEditTag) {
-          setMessage("Tagged Edit — moved to Needs editing.");
-          setTagSaveHint("Moved to Needs editing");
+        if (taggingId === id) setTaggingId(null);
+        if (hasEditTag && patch.taggedGuestIds) {
+          setMessage("Tagged Edit — showing under Needs editing (tag kept).");
+          setTagSaveHint("In Needs editing");
         }
-      } else {
+      } else if (patch.needsEditing === false || patch.taggedGuestIds) {
         setBucket("ready");
         setTagFilter("all");
         setVisibleCount(GALLERY_PAGE_SIZE);
+        if (taggingId === id && patch.needsEditing === false) setTaggingId(null);
       }
-    } else if (patch.taggedGuestIds && json.media?.taggedGuestIds) {
-      patchGalleryTags(id, json.media.taggedGuestIds);
     }
   }
 
@@ -766,8 +758,8 @@ export default function UploadPage() {
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
             Group-photo AI → free Whole event. Tag people for Photos of you. Tag{" "}
-            <span className="font-medium text-ink">Edit</span> to send a photo to Needs editing
-            (it leaves Main gallery). Typo? Open{" "}
+            <span className="font-medium text-ink">Edit</span> to park a photo under Needs editing
+            (Edit stays on the photo — remove it to return to Main gallery). Typo? Open{" "}
             <span className="font-medium text-ink">Tag</span> →{" "}
             <span className="font-medium text-ink">Fix spelling</span>.
           </span>
