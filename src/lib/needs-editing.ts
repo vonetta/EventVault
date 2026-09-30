@@ -1,5 +1,6 @@
 /**
- * Fields that put a still into the Admin / Upload "Needs editing" pile.
+ * Fields that put a still into the Admin / Upload "Needs editing" pile
+ * via the explicit needsEditing flag (quality rejects, Move to Needs editing).
  * Always unpublished team_photo so the photo matches both UIs' queries.
  */
 export function needsEditingPileSet() {
@@ -26,21 +27,36 @@ export function isEditablePhotoKind(kind: string): kind is EditablePhotoKind {
 }
 
 /**
- * Workflow tag: a guest named "Edit" means “send this photo to Needs editing”,
- * not a real person. Matched case-insensitively.
+ * Workflow person-tag: a guest named "Edit" parks the photo under Needs editing
+ * in the UI. The tag stays on the photo (so you can see why it’s there) and can
+ * be removed to return it to Main gallery. Matched case-insensitively.
  */
 export function isEditTagName(name: string) {
   return name.trim().toLowerCase() === "edit";
 }
 
-export function partitionEditTagGuests<T extends { _id: { toString(): string }; name?: string | null }>(
-  guests: T[],
+export function editGuestIdsFrom(
+  guests: { _id: { toString(): string }; name?: string | null }[],
+): string[] {
+  return guests
+    .filter((guest) => isEditTagName(guest.name || ""))
+    .map((guest) => String(guest._id));
+}
+
+export function mediaHasEditTag(
+  taggedGuestIds: { toString(): string }[] | string[] | null | undefined,
+  editGuestIds: Iterable<string>,
 ) {
-  const editGuests: T[] = [];
-  const personGuests: T[] = [];
-  for (const guest of guests) {
-    if (isEditTagName(guest.name || "")) editGuests.push(guest);
-    else personGuests.push(guest);
-  }
-  return { editGuests, personGuests };
+  if (!taggedGuestIds?.length) return false;
+  const editSet = editGuestIds instanceof Set ? editGuestIds : new Set(editGuestIds);
+  if (!editSet.size) return false;
+  return taggedGuestIds.some((id) => editSet.has(String(id)));
+}
+
+/** True when the photo should appear under Needs editing (flag or Edit tag). */
+export function showsInNeedsEditing(
+  media: { needsEditing?: boolean | null; taggedGuestIds?: { toString(): string }[] | null },
+  editGuestIds: Iterable<string>,
+) {
+  return Boolean(media.needsEditing) || mediaHasEditTag(media.taggedGuestIds, editGuestIds);
 }
