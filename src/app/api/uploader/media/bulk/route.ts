@@ -8,6 +8,10 @@ import {
 } from "@/lib/auth";
 import { Media } from "@/lib/models";
 import { logAdminAction } from "@/lib/audit";
+import {
+  EDITABLE_PHOTO_KINDS,
+  needsEditingPileSet,
+} from "@/lib/needs-editing";
 import { objectIdSchema } from "@/lib/validate";
 import { z } from "zod";
 
@@ -26,6 +30,8 @@ const bulkSchema = z.object({
 
 /**
  * Bulk-update needs-editing flags after client-side quality / duplicate review.
+ * Finds team / event / group stills by id so tagged photos that were already
+ * sent (event_photo) still land in the Needs editing pile.
  * Once a photo is published to guests, only admins can change it.
  */
 export async function POST(request: Request) {
@@ -50,26 +56,31 @@ export async function POST(request: Request) {
   const asAdmin = await isAdminAuthenticated();
   let updated = 0;
   let skippedPublished = 0;
+  let skippedMissing = 0;
 
   for (const update of body.updates) {
     if (update.needsEditing === undefined) continue;
     const media = await Media.findOne({
       _id: update.mediaId,
       eventId: body.eventId,
-      kind: "team_photo",
+      kind: { $in: [...EDITABLE_PHOTO_KINDS] },
     });
-    if (!media) continue;
+    if (!media) {
+      skippedMissing += 1;
+      continue;
+    }
     if (media.published && !asAdmin) {
       skippedPublished += 1;
       continue;
     }
 
-    media.needsEditing = update.needsEditing;
     if (update.needsEditing) {
+      Object.assign(media, needsEditingPileSet());
+    } else {
+      media.needsEditing = false;
+      // Stay in Main gallery as an unpublished team photo.
       media.kind = "team_photo";
       media.published = false;
-      media.everyone = false;
-      media.groupIds = [];
     }
     await media.save();
     updated += 1;
@@ -79,7 +90,13 @@ export async function POST(request: Request) {
     eventId: body.eventId,
     photos: updated,
     skippedPublished,
+    skippedMissing,
   });
 
-  return NextResponse.json({ ok: true, photos: updated, skippedPublished });
+  return NextResponse.json({
+    ok: true,
+    photos: updated,
+    skippedPublished,
+    skippedMissing,
+  });
 }

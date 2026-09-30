@@ -124,7 +124,7 @@ export function MediaTab({
     () =>
       data.media.filter(
         (item) =>
-          item.needsEditing &&
+          Boolean(item.needsEditing) &&
           (item.kind === "team_photo" ||
             item.kind === "event_photo" ||
             item.kind === "group_photo"),
@@ -235,16 +235,17 @@ export function MediaTab({
   );
 
   function toggleIdInSet(setter: (fn: (prev: Set<string>) => Set<string>) => void, id: string) {
+    const key = String(id);
     setter((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
 
   function selectAllFilteredStaged() {
-    setTeamSelected(new Set(filteredStagedPhotos.map((item) => item._id)));
+    setTeamSelected(new Set(filteredStagedPhotos.map((item) => String(item._id))));
   }
 
   function clearTeamSelection() {
@@ -263,19 +264,20 @@ export function MediaTab({
       ? `${item.title || item.filename} · ${item.uploadedByName}`
       : item.title || item.filename;
     return {
-      id: item._id,
+      id: String(item._id),
       title: tags.length ? `${base} · ${tags.join(", ")}` : base,
       contentType: item.contentType || "image/jpeg",
-      url: `/api/media/${item._id}`,
+      url: `/api/media/${String(item._id)}`,
     };
   }
 
   async function setNeedsEditing(mediaIds: string[], needsEditing: boolean) {
     if (!mediaIds.length) return;
+    const ids = mediaIds.map(String);
     setTogglingEdit(true);
     const json = await actions.postAction({
       action: "set_needs_editing",
-      mediaIds,
+      mediaIds: ids,
       needsEditing,
     });
     setTogglingEdit(false);
@@ -283,17 +285,22 @@ export function MediaTab({
     setEditingSelected(new Set());
     setTeamSelected((prev) => {
       const next = new Set(prev);
-      for (const id of mediaIds) next.delete(id);
+      for (const id of ids) next.delete(id);
       return next;
     });
     setSentSelected((prev) => {
       const next = new Set(prev);
-      for (const id of mediaIds) next.delete(id);
+      for (const id of ids) next.delete(id);
       return next;
     });
+    if (needsEditing) {
+      // Land on the edit section so tagged / quality-flagged shots are visible.
+      setEditingFilter("all");
+      setEditingVisibleCount(60);
+    }
     actions.setMessage(
       needsEditing
-        ? "Moved to Needs editing."
+        ? `Moved ${ids.length} photo${ids.length === 1 ? "" : "s"} to Needs editing.`
         : "Marked ready — back in the Main gallery.",
     );
     await actions.load(selectedEventId);
@@ -306,7 +313,13 @@ export function MediaTab({
       taggedGuestIds,
     });
     if (!json) return;
-    // Reload data but keep the tagging modal open on this photo.
+    if ((json as { media?: { movedByEditTag?: boolean } }).media?.movedByEditTag) {
+      setEditingFilter("all");
+      setEditingVisibleCount(60);
+      actions.setMessage("Tagged Edit — moved to Needs editing.");
+      setTaggingId(null);
+    }
+    // Reload data but keep the tagging modal open on this photo (unless moved).
     await actions.load(selectedEventId);
   }
 
@@ -576,8 +589,9 @@ export function MediaTab({
           </a>
           , clean rejects and tag faces there, then come back to this Media tab to Send ready photos
           to the whole-event album. Tag 1–2 people on a personal shot for Photos of you
-          (watermarked until unlock). Big group shots: use Group photos → Whole event on upload so
-          they stay free for everyone.
+          (watermarked until unlock). Tag <strong>Edit</strong> on a photo to send it to Needs
+          editing (it leaves Main gallery). Big group shots: use Group photos → Whole event on
+          upload so they stay free for everyone.
         </p>
         <p>
           Fix a typo on a tagged name: tap <strong>Tag</strong> on the photo (opens a popup) → tap
@@ -652,7 +666,9 @@ export function MediaTab({
               <AdminButton
                 variant="secondary"
                 onClick={() =>
-                  setEditingSelected(new Set(filteredNeedsEditing.map((item) => item._id)))
+                  setEditingSelected(
+                    new Set(filteredNeedsEditing.map((item) => String(item._id))),
+                  )
                 }
               >
                 Select all {editingFilter === "all" ? "" : editingFilter}
@@ -836,7 +852,9 @@ export function MediaTab({
               </span>
               <AdminButton
                 variant="secondary"
-                onClick={() => setSentSelected(new Set(filteredSentPhotos.map((item) => item._id)))}
+                onClick={() =>
+                  setSentSelected(new Set(filteredSentPhotos.map((item) => String(item._id))))
+                }
               >
                 Select all {sentFilter === "all" ? "" : sentFilter}
               </AdminButton>

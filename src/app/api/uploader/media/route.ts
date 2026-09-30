@@ -40,6 +40,11 @@ export async function GET(request: Request) {
 
   await connectDB();
 
+  // Convert any leftover "Edit" person-tags into the Needs editing pile so
+  // those photos leave Main gallery immediately on load.
+  const { migrateEditTaggedPhotos } = await import("@/lib/migrate-edit-tags");
+  await migrateEditTaggedPhotos(eventId);
+
   const filter: {
     eventId: string;
     kind: "team_photo";

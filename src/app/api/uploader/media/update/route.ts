@@ -8,12 +8,17 @@ import {
 } from "@/lib/auth";
 import { Guest, Media } from "@/lib/models";
 import { logAdminAction } from "@/lib/audit";
+import {
+  isEditablePhotoKind,
+  needsEditingPileSet,
+  partitionEditTagGuests,
+} from "@/lib/needs-editing";
 import { uploaderUpdateMediaSchema } from "@/lib/validate";
 
 /**
- * Photo team (or admin) updates tags / needs-editing on a team upload.
- * Tags may be prepared while a photo still needs editing; guests only see
- * tagged photos once needsEditing is cleared.
+ * Photo team (or admin) updates tags / needs-editing on a still.
+ * A guest named "Edit" is a workflow tag: move the photo to Needs editing
+ * and strip that name so it does not show as a person under the thumbnail.
  */
 export async function POST(request: Request) {
   if (!(await isUploaderAuthenticated()) && !(await isAdminAuthenticated())) {
@@ -43,13 +48,39 @@ export async function POST(request: Request) {
 
   await connectDB();
   const media = await Media.findById(body.mediaId);
-  if (!media || media.kind !== "team_photo") {
-    return NextResponse.json({ error: "Team photo not found" }, { status: 404 });
+  if (!media || !isEditablePhotoKind(media.kind)) {
+    return NextResponse.json({ error: "Photo not found" }, { status: 404 });
   }
 
   const asAdmin = await isAdminAuthenticated();
-  // Match delete policy: once sent to guests, only admin can change it.
-  if (media.published && !asAdmin) {
+  let movedByEditTag = false;
+
+  if (body.taggedGuestIds !== undefined) {
+    if (!asAdmin && media.kind !== "team_photo") {
+      return NextResponse.json(
+        {
+          error:
+            "This photo has already been sent to guests. Ask an admin to change tags or move it back.",
+        },
+        { status: 403 },
+      );
+    }
+    const validGuests = await Guest.find({
+      _id: { $in: body.taggedGuestIds },
+      eventId: media.eventId,
+    }).select("_id name");
+    const { editGuests, personGuests } = partitionEditTagGuests(validGuests);
+    media.taggedGuestIds = personGuests.map((guest) => guest._id);
+    if (editGuests.length) {
+      Object.assign(media, needsEditingPileSet());
+      movedByEditTag = true;
+    }
+  }
+
+  // Match delete policy: once sent to guests, only admin can change it —
+  // unless we're pulling it back into Needs editing (button or Edit tag).
+  const pullingToEdit = body.needsEditing === true || movedByEditTag;
+  if (media.published && !asAdmin && !pullingToEdit) {
     return NextResponse.json(
       {
         error:
@@ -59,18 +90,11 @@ export async function POST(request: Request) {
     );
   }
 
-  if (body.taggedGuestIds !== undefined) {
-    const validGuests = await Guest.find({
-      _id: { $in: body.taggedGuestIds },
-      eventId: media.eventId,
-    }).select("_id");
-    media.taggedGuestIds = validGuests.map((guest) => guest._id);
-  }
-
   if (body.needsEditing !== undefined) {
-    media.needsEditing = body.needsEditing;
     if (body.needsEditing) {
-      // Stay/return in the Needs editing pile (unpublished team photo).
+      Object.assign(media, needsEditingPileSet());
+    } else {
+      media.needsEditing = false;
       media.kind = "team_photo";
       media.published = false;
       media.everyone = false;
@@ -83,6 +107,8 @@ export async function POST(request: Request) {
     mediaId: body.mediaId,
     tags: media.taggedGuestIds?.length || 0,
     needsEditing: media.needsEditing,
+    kind: media.kind,
+    movedByEditTag,
     actor: asAdmin ? "admin" : "uploader",
   });
 
@@ -91,6 +117,8 @@ export async function POST(request: Request) {
       _id: String(media._id),
       taggedGuestIds: (media.taggedGuestIds || []).map((id) => String(id)),
       needsEditing: Boolean(media.needsEditing),
+      kind: media.kind,
+      movedByEditTag,
     },
   });
 }
