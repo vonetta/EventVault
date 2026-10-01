@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GroupPhotoAssistPanel } from "@/components/GroupPhotoAssistPanel";
+import { NeedsEditingZipExport } from "@/components/NeedsEditingZipExport";
 import { QualityAssistPanel } from "@/components/QualityAssistPanel";
 import { TagPhotoModal } from "@/components/TagPhotoModal";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
@@ -157,7 +158,6 @@ export default function UploadPage() {
   const [visibleCount, setVisibleCount] = useState(GALLERY_PAGE_SIZE);
   const [assistPhotos, setAssistPhotos] = useState<StagedPhoto[]>([]);
   const [assistLoading, setAssistLoading] = useState(false);
-  const [downloadingEditingZip, setDownloadingEditingZip] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cancelUploadRef = useRef(false);
 
@@ -632,47 +632,6 @@ export default function UploadPage() {
     return guest;
   }
 
-  async function downloadNeedsEditingZip() {
-    if (!eventId || galleryTotals.editing === 0 || downloadingEditingZip) return;
-    setDownloadingEditingZip(true);
-    setMessage(
-      `Preparing ZIP of ${galleryTotals.editing} Needs editing photo${
-        galleryTotals.editing === 1 ? "" : "s"
-      }…`,
-    );
-    try {
-      const response = await fetch(
-        `/api/uploader/media/download-editing?eventId=${encodeURIComponent(eventId)}`,
-      );
-      if (response.status === 401) {
-        window.location.assign("/upload/login");
-        return;
-      }
-      if (!response.ok) {
-        const json = await response.json().catch(() => ({}));
-        setMessage(json.error || "Could not prepare the Needs editing ZIP.");
-        return;
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get("Content-Disposition") || "";
-      const match = disposition.match(/filename="([^"]+)"/);
-      const filename = match?.[1] || "needs-editing.zip";
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-      setMessage(`Downloaded ${filename}.`);
-    } catch {
-      setMessage("Could not prepare the Needs editing ZIP.");
-    } finally {
-      setDownloadingEditingZip(false);
-    }
-  }
-
   async function signOut() {
     await fetch("/api/auth/uploader/logout", { method: "POST" });
     window.location.assign("/upload/login");
@@ -1088,21 +1047,15 @@ export default function UploadPage() {
             <p className="mt-2 text-sm text-pine">
               {bucket === "ready"
                 ? "Ready for Admin → Media to send. Tap Untagged to finish naming what’s left."
-                : "Hidden from guests. Tap Untagged to finish naming, then mark ready. Download a ZIP when the pile is large."}
+                : "Hidden from guests. Tap Untagged to finish naming, then mark ready."}
             </p>
             {bucket === "editing" && galleryTotals.editing > 0 ? (
-              <div className="mt-3">
-                <button
-                  type="button"
-                  disabled={downloadingEditingZip}
-                  onClick={() => void downloadNeedsEditingZip()}
-                  className="rounded-lg border border-[color:var(--line)] px-3 py-2 text-sm text-ink hover:bg-mist disabled:opacity-50"
-                >
-                  {downloadingEditingZip
-                    ? "Preparing ZIP…"
-                    : `Download ZIP (${galleryTotals.editing})`}
-                </button>
-              </div>
+              <NeedsEditingZipExport
+                className="mt-3"
+                eventId={eventId}
+                photoCount={galleryTotals.editing}
+                onMessage={setMessage}
+              />
             ) : null}
             {filteredGallery.length === 0 ? (
               <p className="mt-4 text-sm text-pine">
