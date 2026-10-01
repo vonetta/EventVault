@@ -27,13 +27,19 @@ function isCurrentEngine(engine?: string | null) {
   return Boolean(engine) && engine === CLEANUP_ENGINE;
 }
 
+/** Normalize DB/API preset; missing/legacy empty string counts as Auto. */
+function storedPreset(photo: CleanupPhoto): CleanupPreset {
+  return isCleanupPreset(photo.cleanupPreviewPreset)
+    ? photo.cleanupPreviewPreset
+    : "auto";
+}
+
 function presetForPhoto(
   photo: CleanupPhoto,
   draft: Record<string, CleanupPreset>,
 ): CleanupPreset {
   if (draft[photo.id]) return draft[photo.id];
-  if (isCleanupPreset(photo.cleanupPreviewPreset)) return photo.cleanupPreviewPreset;
-  return "auto";
+  return storedPreset(photo);
 }
 
 /**
@@ -322,11 +328,15 @@ export function CleanupPreviewPanel({
           const busy = busyId === photo.id || batchBusy;
           const stats = statsById[photo.id];
           const preset = presetForPhoto(photo, presetDraft);
+          const lastPreset = storedPreset(photo);
           const outdated =
             Boolean(photo.hasCleanupPreview) && !isCurrentEngine(photo.cleanupPreviewEngine);
+          const presetDirty =
+            Boolean(photo.hasCleanupPreview) && preset !== lastPreset;
+          const emphasizeRun = outdated || presetDirty;
           const previewSrc = photo.cleanupPreviewUrl
             ? `${photo.cleanupPreviewUrl}${photo.cleanupPreviewUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(
-                `${photo.cleanupPreviewEngine || "1"}-${photo.cleanupPreviewPreset || "auto"}`,
+                `${photo.cleanupPreviewEngine || "1"}-${lastPreset}`,
               )}`
             : null;
           return (
@@ -395,15 +405,10 @@ export function CleanupPreviewPanel({
                   <p className="text-xs text-gold-deep">
                     Older pass — pick a tweak and Re-run cleanup.
                   </p>
-                ) : photo.hasCleanupPreview && photo.cleanupPreviewPreset ? (
+                ) : photo.hasCleanupPreview ? (
                   <p className="text-xs text-pine">
-                    Last run:{" "}
-                    {CLEANUP_PRESET_LABELS[
-                      isCleanupPreset(photo.cleanupPreviewPreset)
-                        ? photo.cleanupPreviewPreset
-                        : "auto"
-                    ]}
-                    {preset !== photo.cleanupPreviewPreset
+                    Last run: {CLEANUP_PRESET_LABELS[lastPreset]}
+                    {presetDirty
                       ? ` · selected ${CLEANUP_PRESET_LABELS[preset]} (not run yet)`
                       : ""}
                   </p>
@@ -421,11 +426,11 @@ export function CleanupPreviewPanel({
                     type="button"
                     disabled={busy}
                     onClick={() => void runAction(photo.id, "generate", preset)}
-                    className={`rounded-lg border border-[color:var(--line)] px-3 py-1.5 text-xs text-ink hover:bg-mist disabled:opacity-50 ${
-                      outdated || (photo.hasCleanupPreview && preset !== photo.cleanupPreviewPreset)
-                        ? "bg-ink text-foam hover:bg-pine"
-                        : ""
-                    }`}
+                    className={
+                      emphasizeRun
+                        ? "rounded-lg border border-[color:var(--line)] bg-ink px-3 py-1.5 text-xs text-foam hover:bg-pine disabled:opacity-50"
+                        : "rounded-lg border border-[color:var(--line)] px-3 py-1.5 text-xs text-ink hover:bg-mist disabled:opacity-50"
+                    }
                   >
                     {busy && busyId === photo.id
                       ? "Working…"
@@ -486,15 +491,8 @@ export function CleanupPreviewPanel({
                   Compare cleanup
                 </p>
                 <p className="text-sm text-pine">
-                  Tweak:{" "}
-                  {
-                    CLEANUP_PRESET_LABELS[
-                      isCleanupPreset(comparePhoto.cleanupPreviewPreset)
-                        ? comparePhoto.cleanupPreviewPreset
-                        : "auto"
-                    ]
-                  }
-                  . Lighting & sharpness only — if faces look different, discard.
+                  Tweak: {CLEANUP_PRESET_LABELS[storedPreset(comparePhoto)]}.
+                  Lighting & sharpness only — if faces look different, discard.
                   {!isCurrentEngine(comparePhoto.cleanupPreviewEngine)
                     ? " Older mild pass — pick a tweak and Re-run."
                     : ""}
@@ -554,7 +552,7 @@ export function CleanupPreviewPanel({
                   src={`${comparePhoto.cleanupPreviewUrl}${
                     comparePhoto.cleanupPreviewUrl.includes("?") ? "&" : "?"
                   }v=${encodeURIComponent(
-                    `${comparePhoto.cleanupPreviewEngine || CLEANUP_ENGINE}-${comparePhoto.cleanupPreviewPreset || "auto"}`,
+                    `${comparePhoto.cleanupPreviewEngine || CLEANUP_ENGINE}-${storedPreset(comparePhoto)}`,
                   )}`}
                   alt="Cleanup preview"
                   className="w-full rounded-lg object-contain"
