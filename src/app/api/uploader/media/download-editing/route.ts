@@ -37,23 +37,27 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const eventId = url.searchParams.get("eventId") || "";
+  const metaOnly = url.searchParams.get("meta") === "1";
   if (!objectIdSchema.safeParse(eventId).success) {
     return NextResponse.json({ error: "Invalid eventId" }, { status: 400 });
   }
 
-  const limited = await rateLimit(
-    `needs-editing-zip:${eventId}:${clientIp(request)}`,
-    8,
-    10 * 60_000,
-  );
-  if (!limited.ok) {
-    return NextResponse.json(
-      { error: "Too many ZIP downloads. Try again shortly." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(limited.retryAfterSec) },
-      },
+  // Meta checks are cheap; only throttle full ZIP builds.
+  if (!metaOnly) {
+    const limited = await rateLimit(
+      `needs-editing-zip:${eventId}:${clientIp(request)}`,
+      8,
+      10 * 60_000,
     );
+    if (!limited.ok) {
+      return NextResponse.json(
+        { error: "Too many ZIP downloads. Try again shortly." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(limited.retryAfterSec) },
+        },
+      );
+    }
   }
 
   await connectDB();
@@ -83,6 +87,7 @@ export async function GET(request: Request) {
 
   const used = new Set<string>();
   const entries: ZipStreamEntry[] = [];
+  let estimatedBytes = 0;
 
   for (const photo of photos) {
     if (entries.length >= TEAM_ZIP_MAX_FILES) break;
@@ -90,6 +95,8 @@ export async function GET(request: Request) {
     if (photo.storageProvider !== "r2" && photo.storageProvider !== "local") continue;
 
     const filename = photo.filename || photo.title || `${String(photo._id)}.jpg`;
+    const size = typeof photo.size === "number" ? photo.size : 0;
+    estimatedBytes += size;
     entries.push({
       path: uniqueZipPath(used, "", filename),
       storageKey: photo.storageKey,
@@ -105,6 +112,21 @@ export async function GET(request: Request) {
     );
   }
 
+  const eventSlug = safeZipName(event.slug || event.name, "event").replace(/\s+/g, "-");
+  const filename = `${eventSlug}-needs-editing.zip`;
+  const capped = photos.length > entries.length || estimatedBytes > TEAM_ZIP_MAX_BYTES;
+
+  if (metaOnly) {
+    return NextResponse.json({
+      photoCount: entries.length,
+      estimatedBytes: Math.min(estimatedBytes, TEAM_ZIP_MAX_BYTES),
+      filename,
+      capped,
+      maxFiles: TEAM_ZIP_MAX_FILES,
+      maxBytes: TEAM_ZIP_MAX_BYTES,
+    });
+  }
+
   await logActivity(request, {
     action: "needs_editing_download",
     actor: isAdmin ? "admin" : "uploader",
@@ -114,13 +136,11 @@ export async function GET(request: Request) {
       meta: {
         photoCount: entries.length,
         pileCount: photos.length,
-        capped: photos.length > entries.length,
+        estimatedBytes,
+        capped,
       },
     },
   });
-
-  const eventSlug = safeZipName(event.slug || event.name, "event").replace(/\s+/g, "-");
-  const filename = `${eventSlug}-needs-editing.zip`;
 
   return createZipDownloadResponse(entries, filename, {
     maxFiles: TEAM_ZIP_MAX_FILES,
