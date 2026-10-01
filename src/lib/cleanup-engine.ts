@@ -1,8 +1,18 @@
-/** Shared cleanup constants — safe for client + server (no sharp). */
+/** Shared cleanup constants — safe for client + server (no sharp / no secrets). */
 
-/** Bump when the adaptive recipe changes so old previews show “Re-run”. */
-export const CLEANUP_ENGINE = "lighting-sharpen-v3";
+/** Generative OpenAI image-edit pass (ChatGPT-class). */
+export const CLEANUP_ENGINE_AI = "ai-edit-v1";
 
-export function cleanupPreviewStorageKey(eventId: string, mediaId: string) {
-  return `events/${eventId}/cleanup-preview/${mediaId}-${CLEANUP_ENGINE}.jpg`;
+/** Local sharp tone/sharpen fallback when OPENAI_API_KEY is unset. */
+export const CLEANUP_ENGINE_LOCAL = "lighting-sharpen-v3";
+
+/**
+ * Preferred engine id for “current preview” checks on the client.
+ * Server may still choose AI vs local at generate time; pass the live value
+ * from the media API (`cleanup.preferredEngine`) into the panel.
+ */
+export const CLEANUP_ENGINE = CLEANUP_ENGINE_AI;
+
+export function cleanupPreviewStorageKey(eventId: string, mediaId: string, engine: string) {
+  return `events/${eventId}/cleanup-preview/${mediaId}-${engine}.jpg`;
 }

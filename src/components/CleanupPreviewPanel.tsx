@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CLEANUP_ENGINE } from "@/lib/cleanup-engine";
+import { CLEANUP_ENGINE_AI, CLEANUP_ENGINE_LOCAL } from "@/lib/cleanup-engine";
 
 export type CleanupPhoto = {
   id: string;
@@ -11,15 +11,11 @@ export type CleanupPhoto = {
   hasCleanupPreview?: boolean;
   cleanupPreviewUrl?: string | null;
   cleanupPreviewEngine?: string;
-  /** Adaptive plan label from last run (e.g. "Moderate lift"). */
+  /** Plan / AI label from last run (e.g. "AI cleanup · gpt-image-1"). */
   cleanupPreviewPreset?: string;
 };
 
 type ToneStats = { brightness: number; contrast: number };
-
-function isCurrentEngine(engine?: string | null) {
-  return Boolean(engine) && engine === CLEANUP_ENGINE;
-}
 
 /** Old menu presets stored before adaptive labels — don’t show as “This photo”. */
 function isAdaptiveLabel(value?: string | null) {
@@ -29,16 +25,22 @@ function isAdaptiveLabel(value?: string | null) {
 }
 
 /**
- * Sandbox to judge lighting/sharpness cleanup on Needs editing photos.
- * One adaptive pass per photo (no preset menu). Originals stay untouched
- * until “Use this version”.
+ * Sandbox cleanup for Needs editing photos.
+ * Uses OpenAI image edit when configured; otherwise local adaptive sharp.
+ * Originals stay untouched until “Use this version”.
  */
 export function CleanupPreviewPanel({
   photos,
+  preferredEngine = CLEANUP_ENGINE_LOCAL,
+  aiEnabled = false,
+  aiModel = null,
   onMessage,
   onPhotoUpdated,
 }: {
   photos: CleanupPhoto[];
+  preferredEngine?: string;
+  aiEnabled?: boolean;
+  aiModel?: string | null;
   onMessage: (message: string) => void;
   onPhotoUpdated: (
     id: string,
@@ -51,6 +53,10 @@ export function CleanupPreviewPanel({
     },
   ) => void;
 }) {
+  const currentEngine = preferredEngine || (aiEnabled ? CLEANUP_ENGINE_AI : CLEANUP_ENGINE_LOCAL);
+  function isCurrentEngine(engine?: string | null) {
+    return Boolean(engine) && engine === currentEngine;
+  }
   const [busyId, setBusyId] = useState<string | null>(null);
   const [compareId, setCompareId] = useState<string | null>(null);
   const [statsById, setStatsById] = useState<
@@ -100,7 +106,7 @@ export function CleanupPreviewPanel({
         onPhotoUpdated(mediaId, {
           hasCleanupPreview: true,
           cleanupPreviewUrl: json.cleanupPreviewUrl,
-          cleanupPreviewEngine: json.engine || CLEANUP_ENGINE,
+          cleanupPreviewEngine: json.engine || currentEngine,
           cleanupPreviewPreset: label,
         });
         if (json.before && json.after) {
@@ -109,7 +115,7 @@ export function CleanupPreviewPanel({
             [mediaId]: {
               before: json.before,
               after: json.after,
-              engine: json.engine || CLEANUP_ENGINE,
+              engine: json.engine || currentEngine,
               label,
             },
           }));
@@ -170,10 +176,15 @@ export function CleanupPreviewPanel({
     }
     setBatchBusy(true);
     onMessage(
-      `Running adaptive cleanup on ${targets.length} photo${targets.length === 1 ? "" : "s"}…`,
+      aiEnabled
+        ? `Running AI cleanup on ${targets.length} photo${targets.length === 1 ? "" : "s"} (may take a minute each)…`
+        : `Running local cleanup on ${targets.length} photo${targets.length === 1 ? "" : "s"}…`,
     );
     let done = 0;
-    for (const photo of targets) {
+    // AI edits are slow/costly — smaller batches than local.
+    const batchLimit = aiEnabled ? Math.min(limit, 3) : limit;
+    const batchTargets = targets.slice(0, batchLimit);
+    for (const photo of batchTargets) {
       setBusyId(photo.id);
       try {
         const res = await fetch("/api/uploader/media/cleanup-preview", {
@@ -189,11 +200,11 @@ export function CleanupPreviewPanel({
         const label =
           typeof json.label === "string" && json.label
             ? json.label
-            : "Adaptive cleanup";
+            : "Cleanup";
         onPhotoUpdated(photo.id, {
           hasCleanupPreview: true,
           cleanupPreviewUrl: json.cleanupPreviewUrl,
-          cleanupPreviewEngine: json.engine || CLEANUP_ENGINE,
+          cleanupPreviewEngine: json.engine || currentEngine,
           cleanupPreviewPreset: label,
         });
         if (json.before && json.after) {
@@ -202,7 +213,7 @@ export function CleanupPreviewPanel({
             [photo.id]: {
               before: json.before,
               after: json.after,
-              engine: json.engine || CLEANUP_ENGINE,
+              engine: json.engine || currentEngine,
               label,
             },
           }));
@@ -217,7 +228,7 @@ export function CleanupPreviewPanel({
     setBatchBusy(false);
     if (done > 0) {
       onMessage(
-        `Created ${done} cleanup preview${done === 1 ? "" : "s"}. Each photo got its own adaptive pass — compare, then Use or Discard.`,
+        `Created ${done} cleanup preview${done === 1 ? "" : "s"}. Compare, then Use or Discard.`,
       );
     }
   }
@@ -235,27 +246,45 @@ export function CleanupPreviewPanel({
       <div className="rounded-xl border border-[color:var(--line)] bg-mist/40 px-4 py-3">
         <p className="text-sm font-medium text-ink">Cleanup preview (sandbox)</p>
         <p className="mt-1 text-sm text-pine">
-          One Run per photo — strength is measured from that frame (dark gets more lift, flat
-          gets more contrast). Lighting & sharpen only; not generative AI, so faces are not
-          redrawn. Originals stay untouched until{" "}
-          <span className="font-medium text-ink">Use this version</span>.
+          {aiEnabled ? (
+            <>
+              Uses OpenAI image edit
+              {aiModel ? (
+                <>
+                  {" "}
+                  (<span className="font-medium text-ink">{aiModel}</span>)
+                </>
+              ) : null}{" "}
+              — ChatGPT-class lighting/clarity per photo. Prompt asks it to preserve faces and
+              framing. Originals stay untouched until{" "}
+              <span className="font-medium text-ink">Use this version</span>.
+            </>
+          ) : (
+            <>
+              Local adaptive lighting/sharpen (no{" "}
+              <span className="font-medium text-ink">OPENAI_API_KEY</span> configured). Add the
+              key for ChatGPT-class AI cleanup. Originals stay untouched until{" "}
+              <span className="font-medium text-ink">Use this version</span>.
+            </>
+          )}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={batchBusy || pendingCount === 0}
-            onClick={() => void runBatch(8)}
+            onClick={() => void runBatch(aiEnabled ? 3 : 8)}
             className="inline-flex h-10 items-center rounded-lg bg-ink px-4 text-sm font-medium text-foam disabled:opacity-50"
           >
             {batchBusy
               ? "Running…"
               : pendingCount === 0
                 ? "All loaded photos have current previews"
-                : `Preview next ${Math.min(8, pendingCount)}`}
+                : `Preview next ${Math.min(aiEnabled ? 3 : 8, pendingCount)}`}
           </button>
           <span className="text-xs text-pine">
             {previewCount} current · {pendingCount} need run
             {outdatedCount ? ` (${outdatedCount} outdated)` : ""}
+            {aiEnabled ? " · AI" : " · local"}
           </span>
         </div>
       </div>
@@ -445,7 +474,7 @@ export function CleanupPreviewPanel({
                   src={`${comparePhoto.cleanupPreviewUrl}${
                     comparePhoto.cleanupPreviewUrl.includes("?") ? "&" : "?"
                   }v=${encodeURIComponent(
-                    comparePhoto.cleanupPreviewEngine || CLEANUP_ENGINE,
+                    comparePhoto.cleanupPreviewEngine || currentEngine,
                   )}`}
                   alt="Cleanup preview"
                   className="w-full rounded-lg object-contain"

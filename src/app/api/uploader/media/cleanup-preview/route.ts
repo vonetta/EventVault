@@ -11,9 +11,9 @@ import { Media } from "@/lib/models";
 import { logActivity } from "@/lib/audit";
 import { objectIdSchema } from "@/lib/validate";
 import {
-  CLEANUP_ENGINE,
   cleanupPreviewStorageKey,
-  enhanceLightingAndSharpness,
+  enhanceCleanupPreview,
+  preferredCleanupEngine,
 } from "@/lib/cleanup-preview";
 import { deleteStoredObject, mediaProxyUrl, readStoredObject, storeBytes } from "@/lib/storage";
 import { z } from "zod";
@@ -148,7 +148,7 @@ export async function POST(request: Request) {
       eventId: String(media.eventId),
       details: {
         summary: `Applied cleanup preview · ${media.filename || media._id}`,
-        meta: { engine: CLEANUP_ENGINE },
+        meta: { engine: media.cleanupPreviewEngine || null },
       },
     });
 
@@ -162,13 +162,17 @@ export async function POST(request: Request) {
     });
   }
 
-  // generate — one adaptive pass per photo (no manual presets)
+  // generate — OpenAI image edit when keyed, else local adaptive sharp
   const { body: original } = await readStoredObject(
     media.storageKey,
     media.storageProvider,
   );
-  const enhanced = await enhanceLightingAndSharpness(Buffer.from(original));
-  const key = cleanupPreviewStorageKey(String(media.eventId), String(media._id));
+  const enhanced = await enhanceCleanupPreview(Buffer.from(original));
+  const key = cleanupPreviewStorageKey(
+    String(media.eventId),
+    String(media._id),
+    enhanced.engine,
+  );
   const stored = await storeBytes(
     enhanced.buffer,
     `events/${String(media.eventId)}/cleanup-preview`,
@@ -194,14 +198,14 @@ export async function POST(request: Request) {
   }
 
   // Native collection update so hot-reloaded Mongoose schemas cannot strip
-  // newer cleanupPreview* paths. Preset field holds the adaptive plan label.
+  // newer cleanupPreview* paths. Preset field holds the plan / AI label.
   await Media.collection.updateOne(
     { _id: media._id },
     {
       $set: {
         cleanupPreviewKey: stored.storageKey,
         cleanupPreviewProvider: stored.storageProvider,
-        cleanupPreviewEngine: CLEANUP_ENGINE,
+        cleanupPreviewEngine: enhanced.engine,
         cleanupPreviewPreset: enhanced.plan.label,
         cleanupPreviewAt: new Date(),
       },
@@ -215,7 +219,9 @@ export async function POST(request: Request) {
     details: {
       summary: `Generated cleanup preview · ${media.filename || media._id} · ${enhanced.plan.label}`,
       meta: {
-        engine: CLEANUP_ENGINE,
+        engine: enhanced.engine,
+        provider: enhanced.provider,
+        model: enhanced.model || null,
         label: enhanced.plan.label,
         strength: enhanced.plan.strength,
         before: enhanced.before,
@@ -230,7 +236,10 @@ export async function POST(request: Request) {
     mediaId: String(media._id),
     hasCleanupPreview: true,
     cleanupPreviewUrl: `${mediaProxyUrl(String(media._id))}?variant=cleanup&t=${stamp}`,
-    engine: CLEANUP_ENGINE,
+    engine: enhanced.engine,
+    preferredEngine: preferredCleanupEngine(),
+    provider: enhanced.provider,
+    model: enhanced.model || null,
     label: enhanced.plan.label,
     strength: enhanced.plan.strength,
     before: enhanced.before,
@@ -272,4 +281,5 @@ async function discardPreview(media: {
   );
 }
 
-export const maxDuration = 60;
+/** AI edits can take up to ~2 minutes. */
+export const maxDuration = 120;
