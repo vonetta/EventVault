@@ -117,6 +117,10 @@ export async function GET(request: Request) {
   const event =
     (eventId && events.find((item) => String(item._id) === eventId)) || events[0];
 
+  // Put back Edit tags stripped by the earlier migrate (no re-tagging).
+  const { restoreStrippedEditTags } = await import("@/lib/restore-edit-tags");
+  await restoreStrippedEditTags(event._id);
+
   const [days, sessions, guests, media, groups] = await Promise.all([
     Day.find({ eventId: event._id }).sort({ sortOrder: 1 }),
     Session.find({ eventId: event._id }).sort({ sortOrder: 1 }),
