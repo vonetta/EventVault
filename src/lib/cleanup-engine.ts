@@ -1,33 +1,18 @@
-/** Shared cleanup constants — safe for client + server (no sharp). */
+/** Shared cleanup constants — safe for client + server (no sharp / no secrets). */
 
-export const CLEANUP_ENGINE = "lighting-sharpen-v2";
+/** Generative OpenAI image-edit pass (ChatGPT-class). */
+export const CLEANUP_ENGINE_AI = "ai-edit-v1";
 
-/** Per-photo tweak modes — different shots need different help. */
-export const CLEANUP_PRESETS = ["auto", "gentle", "dark", "soft"] as const;
-export type CleanupPreset = (typeof CLEANUP_PRESETS)[number];
+/** Local sharp tone/sharpen fallback when OPENAI_API_KEY is unset. */
+export const CLEANUP_ENGINE_LOCAL = "lighting-sharpen-v3";
 
-export const CLEANUP_PRESET_LABELS: Record<CleanupPreset, string> = {
-  auto: "Auto",
-  gentle: "Gentle",
-  dark: "Dark lift",
-  soft: "Sharpen",
-};
+/**
+ * Preferred engine id for “current preview” checks on the client.
+ * Server may still choose AI vs local at generate time; pass the live value
+ * from the media API (`cleanup.preferredEngine`) into the panel.
+ */
+export const CLEANUP_ENGINE = CLEANUP_ENGINE_AI;
 
-export const CLEANUP_PRESET_HINTS: Record<CleanupPreset, string> = {
-  auto: "Picks strength from how dark / flat the frame is",
-  gentle: "Light touch — when Auto looks too strong",
-  dark: "Stronger exposure lift for underexposed shots",
-  soft: "Focus on sharpness; light tone only",
-};
-
-export function isCleanupPreset(value: unknown): value is CleanupPreset {
-  return typeof value === "string" && (CLEANUP_PRESETS as readonly string[]).includes(value);
-}
-
-export function cleanupPreviewStorageKey(
-  eventId: string,
-  mediaId: string,
-  preset: CleanupPreset = "auto",
-) {
-  return `events/${eventId}/cleanup-preview/${mediaId}-${CLEANUP_ENGINE}-${preset}.jpg`;
+export function cleanupPreviewStorageKey(eventId: string, mediaId: string, engine: string) {
+  return `events/${eventId}/cleanup-preview/${mediaId}-${engine}.jpg`;
 }

@@ -3,6 +3,11 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { isAdminAuthenticated, isUploaderAuthenticated, unauthorized } from "@/lib/auth";
 import { Guest, Media } from "@/lib/models";
+import {
+  hasOpenAICleanup,
+  openAIImageModel,
+  preferredCleanupEngine,
+} from "@/lib/cleanup-preview";
 import { editGuestIdsFrom } from "@/lib/needs-editing";
 import { mediaProxyUrl } from "@/lib/storage";
 import { objectIdSchema } from "@/lib/validate";
@@ -161,6 +166,11 @@ export async function GET(request: Request) {
         totalReady,
         totalEditing,
         total: totalReady + totalEditing,
+      },
+      cleanup: {
+        aiEnabled: hasOpenAICleanup(),
+        preferredEngine: preferredCleanupEngine(),
+        model: hasOpenAICleanup() ? openAIImageModel() : null,
       },
     },
     { headers: { "Cache-Control": "private, no-store" } },

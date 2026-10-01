@@ -1,26 +1,24 @@
 import sharp from "sharp";
 import {
-  CLEANUP_ENGINE,
-  type CleanupPreset,
+  CLEANUP_ENGINE_AI,
+  CLEANUP_ENGINE_LOCAL,
   cleanupPreviewStorageKey,
-  isCleanupPreset,
 } from "@/lib/cleanup-engine";
+import { enhanceWithOpenAI, hasOpenAICleanup } from "@/lib/cleanup-ai";
 
 export {
   CLEANUP_ENGINE,
-  CLEANUP_PRESETS,
-  CLEANUP_PRESET_HINTS,
-  CLEANUP_PRESET_LABELS,
+  CLEANUP_ENGINE_AI,
+  CLEANUP_ENGINE_LOCAL,
   cleanupPreviewStorageKey,
-  isCleanupPreset,
-  type CleanupPreset,
 } from "@/lib/cleanup-engine";
+export { hasOpenAICleanup, openAIImageModel } from "@/lib/cleanup-ai";
 
 /**
- * Automatic lighting + sharpness cleanup for Needs editing previews.
+ * Cleanup for Needs editing previews.
  *
- * Intentionally NOT generative AI: no face restore, no redraw, no upscale.
- * Per-photo presets let dark / soft / already-OK frames get different tweaks.
+ * Prefer OpenAI GPT Image edit when OPENAI_API_KEY is set (ChatGPT-class).
+ * Otherwise fall back to local sharp tone/sharpen (adaptive, not generative).
  */
 
 export type CleanupStats = {
@@ -43,107 +41,95 @@ export async function measureToneStats(input: Buffer): Promise<CleanupStats> {
 }
 
 export type TonePlan = {
-  /** Multiply then add: out = a*in + b (lifts underexposed frames). */
   linear: [number, number];
   claheSlope: number;
   brightness: number;
   saturation: number;
   sharpenSigma: number;
   normalize: boolean;
-  preset: CleanupPreset;
+  label: string;
+  strength: number;
 };
 
-const GENTLE_PLAN: Omit<TonePlan, "preset"> = {
-  linear: [1.04, 2],
-  claheSlope: 2,
-  brightness: 1.03,
-  saturation: 1.02,
-  sharpenSigma: 0.9,
-  normalize: false,
-};
-
-const DARK_PLAN: Omit<TonePlan, "preset"> = {
-  linear: [1.4, 16],
-  claheSlope: 5,
-  brightness: 1.12,
-  saturation: 1.08,
-  sharpenSigma: 1.25,
-  normalize: true,
-};
-
-const SOFT_PLAN: Omit<TonePlan, "preset"> = {
-  linear: [1.06, 3],
-  claheSlope: 2,
-  brightness: 1.03,
-  saturation: 1.02,
-  sharpenSigma: 1.55,
-  normalize: false,
-};
-
-/** Auto adapts; other presets force a fixed recipe. */
-export function planTonePass(
-  stats: CleanupStats,
-  preset: CleanupPreset = "auto",
-): TonePlan {
-  if (preset === "gentle") return { ...GENTLE_PLAN, preset };
-  if (preset === "dark") return { ...DARK_PLAN, preset };
-  if (preset === "soft") return { ...SOFT_PLAN, preset };
-
-  const { brightness, contrast } = stats;
-  const veryDark = brightness < 55;
-  const dark = brightness < 85;
-  const dim = brightness < 120;
-  const flat = contrast < 28;
-
-  if (veryDark) {
-    return {
-      linear: [1.45, 18],
-      claheSlope: 5,
-      brightness: 1.12,
-      saturation: 1.08,
-      sharpenSigma: 1.35,
-      normalize: true,
-      preset: "auto",
-    };
-  }
-  if (dark) {
-    return {
-      linear: [1.28, 12],
-      claheSlope: 4,
-      brightness: 1.1,
-      saturation: 1.06,
-      sharpenSigma: 1.2,
-      normalize: true,
-      preset: "auto",
-    };
-  }
-  if (dim || flat) {
-    return {
-      linear: [1.12, 6],
-      claheSlope: 3,
-      brightness: 1.06,
-      saturation: 1.04,
-      sharpenSigma: 1.05,
-      normalize: flat,
-      preset: "auto",
-    };
-  }
-  return { ...GENTLE_PLAN, preset: "auto" };
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
 }
 
-/**
- * Lighting + sharpen with optional per-photo preset. Geometry unchanged.
- */
-export async function enhanceLightingAndSharpness(
+/** Continuous local recipe from this frame’s stats. */
+export function planTonePass(stats: CleanupStats): TonePlan {
+  const { brightness, contrast } = stats;
+
+  const brightGap = clamp(132 - brightness, -15, 110);
+  const flatness = clamp(38 - contrast, 0, 38);
+  const needLift = clamp(brightGap / 95, 0, 1);
+  const needPunch = clamp(flatness / 32, 0, 1);
+  const strength = clamp(needLift * 0.8 + needPunch * (brightness < 125 ? 0.35 : 0.12), 0, 1);
+
+  const linearA = 1 + needLift * 0.55;
+  const linearB = needLift * 22;
+  const claheSlope = Math.round(clamp(2 + strength * 3.4 + needPunch * 0.6, 2, 8));
+  const brightnessMod = 1 + strength * 0.14;
+  const saturation = 1 + strength * 0.09 + needPunch * 0.03;
+  const sharpenSigma = 0.9 + strength * 0.5 + (brightness > 135 && needPunch > 0.3 ? 0.35 : 0);
+  const normalize = needLift < 0.35 && needPunch > 0.55 && brightness > 90;
+
+  let label = "Mild polish";
+  if (strength >= 0.78) label = "Strong exposure lift";
+  else if (strength >= 0.5) label = "Moderate lift";
+  else if (needPunch > 0.55 && needLift < 0.3) label = "Contrast + sharpen";
+  else if (strength < 0.18) label = "Light sharpen";
+
+  return {
+    linear: [Math.round(linearA * 1000) / 1000, Math.round(linearB * 10) / 10],
+    claheSlope,
+    brightness: Math.round(brightnessMod * 1000) / 1000,
+    saturation: Math.round(saturation * 1000) / 1000,
+    sharpenSigma: Math.round(sharpenSigma * 100) / 100,
+    normalize,
+    label,
+    strength: Math.round(strength * 100) / 100,
+  };
+}
+
+async function applyPlan(
   input: Buffer,
-  preset: CleanupPreset = "auto",
-): Promise<{
+  width: number,
+  height: number,
+  plan: TonePlan,
+): Promise<Buffer> {
+  let pipeline = sharp(input, { failOn: "none" }).linear(plan.linear[0], plan.linear[1]);
+
+  if (plan.normalize) {
+    pipeline = pipeline.normalize({ lower: 1, upper: 99 });
+  }
+
+  const maxWin = Math.min(80, Math.floor(Math.min(width, height) / 3));
+  if (maxWin >= 8) {
+    pipeline = pipeline.clahe({
+      width: maxWin,
+      height: maxWin,
+      maxSlope: Math.round(plan.claheSlope),
+    });
+  }
+
+  return pipeline
+    .modulate({ brightness: plan.brightness, saturation: plan.saturation })
+    .sharpen({
+      sigma: plan.sharpenSigma,
+      m1: 1.05,
+      m2: 0.45,
+    })
+    .toBuffer();
+}
+
+export async function enhanceLightingAndSharpness(input: Buffer): Promise<{
   buffer: Buffer;
   width?: number;
   height?: number;
   before: CleanupStats;
   after: CleanupStats;
   plan: TonePlan;
+  engine: string;
 }> {
   const cleaned = await sharp(input, { failOn: "none" })
     .rotate()
@@ -153,30 +139,31 @@ export async function enhanceLightingAndSharpness(
   const width = cleaned.info.width || 1;
   const height = cleaned.info.height || 1;
   const before = await measureToneStats(cleaned.data);
-  const plan = planTonePass(before, preset);
+  let plan = planTonePass(before);
+  let working = await applyPlan(cleaned.data, width, height, plan);
 
-  let pipeline = sharp(cleaned.data, { failOn: "none" }).linear(plan.linear[0], plan.linear[1]);
-
-  if (plan.normalize) {
-    pipeline = pipeline.normalize({ lower: 1, upper: 99 });
+  let mid = await measureToneStats(working);
+  if (before.brightness < 75 && mid.brightness < 100) {
+    const boost = clamp((110 - mid.brightness) / 80, 0.15, 0.55);
+    const again: TonePlan = {
+      linear: [1 + boost * 0.35, boost * 14],
+      claheSlope: 3,
+      brightness: 1 + boost * 0.08,
+      saturation: 1.02,
+      sharpenSigma: 1.05,
+      normalize: false,
+      label: "Strong exposure lift (2-pass)",
+      strength: clamp(plan.strength + boost * 0.4, 0, 1),
+    };
+    working = await applyPlan(working, width, height, again);
+    plan = {
+      ...plan,
+      label: again.label,
+      strength: again.strength,
+    };
   }
 
-  const maxWin = Math.min(72, Math.floor(Math.min(width, height) / 3));
-  if (maxWin >= 8) {
-    pipeline = pipeline.clahe({
-      width: maxWin,
-      height: maxWin,
-      maxSlope: plan.claheSlope,
-    });
-  }
-
-  const { data, info } = await pipeline
-    .modulate({ brightness: plan.brightness, saturation: plan.saturation })
-    .sharpen({
-      sigma: plan.sharpenSigma,
-      m1: 1.0,
-      m2: 0.4,
-    })
+  const { data, info } = await sharp(working, { failOn: "none" })
     .jpeg({ quality: 90, mozjpeg: true, chromaSubsampling: "4:2:0" })
     .toBuffer({ resolveWithObject: true });
 
@@ -189,5 +176,78 @@ export async function enhanceLightingAndSharpness(
     before,
     after,
     plan,
+    engine: CLEANUP_ENGINE_LOCAL,
+  };
+}
+
+export type CleanupEnhanceResult = {
+  buffer: Buffer;
+  width?: number;
+  height?: number;
+  before: CleanupStats;
+  after: CleanupStats;
+  plan: TonePlan;
+  engine: string;
+  provider: "openai" | "local";
+  model?: string;
+};
+
+/** Preferred engine id for current-preview checks (AI when keyed, else local). */
+export function preferredCleanupEngine(): string {
+  return hasOpenAICleanup() ? CLEANUP_ENGINE_AI : CLEANUP_ENGINE_LOCAL;
+}
+
+/**
+ * Run AI edit when configured; otherwise local adaptive sharp.
+ * On AI failure, falls back to local so the sandbox still works.
+ */
+export async function enhanceCleanupPreview(input: Buffer): Promise<CleanupEnhanceResult> {
+  const beforeProbe = await sharp(input, { failOn: "none" })
+    .rotate()
+    .toColourspace("srgb")
+    .toBuffer();
+  const before = await measureToneStats(beforeProbe);
+
+  if (hasOpenAICleanup()) {
+    try {
+      const ai = await enhanceWithOpenAI(input);
+      const after = await measureToneStats(ai.buffer);
+      return {
+        buffer: ai.buffer,
+        width: ai.width,
+        height: ai.height,
+        before,
+        after,
+        plan: {
+          linear: [1, 0],
+          claheSlope: 0,
+          brightness: 1,
+          saturation: 1,
+          sharpenSigma: 0,
+          normalize: false,
+          label: ai.label,
+          strength: 1,
+        },
+        engine: CLEANUP_ENGINE_AI,
+        provider: "openai",
+        model: ai.model,
+      };
+    } catch (err) {
+      // Fall through to local — still produce a usable preview.
+      console.error("[cleanup] OpenAI edit failed, using local fallback:", err);
+    }
+  }
+
+  const local = await enhanceLightingAndSharpness(input);
+  return {
+    ...local,
+    provider: "local",
+    plan: {
+      ...local.plan,
+      label:
+        hasOpenAICleanup()
+          ? `${local.plan.label} (local fallback)`
+          : local.plan.label,
+    },
   };
 }

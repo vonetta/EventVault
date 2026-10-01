@@ -154,7 +154,8 @@ const MediaSchema = new Schema(
     cleanupPreviewKey: { type: String, default: "" },
     cleanupPreviewProvider: { type: String, default: "" }, // "r2" | "local" when set
     cleanupPreviewEngine: { type: String, default: "" },
-    cleanupPreviewPreset: { type: String, default: "" }, // auto | gentle | dark | soft
+    // Adaptive plan label from last generate (e.g. "Moderate lift"), not a menu preset.
+    cleanupPreviewPreset: { type: String, default: "" },
     cleanupPreviewAt: { type: Date, default: null },
     // File-backed media (photos / uploaded videos)
     storageKey: { type: String, default: "" },

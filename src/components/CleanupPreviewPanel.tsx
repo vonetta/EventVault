@@ -1,14 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  CLEANUP_ENGINE,
-  CLEANUP_PRESETS,
-  CLEANUP_PRESET_HINTS,
-  CLEANUP_PRESET_LABELS,
-  isCleanupPreset,
-  type CleanupPreset,
-} from "@/lib/cleanup-engine";
+import { CLEANUP_ENGINE_AI, CLEANUP_ENGINE_LOCAL } from "@/lib/cleanup-engine";
 
 export type CleanupPhoto = {
   id: string;
@@ -18,41 +11,36 @@ export type CleanupPhoto = {
   hasCleanupPreview?: boolean;
   cleanupPreviewUrl?: string | null;
   cleanupPreviewEngine?: string;
+  /** Plan / AI label from last run (e.g. "AI cleanup · gpt-image-1"). */
   cleanupPreviewPreset?: string;
 };
 
 type ToneStats = { brightness: number; contrast: number };
 
-function isCurrentEngine(engine?: string | null) {
-  return Boolean(engine) && engine === CLEANUP_ENGINE;
-}
-
-/** Normalize DB/API preset; missing/legacy empty string counts as Auto. */
-function storedPreset(photo: CleanupPhoto): CleanupPreset {
-  return isCleanupPreset(photo.cleanupPreviewPreset)
-    ? photo.cleanupPreviewPreset
-    : "auto";
-}
-
-function presetForPhoto(
-  photo: CleanupPhoto,
-  draft: Record<string, CleanupPreset>,
-): CleanupPreset {
-  if (draft[photo.id]) return draft[photo.id];
-  return storedPreset(photo);
+/** Old menu presets stored before adaptive labels — don’t show as “This photo”. */
+function isAdaptiveLabel(value?: string | null) {
+  if (!value) return false;
+  const legacy = new Set(["auto", "gentle", "dark", "soft"]);
+  return !legacy.has(value.trim().toLowerCase());
 }
 
 /**
- * Separate sandbox to judge lighting/sharpness cleanup on Needs editing photos.
- * Per-photo presets: Auto / Gentle / Dark lift / Sharpen.
+ * Sandbox cleanup for Needs editing photos.
+ * Uses OpenAI image edit when configured; otherwise local adaptive sharp.
  * Originals stay untouched until “Use this version”.
  */
 export function CleanupPreviewPanel({
   photos,
+  preferredEngine = CLEANUP_ENGINE_LOCAL,
+  aiEnabled = false,
+  aiModel = null,
   onMessage,
   onPhotoUpdated,
 }: {
   photos: CleanupPhoto[];
+  preferredEngine?: string;
+  aiEnabled?: boolean;
+  aiModel?: string | null;
   onMessage: (message: string) => void;
   onPhotoUpdated: (
     id: string,
@@ -65,14 +53,16 @@ export function CleanupPreviewPanel({
     },
   ) => void;
 }) {
+  const currentEngine = preferredEngine || (aiEnabled ? CLEANUP_ENGINE_AI : CLEANUP_ENGINE_LOCAL);
+  function isCurrentEngine(engine?: string | null) {
+    return Boolean(engine) && engine === currentEngine;
+  }
   const [busyId, setBusyId] = useState<string | null>(null);
   const [compareId, setCompareId] = useState<string | null>(null);
   const [statsById, setStatsById] = useState<
-    Record<string, { before: ToneStats; after: ToneStats; engine: string; preset: CleanupPreset }>
+    Record<string, { before: ToneStats; after: ToneStats; engine: string; label: string }>
   >({});
-  const [presetDraft, setPresetDraft] = useState<Record<string, CleanupPreset>>({});
   const [batchBusy, setBatchBusy] = useState(false);
-  const [defaultPreset, setDefaultPreset] = useState<CleanupPreset>("auto");
 
   const comparePhoto = useMemo(
     () => photos.find((p) => p.id === compareId) || null,
@@ -89,30 +79,14 @@ export function CleanupPreviewPanel({
     (p) => p.hasCleanupPreview && !isCurrentEngine(p.cleanupPreviewEngine),
   ).length;
 
-  function setPhotoPreset(mediaId: string, preset: CleanupPreset) {
-    setPresetDraft((prev) => ({ ...prev, [mediaId]: preset }));
-  }
-
-  async function runAction(
-    mediaId: string,
-    action: "generate" | "apply" | "discard",
-    presetOverride?: CleanupPreset,
-  ) {
+  async function runAction(mediaId: string, action: "generate" | "apply" | "discard") {
     setBusyId(mediaId);
-    const photo = photos.find((p) => p.id === mediaId);
-    const preset =
-      presetOverride ||
-      (photo ? presetForPhoto(photo, presetDraft) : defaultPreset);
 
     try {
       const res = await fetch("/api/uploader/media/cleanup-preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mediaId,
-          action,
-          ...(action === "generate" ? { preset } : {}),
-        }),
+        body: JSON.stringify({ mediaId, action }),
       });
       const json = await res.json().catch(() => ({}));
       if (res.status === 401) {
@@ -125,29 +99,31 @@ export function CleanupPreviewPanel({
       }
 
       if (action === "generate") {
-        const usedPreset: CleanupPreset = isCleanupPreset(json.preset) ? json.preset : preset;
+        const label =
+          typeof json.label === "string" && json.label
+            ? json.label
+            : "Adaptive cleanup";
         onPhotoUpdated(mediaId, {
           hasCleanupPreview: true,
           cleanupPreviewUrl: json.cleanupPreviewUrl,
-          cleanupPreviewEngine: json.engine || CLEANUP_ENGINE,
-          cleanupPreviewPreset: usedPreset,
+          cleanupPreviewEngine: json.engine || currentEngine,
+          cleanupPreviewPreset: label,
         });
-        setPresetDraft((prev) => ({ ...prev, [mediaId]: usedPreset }));
         if (json.before && json.after) {
           setStatsById((prev) => ({
             ...prev,
             [mediaId]: {
               before: json.before,
               after: json.after,
-              engine: json.engine || CLEANUP_ENGINE,
-              preset: usedPreset,
+              engine: json.engine || currentEngine,
+              label,
             },
           }));
           const lift = Math.round((json.after.brightness - json.before.brightness) * 10) / 10;
           onMessage(
-            `${CLEANUP_PRESET_LABELS[usedPreset]} preview ready (brightness ${json.before.brightness} → ${json.after.brightness}${
+            `${label} ready (brightness ${json.before.brightness} → ${json.after.brightness}${
               lift > 0 ? `, +${lift}` : ""
-            }). Original unchanged — compare, then Use or try another tweak.`,
+            }). Original unchanged — compare, then Use or Discard.`,
           );
         } else {
           onMessage("Cleanup preview ready — original is unchanged. Compare before you use it.");
@@ -200,31 +176,36 @@ export function CleanupPreviewPanel({
     }
     setBatchBusy(true);
     onMessage(
-      `Running ${CLEANUP_PRESET_LABELS[defaultPreset]} cleanup on ${targets.length} photo${
-        targets.length === 1 ? "" : "s"
-      }…`,
+      aiEnabled
+        ? `Running AI cleanup on ${targets.length} photo${targets.length === 1 ? "" : "s"} (may take a minute each)…`
+        : `Running local cleanup on ${targets.length} photo${targets.length === 1 ? "" : "s"}…`,
     );
     let done = 0;
-    for (const photo of targets) {
+    // AI edits are slow/costly — smaller batches than local.
+    const batchLimit = aiEnabled ? Math.min(limit, 3) : limit;
+    const batchTargets = targets.slice(0, batchLimit);
+    for (const photo of batchTargets) {
       setBusyId(photo.id);
-      const preset = presetForPhoto(photo, presetDraft) || defaultPreset;
       try {
         const res = await fetch("/api/uploader/media/cleanup-preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mediaId: photo.id, action: "generate", preset }),
+          body: JSON.stringify({ mediaId: photo.id, action: "generate" }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
           onMessage(json.error || `Stopped after ${done} — could not clean ${photo.title}.`);
           break;
         }
-        const usedPreset: CleanupPreset = isCleanupPreset(json.preset) ? json.preset : preset;
+        const label =
+          typeof json.label === "string" && json.label
+            ? json.label
+            : "Cleanup";
         onPhotoUpdated(photo.id, {
           hasCleanupPreview: true,
           cleanupPreviewUrl: json.cleanupPreviewUrl,
-          cleanupPreviewEngine: json.engine || CLEANUP_ENGINE,
-          cleanupPreviewPreset: usedPreset,
+          cleanupPreviewEngine: json.engine || currentEngine,
+          cleanupPreviewPreset: label,
         });
         if (json.before && json.after) {
           setStatsById((prev) => ({
@@ -232,8 +213,8 @@ export function CleanupPreviewPanel({
             [photo.id]: {
               before: json.before,
               after: json.after,
-              engine: json.engine || CLEANUP_ENGINE,
-              preset: usedPreset,
+              engine: json.engine || currentEngine,
+              label,
             },
           }));
         }
@@ -247,7 +228,7 @@ export function CleanupPreviewPanel({
     setBatchBusy(false);
     if (done > 0) {
       onMessage(
-        `Created ${done} cleanup preview${done === 1 ? "" : "s"}. Change a photo’s tweak and Re-run if it needs a different pass.`,
+        `Created ${done} cleanup preview${done === 1 ? "" : "s"}. Compare, then Use or Discard.`,
       );
     }
   }
@@ -265,78 +246,59 @@ export function CleanupPreviewPanel({
       <div className="rounded-xl border border-[color:var(--line)] bg-mist/40 px-4 py-3">
         <p className="text-sm font-medium text-ink">Cleanup preview (sandbox)</p>
         <p className="mt-1 text-sm text-pine">
-          Different shots need different help. Pick a tweak per photo —{" "}
-          <span className="font-medium text-ink">Auto</span>,{" "}
-          <span className="font-medium text-ink">Gentle</span>,{" "}
-          <span className="font-medium text-ink">Dark lift</span>, or{" "}
-          <span className="font-medium text-ink">Sharpen</span> — then Run. Lighting/sharpen only;
-          faces stay put. Originals unchanged until{" "}
-          <span className="font-medium text-ink">Use this version</span>.
+          {aiEnabled ? (
+            <>
+              Uses OpenAI image edit
+              {aiModel ? (
+                <>
+                  {" "}
+                  (<span className="font-medium text-ink">{aiModel}</span>)
+                </>
+              ) : null}{" "}
+              — ChatGPT-class lighting/clarity per photo. Prompt asks it to preserve faces and
+              framing. Originals stay untouched until{" "}
+              <span className="font-medium text-ink">Use this version</span>.
+            </>
+          ) : (
+            <>
+              Local adaptive lighting/sharpen (no{" "}
+              <span className="font-medium text-ink">OPENAI_API_KEY</span> configured). Add the
+              key for ChatGPT-class AI cleanup. Originals stay untouched until{" "}
+              <span className="font-medium text-ink">Use this version</span>.
+            </>
+          )}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-pine">
-            Batch default
-            <select
-              value={defaultPreset}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (isCleanupPreset(value)) setDefaultPreset(value);
-              }}
-              className="h-9 rounded-lg border border-[color:var(--line)] bg-white px-2 text-sm text-ink"
-            >
-              {CLEANUP_PRESETS.map((preset) => (
-                <option key={preset} value={preset}>
-                  {CLEANUP_PRESET_LABELS[preset]}
-                </option>
-              ))}
-            </select>
-          </label>
           <button
             type="button"
             disabled={batchBusy || pendingCount === 0}
-            onClick={() => {
-              // Apply batch default to pending photos that have no draft yet.
-              setPresetDraft((prev) => {
-                const next = { ...prev };
-                for (const photo of photos) {
-                  if (!photo.hasCleanupPreview || !isCurrentEngine(photo.cleanupPreviewEngine)) {
-                    if (!next[photo.id]) next[photo.id] = defaultPreset;
-                  }
-                }
-                return next;
-              });
-              void runBatch(8);
-            }}
+            onClick={() => void runBatch(aiEnabled ? 3 : 8)}
             className="inline-flex h-10 items-center rounded-lg bg-ink px-4 text-sm font-medium text-foam disabled:opacity-50"
           >
             {batchBusy
               ? "Running…"
               : pendingCount === 0
                 ? "All loaded photos have current previews"
-                : `Preview next ${Math.min(8, pendingCount)}`}
+                : `Preview next ${Math.min(aiEnabled ? 3 : 8, pendingCount)}`}
           </button>
           <span className="text-xs text-pine">
             {previewCount} current · {pendingCount} need run
             {outdatedCount ? ` (${outdatedCount} outdated)` : ""}
+            {aiEnabled ? " · AI" : " · local"}
           </span>
         </div>
-        <p className="mt-2 text-xs text-pine">{CLEANUP_PRESET_HINTS[defaultPreset]}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {photos.map((photo) => {
           const busy = busyId === photo.id || batchBusy;
           const stats = statsById[photo.id];
-          const preset = presetForPhoto(photo, presetDraft);
-          const lastPreset = storedPreset(photo);
           const outdated =
             Boolean(photo.hasCleanupPreview) && !isCurrentEngine(photo.cleanupPreviewEngine);
-          const presetDirty =
-            Boolean(photo.hasCleanupPreview) && preset !== lastPreset;
-          const emphasizeRun = outdated || presetDirty;
+          const label = stats?.label || photo.cleanupPreviewPreset || "";
           const previewSrc = photo.cleanupPreviewUrl
             ? `${photo.cleanupPreviewUrl}${photo.cleanupPreviewUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(
-                `${photo.cleanupPreviewEngine || "1"}-${lastPreset}`,
+                photo.cleanupPreviewEngine || "1",
               )}`
             : null;
           return (
@@ -383,35 +345,12 @@ export function CleanupPreviewPanel({
                     : photo.title}
                 </p>
 
-                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Cleanup tweak">
-                  {CLEANUP_PRESETS.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={busy}
-                      aria-pressed={preset === option}
-                      title={CLEANUP_PRESET_HINTS[option]}
-                      onClick={() => setPhotoPreset(photo.id, option)}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                        preset === option ? "bg-ink text-foam" : "bg-mist text-pine"
-                      } disabled:opacity-50`}
-                    >
-                      {CLEANUP_PRESET_LABELS[option]}
-                    </button>
-                  ))}
-                </div>
-
                 {outdated ? (
                   <p className="text-xs text-gold-deep">
-                    Older pass — pick a tweak and Re-run cleanup.
+                    Older cleanup engine — Re-run for the adaptive pass.
                   </p>
-                ) : photo.hasCleanupPreview ? (
-                  <p className="text-xs text-pine">
-                    Last run: {CLEANUP_PRESET_LABELS[lastPreset]}
-                    {presetDirty
-                      ? ` · selected ${CLEANUP_PRESET_LABELS[preset]} (not run yet)`
-                      : ""}
-                  </p>
+                ) : photo.hasCleanupPreview && isAdaptiveLabel(label) ? (
+                  <p className="text-xs text-pine">This photo: {label}</p>
                 ) : null}
 
                 {stats ? (
@@ -425,9 +364,9 @@ export function CleanupPreviewPanel({
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void runAction(photo.id, "generate", preset)}
+                    onClick={() => void runAction(photo.id, "generate")}
                     className={
-                      emphasizeRun
+                      outdated
                         ? "rounded-lg border border-[color:var(--line)] bg-ink px-3 py-1.5 text-xs text-foam hover:bg-pine disabled:opacity-50"
                         : "rounded-lg border border-[color:var(--line)] px-3 py-1.5 text-xs text-ink hover:bg-mist disabled:opacity-50"
                     }
@@ -435,8 +374,8 @@ export function CleanupPreviewPanel({
                     {busy && busyId === photo.id
                       ? "Working…"
                       : photo.hasCleanupPreview
-                        ? `Re-run · ${CLEANUP_PRESET_LABELS[preset]}`
-                        : `Run · ${CLEANUP_PRESET_LABELS[preset]}`}
+                        ? "Re-run"
+                        : "Run cleanup"}
                   </button>
                   {photo.hasCleanupPreview ? (
                     <>
@@ -491,10 +430,12 @@ export function CleanupPreviewPanel({
                   Compare cleanup
                 </p>
                 <p className="text-sm text-pine">
-                  Tweak: {CLEANUP_PRESET_LABELS[storedPreset(comparePhoto)]}.
-                  Lighting & sharpness only — if faces look different, discard.
+                  {statsById[comparePhoto.id]?.label ||
+                    comparePhoto.cleanupPreviewPreset ||
+                    "Adaptive cleanup"}
+                  . Lighting & sharpness only — if faces look different, discard.
                   {!isCurrentEngine(comparePhoto.cleanupPreviewEngine)
-                    ? " Older mild pass — pick a tweak and Re-run."
+                    ? " Older pass — Re-run for the current engine."
                     : ""}
                 </p>
                 {statsById[comparePhoto.id] ? (
@@ -515,25 +456,6 @@ export function CleanupPreviewPanel({
               </button>
             </div>
 
-            <div className="mb-3 flex flex-wrap gap-1.5">
-              {CLEANUP_PRESETS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  disabled={busyId === comparePhoto.id}
-                  aria-pressed={presetForPhoto(comparePhoto, presetDraft) === option}
-                  onClick={() => setPhotoPreset(comparePhoto.id, option)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    presetForPhoto(comparePhoto, presetDraft) === option
-                      ? "bg-ink text-foam"
-                      : "bg-mist text-pine"
-                  } disabled:opacity-50`}
-                >
-                  {CLEANUP_PRESET_LABELS[option]}
-                </button>
-              ))}
-            </div>
-
             <div className="grid gap-3 md:grid-cols-2">
               <figure>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -552,7 +474,7 @@ export function CleanupPreviewPanel({
                   src={`${comparePhoto.cleanupPreviewUrl}${
                     comparePhoto.cleanupPreviewUrl.includes("?") ? "&" : "?"
                   }v=${encodeURIComponent(
-                    `${comparePhoto.cleanupPreviewEngine || CLEANUP_ENGINE}-${storedPreset(comparePhoto)}`,
+                    comparePhoto.cleanupPreviewEngine || currentEngine,
                   )}`}
                   alt="Cleanup preview"
                   className="w-full rounded-lg object-contain"
@@ -566,16 +488,10 @@ export function CleanupPreviewPanel({
               <button
                 type="button"
                 disabled={busyId === comparePhoto.id}
-                onClick={() =>
-                  void runAction(
-                    comparePhoto.id,
-                    "generate",
-                    presetForPhoto(comparePhoto, presetDraft),
-                  )
-                }
+                onClick={() => void runAction(comparePhoto.id, "generate")}
                 className="rounded-lg border border-[color:var(--line)] px-4 py-2 text-sm text-ink hover:bg-mist disabled:opacity-50"
               >
-                Re-run · {CLEANUP_PRESET_LABELS[presetForPhoto(comparePhoto, presetDraft)]}
+                Re-run
               </button>
               {isCurrentEngine(comparePhoto.cleanupPreviewEngine) ? (
                 <button

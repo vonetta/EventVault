@@ -162,6 +162,11 @@ export default function UploadPage() {
   const [tagSaveHint, setTagSaveHint] = useState("");
   const [visibleCount, setVisibleCount] = useState(GALLERY_PAGE_SIZE);
   const [assistPhotos, setAssistPhotos] = useState<StagedPhoto[]>([]);
+  const [cleanupMeta, setCleanupMeta] = useState<{
+    aiEnabled: boolean;
+    preferredEngine: string;
+    model: string | null;
+  }>({ aiEnabled: false, preferredEngine: "", model: null });
   const [assistLoading, setAssistLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cancelUploadRef = useRef(false);
@@ -192,6 +197,11 @@ export default function UploadPage() {
         needsEditing: StagedPhoto[];
         all: StagedPhoto[];
         page: MediaPage;
+        cleanup?: {
+          aiEnabled: boolean;
+          preferredEngine: string;
+          model: string | null;
+        };
       };
     },
     [],
@@ -218,6 +228,14 @@ export default function UploadPage() {
           editing: editingPage.page.totalEditing,
           total: readyPage.page.total,
         });
+        const cleanupMeta = editingPage.cleanup || readyPage.cleanup;
+        if (cleanupMeta) {
+          setCleanupMeta({
+            aiEnabled: Boolean(cleanupMeta.aiEnabled),
+            preferredEngine: cleanupMeta.preferredEngine || "",
+            model: cleanupMeta.model || null,
+          });
+        }
         setVisibleCount(GALLERY_PAGE_SIZE);
       } finally {
         setLoadingGallery(false);
@@ -1044,6 +1062,9 @@ export default function UploadPage() {
               <>
                 <CleanupPreviewPanel
                   photos={editingGallery}
+                  preferredEngine={cleanupMeta.preferredEngine}
+                  aiEnabled={cleanupMeta.aiEnabled}
+                  aiModel={cleanupMeta.model}
                   onMessage={setMessage}
                   onPhotoUpdated={(id, patch) => {
                     setEditingGallery((prev) =>
