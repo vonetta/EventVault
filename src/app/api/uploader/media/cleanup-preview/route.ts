@@ -220,16 +220,17 @@ export async function POST(request: Request) {
     },
   });
 
+  const stamp = Date.now();
   return NextResponse.json({
     ok: true,
     mediaId: String(media._id),
     hasCleanupPreview: true,
-    cleanupPreviewUrl: `${mediaProxyUrl(String(media._id))}?variant=cleanup`,
+    cleanupPreviewUrl: `${mediaProxyUrl(String(media._id))}?variant=cleanup&t=${stamp}`,
     engine: CLEANUP_ENGINE,
     before: enhanced.before,
     after: enhanced.after,
     // cache-bust the original URL after regenerate
-    url: `${mediaProxyUrl(String(media._id))}?t=${Date.now()}`,
+    url: `${mediaProxyUrl(String(media._id))}?t=${stamp}`,
   });
 }
 

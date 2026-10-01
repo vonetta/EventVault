@@ -113,6 +113,7 @@ type StagedPhoto = {
   taggedNames: string[];
   hasCleanupPreview?: boolean;
   cleanupPreviewUrl?: string | null;
+  cleanupPreviewEngine?: string;
 };
 
 type GalleryBucket = "ready" | "editing" | "cleanup";
