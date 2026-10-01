@@ -193,10 +193,9 @@ export async function POST(request: Request) {
     }
   }
 
-  // Use updateOne so new schema fields persist even if a hot-reloaded
-  // Mongoose model was compiled before cleanupPreview* existed.
-  // cleanupPreviewPreset stores the adaptive plan label (not a menu mode).
-  await Media.updateOne(
+  // Native collection update so hot-reloaded Mongoose schemas cannot strip
+  // newer cleanupPreview* paths. Preset field holds the adaptive plan label.
+  await Media.collection.updateOne(
     { _id: media._id },
     {
       $set: {
