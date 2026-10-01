@@ -149,6 +149,12 @@ const MediaSchema = new Schema(
     // until cleared. Tags may be prepared while editing but only go live when
     // this is false.
     needsEditing: { type: Boolean, default: false, index: true },
+    // Optional lighting/sharpness cleanup PREVIEW (separate from the original).
+    // Never served to guests. Cleared when discarded or applied over the original.
+    cleanupPreviewKey: { type: String, default: "" },
+    cleanupPreviewProvider: { type: String, default: "" }, // "r2" | "local" when set
+    cleanupPreviewEngine: { type: String, default: "" },
+    cleanupPreviewAt: { type: Date, default: null },
     // File-backed media (photos / uploaded videos)
     storageKey: { type: String, default: "" },
     storageProvider: {

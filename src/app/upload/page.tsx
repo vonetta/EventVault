@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CleanupPreviewPanel } from "@/components/CleanupPreviewPanel";
 import { GroupPhotoAssistPanel } from "@/components/GroupPhotoAssistPanel";
 import { NeedsEditingZipExport } from "@/components/NeedsEditingZipExport";
 import { QualityAssistPanel } from "@/components/QualityAssistPanel";
@@ -110,9 +111,11 @@ type StagedPhoto = {
   needsEditing: boolean;
   taggedGuestIds: string[];
   taggedNames: string[];
+  hasCleanupPreview?: boolean;
+  cleanupPreviewUrl?: string | null;
 };
 
-type GalleryBucket = "ready" | "editing";
+type GalleryBucket = "ready" | "editing" | "cleanup";
 type MediaPage = {
   limit: number;
   hasMore: boolean;
@@ -169,7 +172,7 @@ export default function UploadPage() {
   }, []);
 
   const fetchMediaPage = useCallback(
-    async (id: string, galleryBucket: GalleryBucket, cursor: string | null) => {
+    async (id: string, galleryBucket: Exclude<GalleryBucket, "cleanup">, cursor: string | null) => {
       const params = new URLSearchParams({
         eventId: id,
         bucket: galleryBucket,
@@ -254,7 +257,7 @@ export default function UploadPage() {
         });
         setReadyCursor(page.page.nextCursor);
         setReadyHasMore(page.page.hasMore);
-      } else if (bucket === "editing" && editingHasMore) {
+      } else if ((bucket === "editing" || bucket === "cleanup") && editingHasMore) {
         const page = await fetchMediaPage(eventId, "editing", editingCursor);
         if (!page) return;
         setEditingGallery((prev) => {
@@ -646,6 +649,7 @@ export default function UploadPage() {
   const activeGallery = bucket === "ready" ? readyGallery : editingGallery;
   const activeTotal = bucket === "ready" ? galleryTotals.ready : galleryTotals.editing;
   const activeHasMore = bucket === "ready" ? readyHasMore : editingHasMore;
+  const cleanupPreviewCount = editingGallery.filter((p) => p.hasCleanupPreview).length;
   const filteredGallery =
     tagFilter === "untagged"
       ? activeGallery.filter(
@@ -1016,69 +1020,37 @@ export default function UploadPage() {
               >
                 Needs editing ({galleryTotals.editing})
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setBucket("cleanup");
+                  setTagFilter("all");
+                  setVisibleCount(GALLERY_PAGE_SIZE);
+                }}
+                aria-pressed={bucket === "cleanup"}
+                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  bucket === "cleanup" ? "bg-ink text-foam" : "bg-mist text-pine"
+                }`}
+              >
+                Cleanup preview ({cleanupPreviewCount}/{galleryTotals.editing})
+              </button>
               {loadingGallery ? (
                 <span className="text-xs text-pine">Refreshing…</span>
               ) : null}
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {(
-                [
-                  { id: "all" as const, label: `All (${activeGallery.length})` },
-                  { id: "untagged" as const, label: `Untagged (${untaggedInBucket})` },
-                  { id: "tagged" as const, label: `Tagged (${taggedInBucket})` },
-                ] as const
-              ).map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  aria-pressed={tagFilter === option.id}
-                  onClick={() => {
-                    setTagFilter(option.id);
-                    setVisibleCount(GALLERY_PAGE_SIZE);
-                  }}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    tagFilter === option.id ? "bg-ink text-foam" : "bg-mist text-pine"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-sm text-pine">
-              {bucket === "ready"
-                ? "Ready for Admin → Media to send. Tap Untagged to finish naming what’s left."
-                : "Hidden from guests. Tap Untagged to finish naming, then mark ready."}
-            </p>
-            {bucket === "editing" && galleryTotals.editing > 0 ? (
-              <NeedsEditingZipExport
-                className="mt-3"
-                eventId={eventId}
-                photoCount={galleryTotals.editing}
-                onMessage={setMessage}
-              />
-            ) : null}
-            {filteredGallery.length === 0 ? (
-              <p className="mt-4 text-sm text-pine">
-                {tagFilter === "untagged"
-                  ? "No untagged photos in this loaded batch — try Load more from server, or switch buckets."
-                  : "Nothing here yet."}
-              </p>
-            ) : (
+            {bucket === "cleanup" ? (
               <>
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {visibleGallery.map(renderPhotoCard)}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {visibleCount < filteredGallery.length ? (
-                    <button
-                      type="button"
-                      onClick={() => setVisibleCount((n) => n + GALLERY_PAGE_SIZE)}
-                      className="rounded-lg border border-[color:var(--line)] px-3 py-2 text-sm text-ink hover:bg-mist"
-                    >
-                      Show more ({filteredGallery.length - visibleCount} loaded)
-                    </button>
-                  ) : null}
-                  {activeHasMore ? (
+                <CleanupPreviewPanel
+                  photos={editingGallery}
+                  onMessage={setMessage}
+                  onPhotoUpdated={(id, patch) => {
+                    setEditingGallery((prev) =>
+                      prev.map((photo) => (photo.id === id ? { ...photo, ...patch } : photo)),
+                    );
+                  }}
+                />
+                {editingHasMore ? (
+                  <div className="mt-4">
                     <button
                       type="button"
                       disabled={loadingMore}
@@ -1087,10 +1059,86 @@ export default function UploadPage() {
                     >
                       {loadingMore
                         ? "Loading…"
-                        : `Load more from server (${activeTotal - activeGallery.length} left)`}
+                        : `Load more Needs editing (${galleryTotals.editing - editingGallery.length} left)`}
                     </button>
-                  ) : null}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {(
+                    [
+                      { id: "all" as const, label: `All (${activeGallery.length})` },
+                      { id: "untagged" as const, label: `Untagged (${untaggedInBucket})` },
+                      { id: "tagged" as const, label: `Tagged (${taggedInBucket})` },
+                    ] as const
+                  ).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      aria-pressed={tagFilter === option.id}
+                      onClick={() => {
+                        setTagFilter(option.id);
+                        setVisibleCount(GALLERY_PAGE_SIZE);
+                      }}
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        tagFilter === option.id ? "bg-ink text-foam" : "bg-mist text-pine"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
+                <p className="mt-2 text-sm text-pine">
+                  {bucket === "ready"
+                    ? "Ready for Admin → Media to send. Tap Untagged to finish naming what’s left."
+                    : "Hidden from guests. Tap Untagged to finish naming, then mark ready."}
+                </p>
+                {bucket === "editing" && galleryTotals.editing > 0 ? (
+                  <NeedsEditingZipExport
+                    className="mt-3"
+                    eventId={eventId}
+                    photoCount={galleryTotals.editing}
+                    onMessage={setMessage}
+                  />
+                ) : null}
+                {filteredGallery.length === 0 ? (
+                  <p className="mt-4 text-sm text-pine">
+                    {tagFilter === "untagged"
+                      ? "No untagged photos in this loaded batch — try Load more from server, or switch buckets."
+                      : "Nothing here yet."}
+                  </p>
+                ) : (
+                  <>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      {visibleGallery.map(renderPhotoCard)}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {visibleCount < filteredGallery.length ? (
+                        <button
+                          type="button"
+                          onClick={() => setVisibleCount((n) => n + GALLERY_PAGE_SIZE)}
+                          className="rounded-lg border border-[color:var(--line)] px-3 py-2 text-sm text-ink hover:bg-mist"
+                        >
+                          Show more ({filteredGallery.length - visibleCount} loaded)
+                        </button>
+                      ) : null}
+                      {activeHasMore ? (
+                        <button
+                          type="button"
+                          disabled={loadingMore}
+                          onClick={() => void loadMoreBucket()}
+                          className="rounded-lg border border-[color:var(--line)] px-3 py-2 text-sm text-ink hover:bg-mist disabled:opacity-50"
+                        >
+                          {loadingMore
+                            ? "Loading…"
+                            : `Load more from server (${activeTotal - activeGallery.length} left)`}
+                        </button>
+                      ) : null}
+                    </div>
+                  </>
+                )}
               </>
             )}
           </section>
