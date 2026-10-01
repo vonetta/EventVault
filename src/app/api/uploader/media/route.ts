@@ -41,6 +41,10 @@ export async function GET(request: Request) {
 
   await connectDB();
 
+  // Put back Edit tags that an earlier migrate stripped (no re-tagging needed).
+  const { restoreStrippedEditTags } = await import("@/lib/restore-edit-tags");
+  await restoreStrippedEditTags(eventId);
+
   const guests = await Guest.find({ eventId }).select("_id name").lean();
   const editIds = editGuestIdsFrom(guests);
 
