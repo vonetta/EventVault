@@ -122,6 +122,7 @@ export async function GET(request: Request) {
     const hasEditTag = taggedGuestIds.some((id) => editIdSet.has(id));
     const hasCleanupPreview = Boolean(item.cleanupPreviewKey);
     const cleanupPreviewEngine = item.cleanupPreviewEngine || "";
+    const cleanupPreviewPreset = item.cleanupPreviewPreset || "";
     return {
       id: String(item._id),
       title: item.title || item.filename || "Photo",
@@ -136,6 +137,7 @@ export async function GET(request: Request) {
         : null,
       cleanupPreviewAt: item.cleanupPreviewAt || null,
       cleanupPreviewEngine,
+      cleanupPreviewPreset,
       taggedGuestIds,
       taggedNames: taggedGuestIds.map((id) => nameById.get(id) || "Unknown").filter(Boolean),
       createdAt: item.createdAt,

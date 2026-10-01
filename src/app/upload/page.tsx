@@ -114,6 +114,7 @@ type StagedPhoto = {
   hasCleanupPreview?: boolean;
   cleanupPreviewUrl?: string | null;
   cleanupPreviewEngine?: string;
+  cleanupPreviewPreset?: string;
 };
 
 type GalleryBucket = "ready" | "editing" | "cleanup";
