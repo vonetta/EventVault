@@ -120,6 +120,7 @@ export async function GET(request: Request) {
   function mapPhoto(item: (typeof media)[number]) {
     const taggedGuestIds = (item.taggedGuestIds || []).map((id) => String(id));
     const hasEditTag = taggedGuestIds.some((id) => editIdSet.has(id));
+    const hasCleanupPreview = Boolean(item.cleanupPreviewKey);
     return {
       id: String(item._id),
       title: item.title || item.filename || "Photo",
@@ -128,6 +129,11 @@ export async function GET(request: Request) {
       uploadedByName: item.uploadedByName || "",
       needsEditing: Boolean(item.needsEditing),
       hasEditTag,
+      hasCleanupPreview,
+      cleanupPreviewUrl: hasCleanupPreview
+        ? `${mediaProxyUrl(String(item._id))}?variant=cleanup`
+        : null,
+      cleanupPreviewAt: item.cleanupPreviewAt || null,
       taggedGuestIds,
       taggedNames: taggedGuestIds.map((id) => nameById.get(id) || "Unknown").filter(Boolean),
       createdAt: item.createdAt,
