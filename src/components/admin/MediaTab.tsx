@@ -100,6 +100,7 @@ export function MediaTab({
   const [taggingId, setTaggingId] = useState<string | null>(null);
   const [editingSelected, setEditingSelected] = useState<Set<string>>(new Set());
   const [togglingEdit, setTogglingEdit] = useState(false);
+  const [downloadingEditingZip, setDownloadingEditingZip] = useState(false);
   const [stagedFilter, setStagedFilter] = useState<"all" | "untagged" | "tagged">("all");
   const [editingFilter, setEditingFilter] = useState<"all" | "untagged" | "tagged">("all");
   const [sentFilter, setSentFilter] = useState<"all" | "untagged" | "tagged">("all");
@@ -278,6 +279,43 @@ export function MediaTab({
       contentType: item.contentType || "image/jpeg",
       url: `/api/media/${String(item._id)}`,
     };
+  }
+
+  async function downloadNeedsEditingZip() {
+    if (!selectedEventId || needsEditingPhotos.length === 0 || downloadingEditingZip) return;
+    setDownloadingEditingZip(true);
+    actions.setMessage(
+      `Preparing ZIP of ${needsEditingPhotos.length} Needs editing photo${
+        needsEditingPhotos.length === 1 ? "" : "s"
+      }…`,
+    );
+    try {
+      const response = await fetch(
+        `/api/uploader/media/download-editing?eventId=${encodeURIComponent(selectedEventId)}`,
+      );
+      if (!response.ok) {
+        const json = await response.json().catch(() => ({}));
+        actions.setMessage(json.error || "Could not prepare the Needs editing ZIP.");
+        return;
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match?.[1] || "needs-editing.zip";
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      actions.setMessage(`Downloaded ${filename}.`);
+    } catch {
+      actions.setMessage("Could not prepare the Needs editing ZIP.");
+    } finally {
+      setDownloadingEditingZip(false);
+    }
   }
 
   async function setNeedsEditing(mediaIds: string[], needsEditing: boolean) {
@@ -672,6 +710,15 @@ export function MediaTab({
                 Showing {visibleNeedsEditing.length} of {filteredNeedsEditing.length}
                 {editingSelected.size ? ` · ${editingSelected.size} selected` : ""}
               </span>
+              <AdminButton
+                variant="secondary"
+                disabled={downloadingEditingZip}
+                onClick={() => void downloadNeedsEditingZip()}
+              >
+                {downloadingEditingZip
+                  ? "Preparing ZIP…"
+                  : `Download ZIP (${needsEditingPhotos.length})`}
+              </AdminButton>
               <AdminButton
                 variant="secondary"
                 onClick={() =>
