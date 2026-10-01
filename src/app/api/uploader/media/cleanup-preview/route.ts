@@ -12,11 +12,8 @@ import { logActivity } from "@/lib/audit";
 import { objectIdSchema } from "@/lib/validate";
 import {
   CLEANUP_ENGINE,
-  CLEANUP_PRESETS,
   cleanupPreviewStorageKey,
   enhanceLightingAndSharpness,
-  isCleanupPreset,
-  type CleanupPreset,
 } from "@/lib/cleanup-preview";
 import { deleteStoredObject, mediaProxyUrl, readStoredObject, storeBytes } from "@/lib/storage";
 import { z } from "zod";
@@ -24,8 +21,6 @@ import { z } from "zod";
 const bodySchema = z.object({
   mediaId: objectIdSchema,
   action: z.enum(["generate", "apply", "discard"]),
-  /** Per-photo tweak: auto | gentle | dark | soft */
-  preset: z.enum(CLEANUP_PRESETS).optional(),
 });
 
 /**
@@ -167,14 +162,13 @@ export async function POST(request: Request) {
     });
   }
 
-  // generate
-  const preset: CleanupPreset = isCleanupPreset(body.preset) ? body.preset : "auto";
+  // generate — one adaptive pass per photo (no manual presets)
   const { body: original } = await readStoredObject(
     media.storageKey,
     media.storageProvider,
   );
-  const enhanced = await enhanceLightingAndSharpness(Buffer.from(original), preset);
-  const key = cleanupPreviewStorageKey(String(media.eventId), String(media._id), preset);
+  const enhanced = await enhanceLightingAndSharpness(Buffer.from(original));
+  const key = cleanupPreviewStorageKey(String(media.eventId), String(media._id));
   const stored = await storeBytes(
     enhanced.buffer,
     `events/${String(media.eventId)}/cleanup-preview`,
@@ -201,6 +195,7 @@ export async function POST(request: Request) {
 
   // Use updateOne so new schema fields persist even if a hot-reloaded
   // Mongoose model was compiled before cleanupPreview* existed.
+  // cleanupPreviewPreset stores the adaptive plan label (not a menu mode).
   await Media.updateOne(
     { _id: media._id },
     {
@@ -208,7 +203,7 @@ export async function POST(request: Request) {
         cleanupPreviewKey: stored.storageKey,
         cleanupPreviewProvider: stored.storageProvider,
         cleanupPreviewEngine: CLEANUP_ENGINE,
-        cleanupPreviewPreset: preset,
+        cleanupPreviewPreset: enhanced.plan.label,
         cleanupPreviewAt: new Date(),
       },
     },
@@ -219,10 +214,11 @@ export async function POST(request: Request) {
     actor: isAdmin ? "admin" : "uploader",
     eventId: String(media.eventId),
     details: {
-      summary: `Generated cleanup preview · ${media.filename || media._id} · ${preset}`,
+      summary: `Generated cleanup preview · ${media.filename || media._id} · ${enhanced.plan.label}`,
       meta: {
         engine: CLEANUP_ENGINE,
-        preset,
+        label: enhanced.plan.label,
+        strength: enhanced.plan.strength,
         before: enhanced.before,
         after: enhanced.after,
       },
@@ -236,7 +232,8 @@ export async function POST(request: Request) {
     hasCleanupPreview: true,
     cleanupPreviewUrl: `${mediaProxyUrl(String(media._id))}?variant=cleanup&t=${stamp}`,
     engine: CLEANUP_ENGINE,
-    preset,
+    label: enhanced.plan.label,
+    strength: enhanced.plan.strength,
     before: enhanced.before,
     after: enhanced.after,
     // cache-bust the original URL after regenerate
