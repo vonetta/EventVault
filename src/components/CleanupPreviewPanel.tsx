@@ -320,7 +320,7 @@ export function CleanupPreviewPanel({
                   <p className="text-xs text-gold-deep">
                     Older cleanup engine — Re-run for the adaptive pass.
                   </p>
-                ) : photo.hasCleanupPreview && label ? (
+                ) : photo.hasCleanupPreview && isAdaptiveLabel(label) ? (
                   <p className="text-xs text-pine">This photo: {label}</p>
                 ) : null}
 
