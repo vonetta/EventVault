@@ -892,10 +892,21 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "tag_media") {
-    const { isEditTagName } = await import("@/lib/needs-editing");
+    const { clearNeedsEditingPileSet, isEditTagName } = await import("@/lib/needs-editing");
     const media = await Media.findById(body.mediaId);
     if (!media) {
       return NextResponse.json({ error: "Media not found" }, { status: 404 });
+    }
+    const previousIds = (media.taggedGuestIds || []).map((id) => String(id));
+    let hadEditTag = false;
+    if (previousIds.length) {
+      const previousGuests = await Guest.find({
+        _id: { $in: previousIds },
+        eventId: media.eventId,
+      })
+        .select("name")
+        .lean();
+      hadEditTag = previousGuests.some((guest) => isEditTagName(guest.name || ""));
     }
     const validGuests = await Guest.find({
       _id: { $in: body.taggedGuestIds },
@@ -903,11 +914,16 @@ export async function POST(request: Request) {
     }).select("_id name");
     media.taggedGuestIds = validGuests.map((guest) => guest._id);
     const hasEditTag = validGuests.some((guest) => isEditTagName(guest.name || ""));
+    const removedEditTag = hadEditTag && !hasEditTag;
+    if (removedEditTag) {
+      Object.assign(media, clearNeedsEditingPileSet());
+    }
     await media.save();
     await logAdminAction(request, "tag_media", {
       mediaId: body.mediaId,
       tags: media.taggedGuestIds.length,
       hasEditTag,
+      removedEditTag,
     });
     return NextResponse.json({
       media: {
@@ -915,6 +931,7 @@ export async function POST(request: Request) {
         taggedGuestIds: media.taggedGuestIds.map((id) => String(id)),
         needsEditing: Boolean(media.needsEditing),
         hasEditTag,
+        removedEditTag,
       },
     });
   }
