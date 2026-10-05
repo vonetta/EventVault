@@ -9,6 +9,7 @@ import {
 import { Guest, Media } from "@/lib/models";
 import { logAdminAction } from "@/lib/audit";
 import {
+  clearNeedsEditingPileSet,
   isEditTagName,
   isEditablePhotoKind,
   needsEditingPileSet,
@@ -17,8 +18,9 @@ import { uploaderUpdateMediaSchema } from "@/lib/validate";
 
 /**
  * Photo team (or admin) updates tags / needs-editing on a still.
- * A guest named "Edit" stays as a visible tag and is used by gallery filters
- * to park the photo under Needs editing (not converted into needsEditing).
+ * A guest named "Edit" stays as a visible tag and parks the photo under Needs
+ * editing. Removing Edit returns it to Main (also clears needsEditing when the
+ * flag was set by the earlier Edit→pile migrate).
  */
 export async function POST(request: Request) {
   if (!(await isUploaderAuthenticated()) && !(await isAdminAuthenticated())) {
@@ -54,6 +56,7 @@ export async function POST(request: Request) {
 
   const asAdmin = await isAdminAuthenticated();
   let hasEditTag = false;
+  let removedEditTag = false;
 
   if (body.taggedGuestIds !== undefined) {
     if (!asAdmin && media.kind !== "team_photo") {
@@ -65,12 +68,32 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
+
+    const previousIds = (media.taggedGuestIds || []).map((id) => String(id));
+    let hadEditTag = false;
+    if (previousIds.length) {
+      const previousGuests = await Guest.find({
+        _id: { $in: previousIds },
+        eventId: media.eventId,
+      })
+        .select("name")
+        .lean();
+      hadEditTag = previousGuests.some((guest) => isEditTagName(guest.name || ""));
+    }
+
     const validGuests = await Guest.find({
       _id: { $in: body.taggedGuestIds },
       eventId: media.eventId,
     }).select("_id name");
     media.taggedGuestIds = validGuests.map((guest) => guest._id);
     hasEditTag = validGuests.some((guest) => isEditTagName(guest.name || ""));
+    removedEditTag = hadEditTag && !hasEditTag;
+
+    // Product promise: remove Edit → back to Main gallery. Many photos still
+    // have needsEditing=true from the Edit→pile migrate; clear that too.
+    if (removedEditTag && body.needsEditing === undefined) {
+      Object.assign(media, clearNeedsEditingPileSet());
+    }
   }
 
   const pullingToEdit = body.needsEditing === true;
@@ -88,11 +111,7 @@ export async function POST(request: Request) {
     if (body.needsEditing) {
       Object.assign(media, needsEditingPileSet());
     } else {
-      media.needsEditing = false;
-      media.kind = "team_photo";
-      media.published = false;
-      media.everyone = false;
-      media.groupIds = [];
+      Object.assign(media, clearNeedsEditingPileSet());
     }
   }
 
@@ -114,6 +133,7 @@ export async function POST(request: Request) {
     needsEditing: media.needsEditing,
     kind: media.kind,
     hasEditTag,
+    removedEditTag,
     actor: asAdmin ? "admin" : "uploader",
   });
 
@@ -124,6 +144,7 @@ export async function POST(request: Request) {
       needsEditing: Boolean(media.needsEditing),
       kind: media.kind,
       hasEditTag,
+      removedEditTag,
     },
   });
 }

@@ -35,6 +35,20 @@ export function isEditTagName(name: string) {
   return name.trim().toLowerCase() === "edit";
 }
 
+/**
+ * Fields that return a still to the Main (ready) gallery after Edit is removed
+ * or Mark ready. Keeps it as an unpublished team_photo.
+ */
+export function clearNeedsEditingPileSet() {
+  return {
+    kind: "team_photo" as const,
+    needsEditing: false,
+    published: false,
+    everyone: false,
+    groupIds: [] as [],
+  };
+}
+
 export function editGuestIdsFrom(
   guests: { _id: { toString(): string }; name?: string | null }[],
 ): string[] {

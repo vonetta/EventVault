@@ -8,12 +8,14 @@ import sharp from "sharp";
 export const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1";
 
 const CLEANUP_PROMPT =
-  "Improve this event photograph: fix exposure and white balance, lift dark " +
-  "undexposed areas, gently recover shadow detail, tame harsh highlights, and " +
-  "apply mild sharpening/clarity. Keep the exact same people, faces, expressions, " +
-  "ages, skin tone, clothing, poses, framing, and background. Do not add, remove, " +
-  "or replace anyone. Do not beautify or reshape faces. Photorealistic only — " +
-  "no illustration, no heavy filters, no text overlays.";
+  "Improve this event photograph. Correct yellow/orange color cast and white " +
+  "balance so skin tones look natural (especially for darker skin). Fix exposure: " +
+  "lift underexposed faces and shadows from lighting/angle without blowing out " +
+  "highlights; gently recover shadow detail; apply mild sharpening/clarity. " +
+  "Keep the exact same people, faces, expressions, ages, true skin tone (do not " +
+  "lighten or darken identity), clothing, poses, framing, and background. Do not " +
+  "add, remove, or replace anyone. Do not beautify or reshape faces. Photorealistic " +
+  "only — no illustration, no heavy filters, no text overlays.";
 
 export function hasOpenAICleanup(): boolean {
   return Boolean(process.env.OPENAI_API_KEY?.trim());

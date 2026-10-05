@@ -425,10 +425,15 @@ export default function UploadPage() {
     }
 
     // Tags or needsEditing can change which bucket lists the photo (Edit tag
-    // parks under Needs editing but stays on the photo).
+    // parks under Needs editing; removing Edit returns to Main).
     if (typeof patch.needsEditing === "boolean" || patch.taggedGuestIds) {
       await refreshGalleries(eventId);
       const hasEditTag = Boolean(json.media?.hasEditTag);
+      const removedEditTag = Boolean(
+        (json.media as { removedEditTag?: boolean } | undefined)?.removedEditTag,
+      );
+      const nowNeedsEditing = Boolean(json.media?.needsEditing) || hasEditTag;
+
       if (patch.needsEditing === true || hasEditTag) {
         setBucket("editing");
         setTagFilter("all");
@@ -438,11 +443,17 @@ export default function UploadPage() {
           setMessage("Tagged Edit — showing under Needs editing (tag kept).");
           setTagSaveHint("In Needs editing");
         }
-      } else if (patch.needsEditing === false || patch.taggedGuestIds) {
+      } else if (removedEditTag || patch.needsEditing === false || !nowNeedsEditing) {
         setBucket("ready");
         setTagFilter("all");
         setVisibleCount(GALLERY_PAGE_SIZE);
-        if (taggingId === id && patch.needsEditing === false) setTaggingId(null);
+        if (taggingId === id) setTaggingId(null);
+        if (removedEditTag) {
+          setMessage("Removed Edit — photo back in Main gallery.");
+          setTagSaveHint("Back in Main");
+        }
+      } else if (patch.taggedGuestIds) {
+        setTagSaveHint("Saved");
       }
     }
   }

@@ -323,10 +323,16 @@ export function MediaTab({
       taggedGuestIds,
     });
     if (!json) return;
-    if ((json as { media?: { hasEditTag?: boolean } }).media?.hasEditTag) {
+    const media = (json as {
+      media?: { hasEditTag?: boolean; removedEditTag?: boolean; needsEditing?: boolean };
+    }).media;
+    if (media?.hasEditTag) {
       setEditingFilter("all");
       setEditingVisibleCount(60);
       actions.setMessage("Tagged Edit — showing under Needs editing (tag kept).");
+      setTaggingId(null);
+    } else if (media?.removedEditTag) {
+      actions.setMessage("Removed Edit — photo back in Main gallery.");
       setTaggingId(null);
     }
     // Reload data but keep the tagging modal open on this photo (unless moved).
