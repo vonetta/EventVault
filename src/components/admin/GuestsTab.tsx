@@ -58,12 +58,35 @@ export function GuestsTab({
   const [pendingImport, setPendingImport] = useState<{ guests: ReturnType<typeof parseGuestLines> } | null>(null);
   const [renamingGuestId, setRenamingGuestId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [vipListFilter, setVipListFilter] = useState<"with_photos" | "vip_only" | "all">("with_photos");
 
-  // Shared group logins live on the Groups tab — keep them out of the people list.
+  // Shared group / Whole-event gallery logins live elsewhere — keep them out of the people list.
   const peopleGuests = useMemo(
     () => data.guests.filter((guest) => !guest.isSharedLogin),
     [data.guests],
   );
+
+  const photosOfYouList = useMemo(() => {
+    const rows = peopleGuests
+      .map((guest) => ({
+        ...guest,
+        photosOfYouCount: guest.photosOfYouCount || 0,
+      }))
+      .filter((guest) => {
+        if (vipListFilter === "vip_only") return guest.tier === "vip";
+        if (vipListFilter === "with_photos") {
+          return guest.photosOfYouCount > 0 || guest.tier === "vip";
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        if (b.photosOfYouCount !== a.photosOfYouCount) {
+          return b.photosOfYouCount - a.photosOfYouCount;
+        }
+        return a.name.localeCompare(b.name);
+      });
+    return rows;
+  }, [peopleGuests, vipListFilter]);
 
   const filteredGuests = useMemo(() => {
     if (!guestSearch.trim()) return peopleGuests;
@@ -239,9 +262,83 @@ John Smith, john@email.com, standard`}
         </p>
         <p>
           Shared group login codes (one code for a whole family/table) are on the{" "}
-          <strong>Groups</strong> tab — they are not listed here.
+          <strong>Groups</strong> tab. The free Whole-event gallery code for everyone is on the{" "}
+          <strong>Event</strong> tab — they are not listed here.
         </p>
       </HowTo>
+
+      <AdminPanel
+        title={`Photos of you (${photosOfYouList.length})`}
+        description="Who has personal / VIP photos tagged and how many. Whole-event shots (3+ people) stay free for everyone and are not counted here."
+        action={
+          <select
+            value={vipListFilter}
+            onChange={(e) =>
+              setVipListFilter(e.target.value as "with_photos" | "vip_only" | "all")
+            }
+            className={`${inputClassName} !h-9 !w-auto min-w-[10rem]`}
+            aria-label="Filter Photos of you list"
+          >
+            <option value="with_photos">Has photos or VIP</option>
+            <option value="vip_only">VIP only</option>
+            <option value="all">Everyone</option>
+          </select>
+        }
+      >
+        {photosOfYouList.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[28rem] text-left text-sm">
+              <caption className="sr-only">Photos of you counts</caption>
+              <thead>
+                <tr className="border-b border-[color:var(--line)] text-xs uppercase tracking-wide text-pine">
+                  <th scope="col" className="py-3 pr-4">
+                    Guest
+                  </th>
+                  <th scope="col" className="py-3 pr-4">
+                    Tier
+                  </th>
+                  <th scope="col" className="py-3 pr-4">
+                    Photos of you
+                  </th>
+                  <th scope="col" className="py-3">
+                    Unlock
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {photosOfYouList.map((guest) => (
+                  <tr key={guest._id} className="border-b border-[color:var(--line)] last:border-0">
+                    <td className="py-3 pr-4">
+                      <p className="font-medium text-ink">{guest.name}</p>
+                      {guest.email ? <p className="text-xs text-pine">{guest.email}</p> : null}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <TierBadge tier={guest.tier} />
+                    </td>
+                    <td className="py-3 pr-4 font-[family-name:var(--font-fraunces)] text-lg text-ink">
+                      {guest.photosOfYouCount}
+                    </td>
+                    <td className="py-3 text-xs text-pine">
+                      {guest.personalPhotosPaid || guest.tier === "vip"
+                        ? guest.tier === "vip" && !guest.personalPhotosPaid
+                          ? "VIP unlock"
+                          : "Unlocked"
+                        : guest.zellePaymentPending
+                          ? "Zelle pending"
+                          : "Locked"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-pine">
+            No matching guests yet. Tag 1–2 people on a photo (or assign a VIP personal photo) to
+            build this list.
+          </p>
+        )}
+      </AdminPanel>
 
       <AdminPanel
         title="Import guests"
@@ -331,7 +428,8 @@ John Smith, john@email.com, standard`}
               <tr className="border-b border-[color:var(--line)] text-xs uppercase tracking-wide text-pine">
                 <th scope="col" className="py-3 pr-4">Guest</th>
                 <th scope="col" className="py-3 pr-4">Tier</th>
-                <th scope="col" className="py-3 pr-4">Photos</th>
+                <th scope="col" className="py-3 pr-4">Photos of you</th>
+                <th scope="col" className="py-3 pr-4">Unlock</th>
                 <th scope="col" className="py-3 pr-4">Ticket</th>
                 <th scope="col" className="py-3 pr-4">Last seen</th>
                 <th scope="col" className="py-3">Actions</th>
@@ -381,6 +479,9 @@ John Smith, john@email.com, standard`}
                     </td>
                     <td className="py-3 pr-4">
                       <TierBadge tier={guest.tier} />
+                    </td>
+                    <td className="py-3 pr-4 font-medium text-ink">
+                      {guest.photosOfYouCount || 0}
                     </td>
                     <td className="py-3 pr-4">
                       {guest.personalPhotosPaid || guest.tier === "vip" ? (

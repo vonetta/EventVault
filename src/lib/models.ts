@@ -7,6 +7,8 @@ const EventSchema = new Schema(
     description: { type: String, default: "" },
     startsOn: { type: String, default: "" },
     endsOn: { type: String, default: "" },
+    // One code anyone can use to open the free Whole-event album.
+    galleryLoginCode: { type: String, index: true },
   },
   { timestamps: true },
 );
@@ -58,6 +60,13 @@ const GuestSchema = new Schema(
     sharedGroupId: {
       type: Schema.Types.ObjectId,
       ref: "Group",
+      default: null,
+      index: true,
+    },
+    // When set, this guest is the shared Whole-event gallery login (not a person).
+    sharedEventGalleryId: {
+      type: Schema.Types.ObjectId,
+      ref: "Event",
       default: null,
       index: true,
     },
@@ -177,7 +186,9 @@ const MediaSchema = new Schema(
 
 GuestSchema.index({ eventId: 1, email: 1 });
 GuestSchema.index({ sharedGroupId: 1 }, { unique: true, sparse: true });
+GuestSchema.index({ sharedEventGalleryId: 1 }, { unique: true, sparse: true });
 GroupSchema.index({ loginCode: 1 }, { unique: true, sparse: true });
+EventSchema.index({ galleryLoginCode: 1 }, { unique: true, sparse: true });
 MediaSchema.index({ eventId: 1, kind: 1 });
 MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
 MediaSchema.index({ eventId: 1, taggedGuestIds: 1 });

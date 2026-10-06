@@ -158,6 +158,10 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     groupId: objectIdSchema,
   }),
   z.object({
+    action: z.literal("regenerate_gallery_code"),
+    eventId: objectIdSchema,
+  }),
+  z.object({
     action: z.literal("set_guest_groups"),
     guestId: objectIdSchema,
     groupIds: z.array(objectIdSchema).max(100),

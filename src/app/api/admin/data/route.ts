@@ -10,9 +10,15 @@ import {
   regenerateGroupLoginCode,
 } from "@/lib/group-login";
 import {
+  ensureEventGalleryLogin,
+  regenerateEventGalleryLogin,
+} from "@/lib/event-gallery-login";
+import {
   consolidateGroupIntoEvent,
   recompressEventPhotosBatch,
 } from "@/lib/consolidate-galleries";
+import { isPersonalizedForGuest } from "@/lib/individual-photos";
+import { editGuestIdsFrom, showsInNeedsEditing } from "@/lib/needs-editing";
 import { adminActionSchema } from "@/lib/validate";
 import { emailConfigured, getEmailConfigStatus, sendTicketEmail } from "@/lib/email";
 import { deleteStoredObject } from "@/lib/storage";
@@ -137,13 +143,54 @@ export async function GET(request: Request) {
       didBackfill = true;
     }
   }
+
+  // Ensure every event has a free Whole-event gallery code.
+  if (!event.galleryLoginCode) {
+    await ensureEventGalleryLogin(event);
+    didBackfill = true;
+  } else {
+    await ensureEventGalleryLogin(event);
+  }
+
   const guestsFresh = didBackfill
     ? await Guest.find({ eventId: event._id }).sort({ name: 1 })
     : guests;
 
+  // Reload event so galleryLoginCode is present after ensure.
+  const eventFresh = (await Event.findById(event._id)) || event;
+
+  const editIds = editGuestIdsFrom(guestsFresh);
+  const photosOfYouCounts = new Map<string, number>();
+  for (const item of media) {
+    if (showsInNeedsEditing(item, editIds)) continue;
+    for (const guest of guestsFresh) {
+      if (guest.sharedGroupId || guest.sharedEventGalleryId) continue;
+      const guestId = String(guest._id);
+      if (isPersonalizedForGuest(item, guestId)) {
+        photosOfYouCounts.set(guestId, (photosOfYouCounts.get(guestId) || 0) + 1);
+      }
+    }
+  }
+
   return NextResponse.json({
-    event,
-    events,
+    event: {
+      _id: String(eventFresh._id),
+      name: eventFresh.name,
+      slug: eventFresh.slug,
+      description: eventFresh.description || "",
+      startsOn: eventFresh.startsOn || "",
+      endsOn: eventFresh.endsOn || "",
+      galleryLoginCode: eventFresh.galleryLoginCode || "",
+    },
+    events: events.map((item) => ({
+      _id: String(item._id),
+      name: item.name,
+      slug: item.slug,
+      description: item.description || "",
+      startsOn: item.startsOn || "",
+      endsOn: item.endsOn || "",
+      galleryLoginCode: item.galleryLoginCode || "",
+    })),
     days,
     sessions,
     guests: guestsFresh.map((guest) => ({
@@ -155,8 +202,12 @@ export async function GET(request: Request) {
       groupIds: (guest.groupIds || []).map((id) => String(id)),
       personalPhotosPaid: Boolean(guest.personalPhotosPaid),
       zellePaymentPending: Boolean(guest.zellePaymentPending) && !guest.personalPhotosPaid,
-      isSharedLogin: Boolean(guest.sharedGroupId),
+      isSharedLogin: Boolean(guest.sharedGroupId || guest.sharedEventGalleryId),
       sharedGroupId: guest.sharedGroupId ? String(guest.sharedGroupId) : null,
+      sharedEventGalleryId: guest.sharedEventGalleryId
+        ? String(guest.sharedEventGalleryId)
+        : null,
+      photosOfYouCount: photosOfYouCounts.get(String(guest._id)) || 0,
       lastLoginAt: guest.lastLoginAt
         ? new Date(guest.lastLoginAt).toISOString()
         : null,
@@ -217,6 +268,7 @@ export async function POST(request: Request) {
     "delete_media",
     "regenerate_code",
     "regenerate_group_code",
+    "regenerate_gallery_code",
     "import_guests",
     "email_ticket",
     "sync_days",
@@ -252,6 +304,8 @@ export async function POST(request: Request) {
       startsOn: "",
       endsOn: "",
     });
+
+    await ensureEventGalleryLogin(event);
 
     const dayLabels = resolveDayLabels(body);
     const days = await Day.insertMany(
@@ -509,6 +563,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (guest.sharedEventGalleryId) {
+      return NextResponse.json(
+        { error: "Shared Whole-event gallery login is managed on the Event tab" },
+        { status: 400 },
+      );
+    }
     await Guest.deleteOne({ _id: guest._id });
     await Media.updateMany({ guestId: guest._id }, { $set: { guestId: null } });
     await Media.updateMany(
@@ -527,6 +587,12 @@ export async function POST(request: Request) {
     if (guest.sharedGroupId) {
       return NextResponse.json(
         { error: "Use New code on the Groups tab for shared group logins" },
+        { status: 400 },
+      );
+    }
+    if (guest.sharedEventGalleryId) {
+      return NextResponse.json(
+        { error: "Use New code on the Event tab for the Whole-event gallery login" },
         { status: 400 },
       );
     }
@@ -815,6 +881,25 @@ export async function POST(request: Request) {
     });
   }
 
+  if (body.action === "regenerate_gallery_code") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    const loginCode = await regenerateEventGalleryLogin(event);
+    await logAdminAction(request, "regenerate_gallery_code", {
+      eventId: String(event._id),
+      eventName: event.name,
+    });
+    return NextResponse.json({
+      event: {
+        _id: String(event._id),
+        name: event.name,
+        galleryLoginCode: loginCode,
+      },
+    });
+  }
+
   if (body.action === "set_guest_groups") {
     const guest = await Guest.findById(body.guestId);
     if (!guest) {
@@ -823,6 +908,12 @@ export async function POST(request: Request) {
     if (guest.sharedGroupId) {
       return NextResponse.json(
         { error: "Shared group logins are managed on the Groups tab" },
+        { status: 400 },
+      );
+    }
+    if (guest.sharedEventGalleryId) {
+      return NextResponse.json(
+        { error: "Shared Whole-event gallery login is managed on the Event tab" },
         { status: 400 },
       );
     }

@@ -63,7 +63,8 @@ export async function POST(request: Request) {
     await clearAdminSession();
     await setGuestSession(guestSessionPayload(guest));
 
-    const sharedLogin = Boolean(guest.sharedGroupId);
+    const sharedLogin = Boolean(guest.sharedGroupId || guest.sharedEventGalleryId);
+    const galleryLogin = Boolean(guest.sharedEventGalleryId);
     await logActivity(request, {
       action: "guest_login",
       actor: "guest",
@@ -71,12 +72,15 @@ export async function POST(request: Request) {
       guestId: String(guest._id),
       eventId: String(guest.eventId),
       details: {
-        summary: sharedLogin
-          ? `${guest.name} · group shared login`
-          : `${guest.name} · ${String(guest.tier).toUpperCase()}`,
+        summary: galleryLogin
+          ? `${guest.name} · Whole-event gallery code`
+          : sharedLogin
+            ? `${guest.name} · group shared login`
+            : `${guest.name} · ${String(guest.tier).toUpperCase()}`,
         meta: {
           tier: guest.tier,
           sharedLogin,
+          galleryLogin,
           loginCount: guest.loginCount,
         },
       },
