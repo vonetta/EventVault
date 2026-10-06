@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MediaGrid, type MediaItem } from "@/components/MediaGrid";
+import { WholeEventGallery, type DatedMediaItem } from "@/components/WholeEventGallery";
 
 type SessionItem = {
   id: string;
@@ -25,7 +26,7 @@ type Library = {
   guest: { name: string; tier: "vip" | "standard" };
   event: { name: string; description?: string };
   groupGallery: MediaItem[];
-  eventGallery: MediaItem[];
+  eventGallery: DatedMediaItem[];
   personalPhotos: MediaItem[];
   personalPhotosPaid?: boolean;
   personalPhotosLocked?: boolean;
@@ -461,14 +462,12 @@ export default function VaultPage() {
           {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
         </h2>
         <p className="text-sm text-pine">
-          Free for every guest — including group shots from the weekend. Personalized photos of you
-          are under Photos of you above (watermarked until unlocked).
+          Free for every guest — including group shots from the weekend. Browse page by page when
+          there are many photos. Personalized photos of you are under Photos of you above
+          (watermarked until unlocked).
         </p>
-        <MediaGrid
+        <WholeEventGallery
           items={data.eventGallery || []}
-          showDownload
-          showCaptions={false}
-          pageSize={24}
           emptyMessage="Whole-event photos will appear here after they’re uploaded."
         />
       </section>

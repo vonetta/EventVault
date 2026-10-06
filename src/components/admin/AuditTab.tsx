@@ -38,6 +38,8 @@ const ACTION_LABELS: Record<string, string> = {
   tag_media: "Tagged people on a photo",
   import_guests: "Imported guests",
   email_ticket: "Emailed a ticket code",
+  regenerate_group_code: "Regenerated a group login code",
+  regenerate_gallery_code: "Regenerated Whole-event gallery code",
   mark_guest_paid: "Marked guest paid",
   consolidate_galleries: "Moved Shared → Whole event",
   recompress_media: "Recompressed photos",

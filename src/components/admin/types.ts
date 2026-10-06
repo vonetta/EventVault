@@ -5,6 +5,7 @@ export type EventDoc = {
   description?: string;
   startsOn?: string;
   endsOn?: string;
+  galleryLoginCode?: string;
 };
 
 export type DayDoc = { _id: string; label: string; sortOrder: number; date?: string };
@@ -35,6 +36,8 @@ export type GuestDoc = {
   zellePaymentPending?: boolean;
   isSharedLogin?: boolean;
   sharedGroupId?: string | null;
+  sharedEventGalleryId?: string | null;
+  photosOfYouCount?: number;
   lastLoginAt?: string | null;
   loginCount?: number;
 };
@@ -57,6 +60,7 @@ export type MediaDoc = {
   taggedGuestIds?: string[];
   needsEditing?: boolean;
   uploadedByName?: string;
+  createdAt?: string | null;
 };
 
 export type MediaFilter = "all" | "event_photo" | "personal_photo" | "session_video";

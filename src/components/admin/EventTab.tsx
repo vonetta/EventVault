@@ -5,6 +5,7 @@ import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName, textareaClassName } from "@/components/admin/ui";
 import type { AdminActions, AdminData } from "@/components/admin/types";
 import { daysFromDateRange, formatScheduleDate } from "@/lib/schedule-days";
+import { vaultLoginUrl } from "@/lib/vault-url";
 
 const RETREAT_TEMPLATE = {
   name: "Koinonia Retreat 2026",
@@ -66,11 +67,64 @@ export function EventTab({
   const [editSpeaker, setEditSpeaker] = useState("");
   const [editDayId, setEditDayId] = useState("");
   const [savingSession, setSavingSession] = useState(false);
+  const [regenGallery, setRegenGallery] = useState(false);
+
+  const galleryCode = data.event?.galleryLoginCode || "";
+  const galleryLink = galleryCode ? vaultLoginUrl(galleryCode) : "";
 
   const rangeSchedule = useMemo(
     () => daysFromDateRange(eventStartsOn, eventEndsOn),
     [eventStartsOn, eventEndsOn],
   );
+
+  async function regenerateGalleryCode() {
+    if (!data.event) return;
+    if (
+      !confirm(
+        "Generate a new Whole-event gallery code? Anyone still using the old code will need the new one.",
+      )
+    ) {
+      return;
+    }
+    setRegenGallery(true);
+    const json = await actions.postAction({
+      action: "regenerate_gallery_code",
+      eventId: data.event._id,
+    });
+    setRegenGallery(false);
+    if (!json) return;
+    const code = (json as { event?: { galleryLoginCode?: string } }).event?.galleryLoginCode;
+    actions.setMessage(code ? `New Whole-event code: ${code}` : "Gallery code updated.");
+    await actions.load(data.event._id);
+  }
+
+  async function copyGalleryCode() {
+    if (!galleryCode) return;
+    await navigator.clipboard.writeText(galleryCode);
+    actions.setMessage("Whole-event gallery code copied.");
+  }
+
+  async function copyGalleryLink() {
+    if (!galleryLink) return;
+    await navigator.clipboard.writeText(galleryLink);
+    actions.setMessage("Whole-event gallery link copied.");
+  }
+
+  async function copyGalleryEmailBlurb() {
+    if (!galleryCode || !data.event) return;
+    const blurb = [
+      `You're invited to the ${data.event.name} photo gallery.`,
+      "",
+      "Everyone can view the whole-event album for free with this code:",
+      galleryCode,
+      "",
+      `Open: ${galleryLink}`,
+      "",
+      "Personal Photos of you stay on each person's own ticket (VIP / unlock).",
+    ].join("\n");
+    await navigator.clipboard.writeText(blurb);
+    actions.setMessage("Email blurb copied.");
+  }
 
   function parseDayLabels(text: string, dayCount: number) {
     const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -208,6 +262,32 @@ export function EventTab({
 
   return (
     <>
+      <AdminPanel
+        title="Free Whole-event code"
+        description="One code for everyone. Opens the free Whole-event album only — not Photos of you."
+      >
+        {galleryCode ? (
+          <div className="space-y-3">
+            <p className="font-mono text-2xl tracking-wider text-ink">{galleryCode}</p>
+            <p className="break-all text-xs text-pine">{galleryLink}</p>
+            <div className="flex flex-wrap gap-2">
+              <AdminButton onClick={() => void copyGalleryCode()}>Copy code</AdminButton>
+              <AdminButton onClick={() => void copyGalleryLink()}>Copy link</AdminButton>
+              <AdminButton onClick={() => void copyGalleryEmailBlurb()}>Copy email blurb</AdminButton>
+              <AdminButton
+                variant="secondary"
+                disabled={regenGallery}
+                onClick={() => void regenerateGalleryCode()}
+              >
+                {regenGallery ? "Working…" : "New code"}
+              </AdminButton>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-pine">Save or refresh to create the shared gallery code.</p>
+        )}
+      </AdminPanel>
+
       <AdminPanel
         title="Event"
         description="Name, dates, and schedule. Days are Day 1, Day 2… from Starts on through Ends on."
