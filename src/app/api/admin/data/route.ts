@@ -934,7 +934,7 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "publish_media") {
-    // Whole-event album + tags only — publishing lands in event_photo.
+    // Whole-event album — only tagged photos go live (untagged stay in Main gallery).
     const media = await Media.find({ _id: { $in: body.mediaIds }, kind: "team_photo" });
     if (!media.length) {
       return NextResponse.json({ error: "No team photos to send" }, { status: 400 });
@@ -949,8 +949,20 @@ export async function POST(request: Request) {
       );
     }
 
+    const tagged = media.filter((item) => (item.taggedGuestIds || []).length > 0);
+    const untagged = media.length - tagged.length;
+    if (!tagged.length) {
+      return NextResponse.json(
+        {
+          error:
+            "Tag people on each photo before sending. Untagged photos stay in Main gallery.",
+        },
+        { status: 400 },
+      );
+    }
+
     await Media.updateMany(
-      { _id: { $in: media.map((item) => item._id) }, kind: "team_photo" },
+      { _id: { $in: tagged.map((item) => item._id) }, kind: "team_photo" },
       {
         $set: {
           kind: "event_photo",
@@ -961,11 +973,16 @@ export async function POST(request: Request) {
       },
     );
     await logAdminAction(request, "publish_media", {
-      count: media.length,
+      count: tagged.length,
+      skippedUntagged: untagged,
       everyone: true,
       asEventPhoto: true,
     });
-    return NextResponse.json({ ok: true, sent: media.length });
+    return NextResponse.json({
+      ok: true,
+      sent: tagged.length,
+      skippedUntagged: untagged,
+    });
   }
 
   if (body.action === "unpublish_media") {
@@ -1211,6 +1228,7 @@ export async function POST(request: Request) {
         kind: { $in: ["event_photo", "group_photo"] },
         needsEditing: { $ne: true },
         contentType: { $regex: /^image\//i },
+        "taggedGuestIds.0": { $exists: true },
       }).select("_id");
       const allowed = new Set(docs.map((doc) => String(doc._id)));
       const ordered = mediaIds.filter((id) => allowed.has(id));

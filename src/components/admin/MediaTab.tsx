@@ -379,19 +379,32 @@ export function MediaTab({
 
   async function sendTeamPhotos() {
     if (teamSelected.size === 0) return;
+    const selected = stagedTeamPhotos.filter((item) => teamSelected.has(String(item._id)));
+    const taggedIds = selected
+      .filter((item) => (item.taggedGuestIds || []).length > 0)
+      .map((item) => String(item._id));
+    const untaggedCount = selected.length - taggedIds.length;
+    if (!taggedIds.length) {
+      actions.setMessage(
+        "Tag people on each photo before sending. Untagged photos stay in Main gallery.",
+      );
+      return;
+    }
     setSending(true);
     const json = await actions.postAction({
       action: "publish_media",
-      mediaIds: [...teamSelected],
+      mediaIds: taggedIds,
       everyone: true,
       groupIds: [],
     });
     setSending(false);
     if (!json) return;
-    const count = (json as { sent?: number }).sent ?? teamSelected.size;
+    const count = (json as { sent?: number }).sent ?? taggedIds.length;
     setTeamSelected(new Set());
     actions.setMessage(
-      `Sent ${count} photo${count === 1 ? "" : "s"} to the whole-event album.`,
+      untaggedCount
+        ? `Sent ${count} tagged photo${count === 1 ? "" : "s"} to Whole event. Skipped ${untaggedCount} untagged — tag them first.`
+        : `Sent ${count} photo${count === 1 ? "" : "s"} to the whole-event album.`,
     );
     await actions.load(selectedEventId);
   }
@@ -481,10 +494,13 @@ export function MediaTab({
       (item) =>
         (item.kind === "event_photo" || item.kind === "group_photo") &&
         !item.needsEditing &&
-        (item.contentType || "").startsWith("image/"),
+        (item.contentType || "").startsWith("image/") &&
+        (item.taggedGuestIds || []).length > 0,
     );
     if (!candidates.length) {
-      actions.setMessage("Send photos to Whole event first, then pick highlights.");
+      actions.setMessage(
+        "No tagged Whole-event photos yet. Tag people, send to Whole event, then pick highlights.",
+      );
       return;
     }
 
@@ -839,7 +855,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Main gallery — ready to send"
-        description="Photos waiting to go live. Tap Untagged to see what’s left to name, then Send to Whole event."
+        description="Photos waiting to go live. Tag people first — untagged photos cannot go to Whole event."
       >
         {stagedTeamPhotos.length === 0 ? (
           <p className="text-sm text-pine">
@@ -925,8 +941,8 @@ export function MediaTab({
                 Whole event
               </p>
               <p className="mt-1 text-xs text-pine">
-                Every guest sees these in the free whole-event album. Tag 1–2 people on a personal
-                shot for Photos of you (watermarked until unlock). Crowd tags stay Whole event only.
+                Only tagged photos go live. Untagged stay here until you name people. Tag 1–2 for
+                Photos of you (watermarked until unlock); crowd tags stay free in Whole event.
               </p>
               <AdminButton
                 variant="primary"
@@ -936,7 +952,17 @@ export function MediaTab({
               >
                 {sending
                   ? "Sending…"
-                  : `Send ${teamSelected.size || ""} to Whole event`.trim()}
+                  : `Send tagged to Whole event${
+                      teamSelected.size
+                        ? ` (${
+                            stagedTeamPhotos.filter(
+                              (item) =>
+                                teamSelected.has(String(item._id)) &&
+                                (item.taggedGuestIds || []).length > 0,
+                            ).length
+                          })`
+                        : ""
+                    }`}
               </AdminButton>
             </div>
           </div>
