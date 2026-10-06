@@ -39,11 +39,28 @@ export function Lightbox({
 }: LightboxProps) {
   const [index, setIndex] = useState(startIndex);
   const [chromeVisible, setChromeVisible] = useState(true);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const image = images[index];
   const dialogRef = useDialog(true, onClose);
   const titleId = useId();
   const touchStartX = useRef<number | null>(null);
   const hideTimer = useRef<number | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    setIndex(startIndex);
+  }, [startIndex]);
+
+  useEffect(() => {
+    setLoadState("loading");
+    // Cached images may not fire onLoad — check complete after paint.
+    const id = window.requestAnimationFrame(() => {
+      const el = imgRef.current;
+      if (el?.complete && el.naturalWidth > 0) setLoadState("ready");
+      else if (el?.complete) setLoadState("error");
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [image?.src, index]);
 
   const next = useCallback(() => {
     setIndex((i) => (i + 1) % images.length);
@@ -90,7 +107,7 @@ export function Lightbox({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink"
+      className="fixed inset-0 z-50 bg-ink"
       onClick={onClose}
       onMouseMove={bumpChrome}
       onTouchStart={(e) => {
@@ -113,7 +130,7 @@ export function Lightbox({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative flex h-full w-full items-center justify-center"
+        className="relative flex h-[100dvh] w-[100vw] items-center justify-center overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id={titleId} className="sr-only">
@@ -121,17 +138,34 @@ export function Lightbox({
           {images.length > 1 ? ` — ${index + 1} of ${images.length}` : ""}
         </h2>
 
+        {loadState === "loading" ? (
+          <p className="pointer-events-none absolute text-sm text-foam/70" aria-live="polite">
+            Loading photo…
+          </p>
+        ) : null}
+        {loadState === "error" ? (
+          <p className="pointer-events-none absolute text-sm text-foam/80" role="alert">
+            Couldn’t load this photo.
+          </p>
+        ) : null}
+
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          key={image.src + index}
+          ref={imgRef}
+          key={image.src + String(index)}
           src={image.src}
           alt={image.alt}
-          className="ev-fade-in max-h-full max-w-full object-contain"
+          // Viewport units — max-h-full inside flex collapses to 0 (black screen).
+          className={`h-auto w-auto max-h-[100dvh] max-w-[100vw] object-contain transition-opacity duration-300 ${
+            loadState === "ready" ? "opacity-100" : "opacity-0"
+          }`}
           draggable={false}
+          onLoad={() => setLoadState("ready")}
+          onError={() => setLoadState("error")}
         />
 
         <div
-          className={`pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-ink/70 to-transparent px-4 pb-16 pt-4 transition-opacity duration-300 ${
+          className={`pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-ink/70 to-transparent px-4 pb-16 pt-4 transition-opacity duration-300 ${
             chromeVisible ? "opacity-100" : "opacity-0"
           }`}
         >
@@ -156,7 +190,7 @@ export function Lightbox({
         </div>
 
         <div
-          className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/80 to-transparent px-4 pb-6 pt-16 transition-opacity duration-300 ${
+          className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-ink/80 to-transparent px-4 pb-6 pt-16 transition-opacity duration-300 ${
             chromeVisible ? "opacity-100" : "opacity-0"
           }`}
         >
