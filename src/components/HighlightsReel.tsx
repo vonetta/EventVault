@@ -102,6 +102,7 @@ export function HighlightsReel({ items, intervalMs = 4200 }: HighlightsReelProps
       {lightbox !== null ? (
         <Lightbox
           images={images.map((item) => ({
+            id: item.id,
             src: item.url,
             alt: item.title || "Highlight",
           }))}

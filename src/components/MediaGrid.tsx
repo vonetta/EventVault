@@ -27,6 +27,8 @@ type MediaGridProps = {
   allowDownload?: boolean;
   /** When set, show this many photos first with a Load more control. */
   pageSize?: number;
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (id: string) => void;
 };
 
 function downloadUrl(src: string) {
@@ -79,6 +81,8 @@ export function MediaGrid({
   showCaptions = true,
   allowDownload = true,
   pageSize,
+  favoriteIds,
+  onToggleFavorite,
 }: MediaGridProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(pageSize && pageSize > 0 ? pageSize : items.length);
@@ -301,12 +305,15 @@ export function MediaGrid({
       {lightboxIndex !== null ? (
         <Lightbox
           images={imageItems.map(({ item }) => ({
+            id: item.id,
             src: item.url,
             alt: item.title,
           }))}
           startIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           allowDownload={allowDownload}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={onToggleFavorite}
         />
       ) : null}
     </>

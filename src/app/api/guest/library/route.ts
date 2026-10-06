@@ -191,7 +191,8 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     guest: { name: guest.name, tier },
-    event: { name: event.name, description: event.description },
+    event: { name: event.name, description: event.description, id: String(event._id) },
+    galleryOnly: Boolean(guest.sharedEventGalleryId),
     groupGallery: [],
     eventGallery,
     eventHighlights,

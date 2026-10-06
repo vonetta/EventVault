@@ -24,7 +24,8 @@ type DayItem = {
 
 type Library = {
   guest: { name: string; tier: "vip" | "standard" };
-  event: { name: string; description?: string };
+  event: { id?: string; name: string; description?: string };
+  galleryOnly?: boolean;
   groupGallery: MediaItem[];
   eventGallery: DatedMediaItem[];
   eventHighlights?: MediaItem[];
@@ -307,15 +308,18 @@ export default function VaultPage() {
         <div>
           <p className="font-[family-name:var(--font-fraunces)] text-3xl text-ink">EventVault</p>
           <h1 className="mt-3 font-[family-name:var(--font-fraunces)] text-4xl text-ink">
-            Welcome, {firstName}
+            {data.galleryOnly ? data.event.name : `Welcome, ${firstName}`}
           </h1>
           <p className="mt-2 text-pine">
-            {data.event.name}
-            {isVip
-              ? " · Photos of you, sessions, and the whole-event album"
-              : hasPersonal
-                ? " · Photos of you and the whole-event album"
-                : " · Whole-event album"}
+            {data.galleryOnly
+              ? "Whole-event album — free for everyone with the gallery code"
+              : `${data.event.name}${
+                  isVip
+                    ? " · Photos of you, sessions, and the whole-event album"
+                    : hasPersonal
+                      ? " · Photos of you and the whole-event album"
+                      : " · Whole-event album"
+                }`}
           </p>
           {data.event.description ? (
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-pine">
@@ -463,13 +467,16 @@ export default function VaultPage() {
           {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
         </h2>
         <p className="text-sm text-pine">
-          Free for every guest — including group shots from the weekend. Start with Weekend
-          Highlights when they’re ready, then browse the full album page by page. Personalized
-          photos of you are under Photos of you above (watermarked until unlocked).
+          Free for every guest — including group shots from the weekend. Enter for Highlights,
+          save favorites as you browse, then walk the full album. Personalized photos of you stay
+          under Photos of you above when you have them.
         </p>
         <WholeEventGallery
           items={data.eventGallery || []}
           highlights={data.eventHighlights || []}
+          eventId={data.event.id || data.event.name}
+          eventName={data.event.name}
+          hasPersonalPhotos={hasPersonal}
           emptyMessage="Whole-event photos will appear here after they’re uploaded."
         />
       </section>
