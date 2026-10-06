@@ -7,7 +7,12 @@ import { TagPhotoModal } from "@/components/TagPhotoModal";
 import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName } from "@/components/admin/ui";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
+import {
+  candidateFromQuality,
+  pickHighlights,
+} from "@/lib/gallery-highlights";
 import { editGuestIdsFrom, showsInNeedsEditing } from "@/lib/needs-editing";
+import { analyzePhotoQuality, mapPool } from "@/lib/photo-quality";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
 import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 import type { AdminActions, AdminData, GuestDoc, MediaDoc, MediaFilter, SessionDoc } from "@/components/admin/types";
@@ -109,6 +114,8 @@ export function MediaTab({
   const [editingVisibleCount, setEditingVisibleCount] = useState(60);
   const [consolidating, setConsolidating] = useState(false);
   const [recompressing, setRecompressing] = useState(false);
+  const [pickingHighlights, setPickingHighlights] = useState(false);
+  const [highlightProgress, setHighlightProgress] = useState({ done: 0, total: 0 });
   const nameOnlyGuests: NameOnlyGuest[] = useMemo(
     () =>
       data.guests
@@ -468,6 +475,83 @@ export function MediaTab({
     await actions.load(selectedEventId);
   }
 
+  async function pickWeekendHighlights() {
+    if (!data.event) return;
+    const candidates = data.media.filter(
+      (item) =>
+        (item.kind === "event_photo" || item.kind === "group_photo") &&
+        !item.needsEditing &&
+        (item.contentType || "").startsWith("image/"),
+    );
+    if (!candidates.length) {
+      actions.setMessage("Send photos to Whole event first, then pick highlights.");
+      return;
+    }
+
+    setPickingHighlights(true);
+    setHighlightProgress({ done: 0, total: candidates.length });
+    try {
+      const analyzed = await mapPool(
+        candidates,
+        4,
+        async (item) => {
+          try {
+            const quality = await analyzePhotoQuality(`/api/media/${item._id}`);
+            return candidateFromQuality(String(item._id), quality);
+          } catch {
+            return candidateFromQuality(String(item._id), {
+              sharpness: 0,
+              brightness: 128,
+              aHash: "",
+              dHash: "",
+              needsEditing: true,
+            });
+          }
+        },
+        (done, total) => setHighlightProgress({ done, total }),
+      );
+      const mediaIds = pickHighlights(analyzed);
+      const qualityIndex = analyzed
+        .filter((item) => item.aHash.length === 16 && item.dHash.length === 16)
+        .map((item) => ({
+          mediaId: item.id,
+          aHash: item.aHash,
+          dHash: item.dHash,
+          sharpness: item.sharpness,
+        }));
+      const json = await actions.postAction({
+        action: "set_gallery_highlights",
+        eventId: data.event._id,
+        mediaIds,
+        qualityIndex,
+      });
+      if (!json) return;
+      const count = Number((json as { count?: number }).count || mediaIds.length);
+      const indexed = Number((json as { indexed?: number }).indexed || 0);
+      actions.setMessage(
+        count
+          ? `Weekend Highlights ready — ${count} strongest shot${count === 1 ? "" : "s"}.${indexed ? ` Indexed ${indexed} photos so guests browse collapsed bursts.` : ""}`
+          : "Couldn’t find strong enough shots yet — check that Whole event photos aren’t all soft or dark.",
+      );
+      await actions.load(selectedEventId);
+    } finally {
+      setPickingHighlights(false);
+      setHighlightProgress({ done: 0, total: 0 });
+    }
+  }
+
+  async function clearWeekendHighlights() {
+    if (!data.event) return;
+    const json = await actions.postAction({
+      action: "set_gallery_highlights",
+      eventId: data.event._id,
+      mediaIds: [],
+    });
+    if (!json) return;
+    actions.setMessage("Cleared Weekend Highlights.");
+    await actions.load(selectedEventId);
+  }
+
   const filteredMediaItems = useMemo(() => {
     return data.media
       .filter((item) => item.kind !== "team_photo")
@@ -618,7 +702,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Gallery tools"
-        description="One guest album (Whole event + Photos of you). Compress existing R2 files to cut storage cost."
+        description="One guest album (Whole event + Photos of you). Auto-pick Weekend Highlights or compress R2 files."
       >
         <div className="flex flex-wrap gap-2">
           <AdminButton
@@ -635,10 +719,32 @@ export function MediaTab({
           >
             {recompressing ? "Recompressing…" : "Recompress large photos"}
           </AdminButton>
+          <AdminButton
+            variant="secondary"
+            disabled={pickingHighlights || !data.event}
+            onClick={() => void pickWeekendHighlights()}
+          >
+            {pickingHighlights
+              ? `Picking highlights… ${highlightProgress.done}/${highlightProgress.total || "…"}`
+              : "Auto-pick Weekend Highlights"}
+          </AdminButton>
+          {data.media.some(
+            (item) => typeof item.highlightOrder === "number" && item.highlightOrder > 0,
+          ) ? (
+            <AdminButton
+              variant="secondary"
+              disabled={pickingHighlights || !data.event}
+              onClick={() => void clearWeekendHighlights()}
+            >
+              Clear highlights
+            </AdminButton>
+          ) : null}
         </div>
         <p className="mt-3 text-xs text-pine">
-          Recompress rewrites oversized stills to ~1600px JPEG (quality 78). Run after a big upload
-          weekend; safe to click again — already-small files are skipped.
+          Auto-pick scans Whole event photos for sharpness and exposure, collapses near-duplicate
+          bursts, saves about 20–40 diverse strongest shots for Highlights, and indexes hashes so
+          guests browse moments instead of every burst frame. Recompress keeps camera EXIF while
+          rewriting oversized stills to ~1600px JPEG.
         </p>
       </AdminPanel>
 

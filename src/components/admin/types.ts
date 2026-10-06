@@ -59,6 +59,7 @@ export type MediaDoc = {
   groupIds?: string[];
   taggedGuestIds?: string[];
   needsEditing?: boolean;
+  highlightOrder?: number | null;
   uploadedByName?: string;
   createdAt?: string | null;
 };

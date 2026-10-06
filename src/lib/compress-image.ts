@@ -14,7 +14,9 @@ export type CompressedImage = {
 };
 
 /**
- * Re-encode stills for R2: strip EXIF, cap dimensions, JPEG where possible.
+ * Re-encode stills for R2: cap dimensions, JPEG where possible.
+ * Keeps EXIF (camera DateTimeOriginal, orientation already applied via rotate)
+ * so future shoot-day tools can still read taken-at from the stored file.
  * GIFs are left alone (animation). Returns null if input isn't a compressible still.
  */
 export async function compressImageForStorage(
@@ -34,7 +36,8 @@ export async function compressImageForStorage(
       height: STORAGE_MAX_DIMENSION,
       fit: "inside",
       withoutEnlargement: true,
-    });
+    })
+    .withMetadata();
 
   const { data, info } = await pipeline
     .jpeg({ quality: STORAGE_JPEG_QUALITY, mozjpeg: true, chromaSubsampling: "4:2:0" })

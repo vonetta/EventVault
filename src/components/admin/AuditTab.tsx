@@ -43,6 +43,7 @@ const ACTION_LABELS: Record<string, string> = {
   mark_guest_paid: "Marked guest paid",
   consolidate_galleries: "Moved Shared → Whole event",
   recompress_media: "Recompressed photos",
+  set_gallery_highlights: "Picked Weekend Highlights",
 };
 
 function formatAction(action: string) {

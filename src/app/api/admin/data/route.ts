@@ -237,6 +237,10 @@ export async function GET(request: Request) {
       groupIds: (item.groupIds || []).map((id) => String(id)),
       taggedGuestIds: (item.taggedGuestIds || []).map((id) => String(id)),
       needsEditing: Boolean(item.needsEditing),
+      highlightOrder:
+        typeof item.highlightOrder === "number" && item.highlightOrder > 0
+          ? item.highlightOrder
+          : null,
       uploadedByName: item.uploadedByName || "",
       // storageKey intentionally omitted from admin list payloads
     })),
@@ -274,6 +278,7 @@ export async function POST(request: Request) {
     "sync_days",
     "consolidate_galleries",
     "recompress_media",
+    "set_gallery_highlights",
   ]);
   if (sensitiveActions.has(body.action)) {
     const limited = await rateLimit(`admin-action:${clientIp(request)}`, 80, 60_000);
@@ -1154,6 +1159,91 @@ export async function POST(request: Request) {
       ...result,
     });
     return NextResponse.json({ ok: true, ...result });
+  }
+
+  if (body.action === "set_gallery_highlights") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    const eventId = String(event._id);
+    const mediaIds = [...new Set(body.mediaIds.map(String))];
+
+    // Persist perceptual hashes from the client scan so guests can browse
+    // collapsed bursts without another pass.
+    const qualityIndex = body.qualityIndex || [];
+    if (qualityIndex.length) {
+      const chunkSize = 100;
+      for (let i = 0; i < qualityIndex.length; i += chunkSize) {
+        const chunk = qualityIndex.slice(i, i + chunkSize);
+        await Promise.all(
+          chunk.map((row) =>
+            Media.updateOne(
+              {
+                _id: row.mediaId,
+                eventId,
+                kind: { $in: ["event_photo", "group_photo"] },
+              },
+              {
+                $set: {
+                  aHash: row.aHash || "",
+                  dHash: row.dHash || "",
+                  sharpness:
+                    typeof row.sharpness === "number" ? row.sharpness : null,
+                },
+              },
+            ),
+          ),
+        );
+      }
+    }
+
+    // Clear previous reel for this event.
+    await Media.updateMany(
+      { eventId, highlightOrder: { $ne: null } },
+      { $set: { highlightOrder: null } },
+    );
+
+    if (mediaIds.length) {
+      const docs = await Media.find({
+        _id: { $in: mediaIds },
+        eventId,
+        kind: { $in: ["event_photo", "group_photo"] },
+        needsEditing: { $ne: true },
+        contentType: { $regex: /^image\//i },
+      }).select("_id");
+      const allowed = new Set(docs.map((doc) => String(doc._id)));
+      const ordered = mediaIds.filter((id) => allowed.has(id));
+      await Promise.all(
+        ordered.map((id, index) =>
+          Media.updateOne(
+            { _id: id, eventId },
+            { $set: { highlightOrder: index + 1 } },
+          ),
+        ),
+      );
+      await logAdminAction(request, "set_gallery_highlights", {
+        eventId,
+        count: ordered.length,
+        indexed: qualityIndex.length,
+      });
+      return NextResponse.json({
+        ok: true,
+        count: ordered.length,
+        indexed: qualityIndex.length,
+      });
+    }
+
+    await logAdminAction(request, "set_gallery_highlights", {
+      eventId,
+      count: 0,
+      indexed: qualityIndex.length,
+    });
+    return NextResponse.json({
+      ok: true,
+      count: 0,
+      indexed: qualityIndex.length,
+    });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
