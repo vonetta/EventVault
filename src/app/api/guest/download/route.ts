@@ -111,6 +111,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
 
+  const url = new URL(request.url);
+  const idsParam = url.searchParams.get("ids") || "";
+  const favoriteIds = idsParam
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .slice(0, MAX_ZIP_FILES);
+
   const editGuests = await Guest.find({ eventId: guest.eventId }).select("_id name").lean();
   const editIds = editGuestIdsFrom(editGuests);
 
@@ -121,7 +129,7 @@ export async function GET(request: Request) {
   }).sort({ createdAt: -1 });
 
   const guestId = String(guest._id);
-  const eventForZip = eventPhotos.filter(
+  let eventForZip = eventPhotos.filter(
     (item) =>
       isMediaAvailable(item.availableUntil) &&
       !showsInNeedsEditing(item, editIds) &&
@@ -129,19 +137,39 @@ export async function GET(request: Request) {
   );
 
   // Individual photos (assigned + tagged) only once unlocked (VIP included).
-  const personalPhotos =
+  let personalPhotos =
     guest.personalPhotosPaid || guest.tier === "vip"
       ? await findIndividualPhotos(guest.eventId, guest._id)
       : [];
 
+  if (favoriteIds.length) {
+    const wanted = new Set(favoriteIds);
+    eventForZip = eventForZip.filter((item) => wanted.has(String(item._id)));
+    personalPhotos = personalPhotos.filter((item) => wanted.has(String(item._id)));
+  }
+
   const used = new Set<string>();
   const entries: ZipEntry[] = [];
-  await collectZipEntries(eventForZip, "whole-event", used, entries);
-  await collectZipEntries(personalPhotos, "photos-of-you", used, entries);
+  await collectZipEntries(
+    eventForZip,
+    favoriteIds.length ? "favorites" : "whole-event",
+    used,
+    entries,
+  );
+  await collectZipEntries(
+    personalPhotos,
+    favoriteIds.length ? "favorites" : "photos-of-you",
+    used,
+    entries,
+  );
 
   if (!entries.length) {
     return NextResponse.json(
-      { error: "No downloadable photos are available yet" },
+      {
+        error: favoriteIds.length
+          ? "None of those favorites are available to download"
+          : "No downloadable photos are available yet",
+      },
       { status: 404 },
     );
   }
@@ -153,18 +181,21 @@ export async function GET(request: Request) {
     guestId: String(guest._id),
     eventId: String(guest.eventId),
     details: {
-      summary: `${guest.name} · ${entries.length} photos`,
+      summary: `${guest.name} · ${entries.length} photos${favoriteIds.length ? " (favorites)" : ""}`,
       meta: {
         photoCount: entries.length,
         wholeEvent: eventForZip.length,
         photosOfYou: personalPhotos.length,
+        favorites: favoriteIds.length > 0,
       },
     },
   });
 
   const eventSlug = safeName(event.slug || event.name, "event").replace(/\s+/g, "-");
   const guestSlug = safeName(guest.name, "guest").replace(/\s+/g, "-");
-  const filename = `${eventSlug}-${guestSlug}-photos.zip`;
+  const filename = favoriteIds.length
+    ? `${eventSlug}-favorites.zip`
+    : `${eventSlug}-${guestSlug}-photos.zip`;
 
   const pass = new PassThrough();
   const archive = new ZipArchive({ zlib: { level: 6 } });

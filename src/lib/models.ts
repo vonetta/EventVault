@@ -158,6 +158,12 @@ const MediaSchema = new Schema(
     // until cleared. Tags may be prepared while editing but only go live when
     // this is false.
     needsEditing: { type: Boolean, default: false, index: true },
+    // Weekend Highlights reel order (1-based). null / unset = not in the reel.
+    highlightOrder: { type: Number, default: null, index: true },
+    // Perceptual hashes from quality / highlights scan — used to collapse bursts.
+    aHash: { type: String, default: "" },
+    dHash: { type: String, default: "" },
+    sharpness: { type: Number, default: null },
     // Optional lighting/sharpness cleanup PREVIEW (separate from the original).
     // Never served to guests. Cleared when discarded or applied over the original.
     cleanupPreviewKey: { type: String, default: "" },
@@ -193,6 +199,7 @@ MediaSchema.index({ eventId: 1, kind: 1 });
 MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
 MediaSchema.index({ eventId: 1, taggedGuestIds: 1 });
 MediaSchema.index({ eventId: 1, needsEditing: 1, kind: 1 });
+MediaSchema.index({ eventId: 1, highlightOrder: 1 });
 
 export type EventDoc = InferSchemaType<typeof EventSchema> & { _id: mongoose.Types.ObjectId };
 export type DayDoc = InferSchemaType<typeof DaySchema> & { _id: mongoose.Types.ObjectId };

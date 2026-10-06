@@ -11,6 +11,8 @@ export type MediaItem = {
   provider?: "file" | "youtube";
   embedUrl?: string;
   availableUntil?: string | null;
+  /** When bursts are collapsed, how many near-duplicates this frame represents. */
+  burstCount?: number;
 };
 
 type MediaGridProps = {
@@ -27,6 +29,8 @@ type MediaGridProps = {
   allowDownload?: boolean;
   /** When set, show this many photos first with a Load more control. */
   pageSize?: number;
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (id: string) => void;
 };
 
 function downloadUrl(src: string) {
@@ -79,6 +83,8 @@ export function MediaGrid({
   showCaptions = true,
   allowDownload = true,
   pageSize,
+  favoriteIds,
+  onToggleFavorite,
 }: MediaGridProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(pageSize && pageSize > 0 ? pageSize : items.length);
@@ -215,6 +221,11 @@ export function MediaGrid({
                       <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
                     ) : null}
                   </button>
+                  {item.burstCount && item.burstCount > 1 ? (
+                    <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-ink/80 px-2 py-1 text-[10px] font-medium text-foam">
+                      {item.burstCount} similar
+                    </span>
+                  ) : null}
                   {onTag ? (
                     <button
                       type="button"
@@ -301,12 +312,15 @@ export function MediaGrid({
       {lightboxIndex !== null ? (
         <Lightbox
           images={imageItems.map(({ item }) => ({
+            id: item.id,
             src: item.url,
             alt: item.title,
           }))}
           startIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
           allowDownload={allowDownload}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={onToggleFavorite}
         />
       ) : null}
     </>

@@ -7,7 +7,12 @@ import { TagPhotoModal } from "@/components/TagPhotoModal";
 import { HowTo } from "@/components/admin/HowTo";
 import { AdminButton, AdminField, AdminPanel, inputClassName } from "@/components/admin/ui";
 import type { NameOnlyGuest } from "@/lib/guest-name-match";
+import {
+  candidateFromQuality,
+  pickHighlights,
+} from "@/lib/gallery-highlights";
 import { editGuestIdsFrom, showsInNeedsEditing } from "@/lib/needs-editing";
+import { analyzePhotoQuality, mapPool } from "@/lib/photo-quality";
 import { formatFileSize, resizeImageForUpload } from "@/lib/resize-image";
 import { youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 import type { AdminActions, AdminData, GuestDoc, MediaDoc, MediaFilter, SessionDoc } from "@/components/admin/types";
@@ -109,6 +114,8 @@ export function MediaTab({
   const [editingVisibleCount, setEditingVisibleCount] = useState(60);
   const [consolidating, setConsolidating] = useState(false);
   const [recompressing, setRecompressing] = useState(false);
+  const [pickingHighlights, setPickingHighlights] = useState(false);
+  const [highlightProgress, setHighlightProgress] = useState({ done: 0, total: 0 });
   const nameOnlyGuests: NameOnlyGuest[] = useMemo(
     () =>
       data.guests
@@ -372,19 +379,32 @@ export function MediaTab({
 
   async function sendTeamPhotos() {
     if (teamSelected.size === 0) return;
+    const selected = stagedTeamPhotos.filter((item) => teamSelected.has(String(item._id)));
+    const taggedIds = selected
+      .filter((item) => (item.taggedGuestIds || []).length > 0)
+      .map((item) => String(item._id));
+    const untaggedCount = selected.length - taggedIds.length;
+    if (!taggedIds.length) {
+      actions.setMessage(
+        "Tag people on each photo before sending. Untagged photos stay in Main gallery.",
+      );
+      return;
+    }
     setSending(true);
     const json = await actions.postAction({
       action: "publish_media",
-      mediaIds: [...teamSelected],
+      mediaIds: taggedIds,
       everyone: true,
       groupIds: [],
     });
     setSending(false);
     if (!json) return;
-    const count = (json as { sent?: number }).sent ?? teamSelected.size;
+    const count = (json as { sent?: number }).sent ?? taggedIds.length;
     setTeamSelected(new Set());
     actions.setMessage(
-      `Sent ${count} photo${count === 1 ? "" : "s"} to the whole-event album.`,
+      untaggedCount
+        ? `Sent ${count} tagged photo${count === 1 ? "" : "s"} to Whole event. Skipped ${untaggedCount} untagged — tag them first.`
+        : `Sent ${count} photo${count === 1 ? "" : "s"} to the whole-event album.`,
     );
     await actions.load(selectedEventId);
   }
@@ -465,6 +485,86 @@ export function MediaTab({
         ? `Recompressed ${totalDone} photo${totalDone === 1 ? "" : "s"} (about ${mb} MB saved in R2).`
         : "Photos are already small enough — nothing to recompress.",
     );
+    await actions.load(selectedEventId);
+  }
+
+  async function pickWeekendHighlights() {
+    if (!data.event) return;
+    const candidates = data.media.filter(
+      (item) =>
+        (item.kind === "event_photo" || item.kind === "group_photo") &&
+        !item.needsEditing &&
+        (item.contentType || "").startsWith("image/") &&
+        (item.taggedGuestIds || []).length > 0,
+    );
+    if (!candidates.length) {
+      actions.setMessage(
+        "No tagged Whole-event photos yet. Tag people, send to Whole event, then pick highlights.",
+      );
+      return;
+    }
+
+    setPickingHighlights(true);
+    setHighlightProgress({ done: 0, total: candidates.length });
+    try {
+      const analyzed = await mapPool(
+        candidates,
+        4,
+        async (item) => {
+          try {
+            const quality = await analyzePhotoQuality(`/api/media/${item._id}`);
+            return candidateFromQuality(String(item._id), quality);
+          } catch {
+            return candidateFromQuality(String(item._id), {
+              sharpness: 0,
+              brightness: 128,
+              aHash: "",
+              dHash: "",
+              needsEditing: true,
+            });
+          }
+        },
+        (done, total) => setHighlightProgress({ done, total }),
+      );
+      const mediaIds = pickHighlights(analyzed);
+      const qualityIndex = analyzed
+        .filter((item) => item.aHash.length === 16 && item.dHash.length === 16)
+        .map((item) => ({
+          mediaId: item.id,
+          aHash: item.aHash,
+          dHash: item.dHash,
+          sharpness: item.sharpness,
+        }));
+      const json = await actions.postAction({
+        action: "set_gallery_highlights",
+        eventId: data.event._id,
+        mediaIds,
+        qualityIndex,
+      });
+      if (!json) return;
+      const count = Number((json as { count?: number }).count || mediaIds.length);
+      const indexed = Number((json as { indexed?: number }).indexed || 0);
+      actions.setMessage(
+        count
+          ? `Weekend Highlights ready — ${count} strongest shot${count === 1 ? "" : "s"}.${indexed ? ` Indexed ${indexed} photos so guests browse collapsed bursts.` : ""}`
+          : "Couldn’t find strong enough shots yet — check that Whole event photos aren’t all soft or dark.",
+      );
+      await actions.load(selectedEventId);
+    } finally {
+      setPickingHighlights(false);
+      setHighlightProgress({ done: 0, total: 0 });
+    }
+  }
+
+  async function clearWeekendHighlights() {
+    if (!data.event) return;
+    const json = await actions.postAction({
+      action: "set_gallery_highlights",
+      eventId: data.event._id,
+      mediaIds: [],
+    });
+    if (!json) return;
+    actions.setMessage("Cleared Weekend Highlights.");
     await actions.load(selectedEventId);
   }
 
@@ -618,7 +718,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Gallery tools"
-        description="One guest album (Whole event + Photos of you). Compress existing R2 files to cut storage cost."
+        description="One guest album (Whole event + Photos of you). Auto-pick Weekend Highlights or compress R2 files."
       >
         <div className="flex flex-wrap gap-2">
           <AdminButton
@@ -635,10 +735,32 @@ export function MediaTab({
           >
             {recompressing ? "Recompressing…" : "Recompress large photos"}
           </AdminButton>
+          <AdminButton
+            variant="secondary"
+            disabled={pickingHighlights || !data.event}
+            onClick={() => void pickWeekendHighlights()}
+          >
+            {pickingHighlights
+              ? `Picking highlights… ${highlightProgress.done}/${highlightProgress.total || "…"}`
+              : "Auto-pick Weekend Highlights"}
+          </AdminButton>
+          {data.media.some(
+            (item) => typeof item.highlightOrder === "number" && item.highlightOrder > 0,
+          ) ? (
+            <AdminButton
+              variant="secondary"
+              disabled={pickingHighlights || !data.event}
+              onClick={() => void clearWeekendHighlights()}
+            >
+              Clear highlights
+            </AdminButton>
+          ) : null}
         </div>
         <p className="mt-3 text-xs text-pine">
-          Recompress rewrites oversized stills to ~1600px JPEG (quality 78). Run after a big upload
-          weekend; safe to click again — already-small files are skipped.
+          Auto-pick scans Whole event photos for sharpness and exposure, collapses near-duplicate
+          bursts, saves about 20–40 diverse strongest shots for Highlights, and indexes hashes so
+          guests browse moments instead of every burst frame. Recompress keeps camera EXIF while
+          rewriting oversized stills to ~1600px JPEG.
         </p>
       </AdminPanel>
 
@@ -733,7 +855,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Main gallery — ready to send"
-        description="Photos waiting to go live. Tap Untagged to see what’s left to name, then Send to Whole event."
+        description="Photos waiting to go live. Tag people first — untagged photos cannot go to Whole event."
       >
         {stagedTeamPhotos.length === 0 ? (
           <p className="text-sm text-pine">
@@ -819,8 +941,8 @@ export function MediaTab({
                 Whole event
               </p>
               <p className="mt-1 text-xs text-pine">
-                Every guest sees these in the free whole-event album. Tag 1–2 people on a personal
-                shot for Photos of you (watermarked until unlock). Crowd tags stay Whole event only.
+                Only tagged photos go live. Untagged stay here until you name people. Tag 1–2 for
+                Photos of you (watermarked until unlock); crowd tags stay free in Whole event.
               </p>
               <AdminButton
                 variant="primary"
@@ -830,7 +952,17 @@ export function MediaTab({
               >
                 {sending
                   ? "Sending…"
-                  : `Send ${teamSelected.size || ""} to Whole event`.trim()}
+                  : `Send tagged to Whole event${
+                      teamSelected.size
+                        ? ` (${
+                            stagedTeamPhotos.filter(
+                              (item) =>
+                                teamSelected.has(String(item._id)) &&
+                                (item.taggedGuestIds || []).length > 0,
+                            ).length
+                          })`
+                        : ""
+                    }`}
               </AdminButton>
             </div>
           </div>

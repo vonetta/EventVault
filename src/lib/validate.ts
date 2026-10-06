@@ -205,6 +205,24 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     eventId: objectIdSchema,
     limit: z.number().int().min(1).max(50).optional(),
   }),
+  z.object({
+    action: z.literal("set_gallery_highlights"),
+    eventId: objectIdSchema,
+    /** Ordered media ids for the Weekend Highlights reel (empty clears). */
+    mediaIds: z.array(objectIdSchema).max(60),
+    /** Optional quality index from the client scan (enables burst collapse). */
+    qualityIndex: z
+      .array(
+        z.object({
+          mediaId: objectIdSchema,
+          aHash: z.string().max(32).optional(),
+          dHash: z.string().max(32).optional(),
+          sharpness: z.number().min(0).max(1_000_000).optional(),
+        }),
+      )
+      .max(2000)
+      .optional(),
+  }),
 ]);
 
 export const uploaderUpdateMediaSchema = z.object({

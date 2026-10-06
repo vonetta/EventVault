@@ -115,15 +115,17 @@ export default function HomePage() {
   }
 
   const openingFromLinkAndBusy = openingFromLink && loading && !error;
+  const looksLikeGalleryCode = ticketCode.startsWith("WE-");
 
   return (
     <main id="main" tabIndex={-1} className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-8 md:px-10">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[70vh] opacity-80"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[78vh] opacity-90"
         style={{
-          backgroundImage:
-            "linear-gradient(180deg, rgba(28,25,23,0.5), rgba(28,25,23,0.12) 55%, transparent), url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22 viewBox=%220 0 160 160%22%3E%3Cpath fill=%22%2344403c%22 fill-opacity=%220.06%22 d=%22M0 160L160 0H80L0 80zm160 0V80L80 160z%22/%3E%3C/svg%3E')",
+          backgroundImage: looksLikeGalleryCode
+            ? "linear-gradient(165deg, rgba(28,25,23,0.72), rgba(28,25,23,0.2) 50%, transparent), radial-gradient(ellipse at 70% 10%, rgba(87,83,78,0.35), transparent 50%)"
+            : "linear-gradient(180deg, rgba(28,25,23,0.5), rgba(28,25,23,0.12) 55%, transparent), url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22 viewBox=%220 0 160 160%22%3E%3Cpath fill=%22%2344403c%22 fill-opacity=%220.06%22 d=%22M0 160L160 0H80L0 80zm160 0V80L80 160z%22/%3E%3C/svg%3E')",
           backgroundSize: "cover, 160px 160px",
         }}
       />
@@ -141,30 +143,34 @@ export default function HomePage() {
       </header>
 
       <section className="mt-20 flex flex-1 flex-col justify-center gap-10 md:mt-28 md:max-w-xl">
-        <div className="space-y-4">
+        <div className="ev-fade-in space-y-4">
           <h1 className="font-[family-name:var(--font-fraunces)] text-4xl leading-tight text-ink md:text-5xl">
-            Your event photos, ready when you are.
+            {looksLikeGalleryCode
+              ? "Enter the weekend."
+              : "Your event photos, ready when you are."}
           </h1>
           <p className="max-w-md text-lg leading-relaxed text-pine">
-            Enter the ticket code from your email. VIP guests also see personal photos and speaker sessions.
+            {looksLikeGalleryCode
+              ? "This gallery code opens the free Whole-event album — highlights, the full weekend, and keepers you can save."
+              : "Enter the ticket code from your email. VIP guests also see personal photos and speaker sessions."}
           </p>
         </div>
 
         {openingFromLinkAndBusy ? (
           <p role="status" className="text-lg text-pine">
-            Opening your vault…
+            {looksLikeGalleryCode ? "Opening the weekend…" : "Opening your vault…"}
           </p>
         ) : (
           <>
             <form onSubmit={onSubmit} className="flex w-full max-w-md flex-col gap-3">
               <label className="text-sm font-medium text-pine" htmlFor="ticket">
-                Ticket code
+                {looksLikeGalleryCode ? "Gallery code" : "Ticket code"}
               </label>
               <input
                 id="ticket"
                 value={ticketCode}
                 onChange={(e) => setTicketCode(normalizeTicketInput(e.target.value))}
-                placeholder="EV-XXXXXXXX"
+                placeholder={looksLikeGalleryCode ? "WE-XXXXXXXX" : "EV-XXXXXXXX"}
                 autoComplete="off"
                 autoCapitalize="characters"
                 autoFocus
@@ -178,7 +184,11 @@ export default function HomePage() {
                 disabled={loading}
                 className="h-14 rounded-2xl bg-ink px-5 text-foam transition hover:bg-pine disabled:opacity-60"
               >
-                {loading ? "Opening…" : "Open my vault"}
+                {loading
+                  ? "Opening…"
+                  : looksLikeGalleryCode
+                    ? "Enter the weekend"
+                    : "Open my vault"}
               </button>
               {error ? (
                 <p id="ticket-error" role="alert" className="text-sm text-red-700">
@@ -187,6 +197,7 @@ export default function HomePage() {
               ) : null}
             </form>
 
+            {!looksLikeGalleryCode ? (
             <div className="w-full max-w-md">
               <button
                 type="button"
@@ -231,6 +242,11 @@ export default function HomePage() {
                 </form>
               ) : null}
             </div>
+            ) : (
+              <p className="max-w-md text-sm text-pine">
+                Have a personal VIP ticket too? Use that code instead for Photos of you.
+              </p>
+            )}
           </>
         )}
       </section>
