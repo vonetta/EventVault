@@ -73,6 +73,113 @@ textarea {
   outline: none;
 }
 
+/* Homepage — cinematic vault entrance */
+.home-shell {
+  --home-ink: #100e0c;
+  --home-foam: #f4efe6;
+  --home-mist: #d8cfc0;
+  --home-amber: #d4a574;
+  --home-amber-bright: #e4b889;
+  background: var(--home-ink);
+  color: var(--home-foam);
+}
+
+.home-brand {
+  font-size: clamp(3.25rem, 11vw, 6.75rem);
+  line-height: 0.92;
+  color: var(--home-foam);
+  text-wrap: balance;
+}
+
+.home-atmosphere {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.home-atmosphere__base {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 70% at 78% 18%, rgba(212, 165, 116, 0.28), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 12% 88%, rgba(90, 70, 48, 0.45), transparent 60%),
+    linear-gradient(165deg, #1a1612 0%, #100e0c 42%, #0c0b09 100%);
+}
+
+.home-atmosphere__beam {
+  position: absolute;
+  inset: -20% -10%;
+  background:
+    conic-gradient(from 210deg at 72% 22%, transparent 0deg, rgba(212, 165, 116, 0.12) 28deg, transparent 70deg),
+    radial-gradient(circle at 70% 20%, rgba(244, 239, 230, 0.14), transparent 28%);
+  opacity: 0.9;
+}
+
+.home-atmosphere__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+.home-atmosphere__frames {
+  position: absolute;
+  inset: 0;
+}
+
+.home-frame {
+  position: absolute;
+  border: 1px solid rgba(244, 239, 230, 0.14);
+  background:
+    linear-gradient(145deg, rgba(244, 239, 230, 0.07), rgba(212, 165, 116, 0.04) 45%, rgba(16, 14, 12, 0.2));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+}
+
+.home-frame--a {
+  top: 12%;
+  right: -2%;
+  width: min(38vw, 420px);
+  aspect-ratio: 4 / 5;
+  transform: rotate(6deg);
+}
+
+.home-frame--b {
+  top: 38%;
+  right: 18%;
+  width: min(28vw, 300px);
+  aspect-ratio: 3 / 4;
+  transform: rotate(-4deg);
+  opacity: 0.7;
+}
+
+.home-frame--c {
+  bottom: 8%;
+  right: 4%;
+  width: min(32vw, 340px);
+  aspect-ratio: 5 / 4;
+  transform: rotate(3deg);
+  opacity: 0.55;
+}
+
+@media (max-width: 767px) {
+  .home-frame--a {
+    top: 6%;
+    right: -18%;
+    width: 58vw;
+    opacity: 0.45;
+  }
+
+  .home-frame--b,
+  .home-frame--c {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   @keyframes ev-fade-in {
     from {
@@ -85,8 +192,64 @@ textarea {
     }
   }
 
+  @keyframes home-rise {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes home-beam-drift {
+    from {
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+    to {
+      transform: translate3d(-2%, 1.5%, 0) scale(1.04);
+    }
+  }
+
+  @keyframes home-frame-float {
+    from {
+      transform: translateY(0) rotate(var(--frame-rot, 0deg));
+    }
+    to {
+      transform: translateY(-10px) rotate(var(--frame-rot, 0deg));
+    }
+  }
+
   .ev-fade-in {
     animation: ev-fade-in 520ms ease-out both;
+  }
+
+  .home-rise {
+    animation: home-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .home-atmosphere__beam {
+    animation: home-beam-drift 14s ease-in-out infinite alternate;
+  }
+
+  .home-frame--a {
+    --frame-rot: 6deg;
+    animation: home-frame-float 9s ease-in-out infinite alternate;
+  }
+
+  .home-frame--b {
+    --frame-rot: -4deg;
+    animation: home-frame-float 11s ease-in-out infinite alternate-reverse;
+  }
+
+  .home-frame--c {
+    --frame-rot: 3deg;
+    animation: home-frame-float 10s ease-in-out infinite alternate;
+  }
+
+  .home-cta:hover {
+    transform: translateY(-1px);
   }
 }
 
