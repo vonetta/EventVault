@@ -990,10 +990,11 @@ export async function POST(request: Request) {
   }
 
   if (body.action === "unpublish_media") {
-    await Media.updateMany(
+    // Pull live Whole-event / legacy group album shots back to Main gallery.
+    const result = await Media.updateMany(
       {
         _id: { $in: body.mediaIds },
-        kind: { $in: ["team_photo", "event_photo"] },
+        kind: { $in: ["team_photo", "event_photo", "group_photo"] },
       },
       {
         $set: {
@@ -1004,8 +1005,15 @@ export async function POST(request: Request) {
         },
       },
     );
-    await logAdminAction(request, "unpublish_media", { count: body.mediaIds.length });
-    return NextResponse.json({ ok: true });
+    await logAdminAction(request, "unpublish_media", {
+      count: body.mediaIds.length,
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+    });
+    return NextResponse.json({
+      ok: true,
+      removed: result.modifiedCount,
+    });
   }
 
   if (body.action === "tag_media") {

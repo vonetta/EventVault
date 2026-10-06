@@ -156,8 +156,8 @@ export function MediaTab({
     () =>
       data.media.filter(
         (item) =>
-          item.kind === "event_photo" &&
-          item.published &&
+          (item.kind === "event_photo" || item.kind === "group_photo") &&
+          item.published !== false &&
           !showsInNeedsEditing(item, editGuestIds),
       ),
     [data.media, editGuestIds],
@@ -411,6 +411,14 @@ export function MediaTab({
 
   async function unsendTeamPhotos() {
     if (sentSelected.size === 0) return;
+    const count = sentSelected.size;
+    if (
+      !confirm(
+        `Remove ${count} photo${count === 1 ? "" : "s"} from Whole event? Guests will no longer see them. They’ll go back to Main gallery so you can edit or send again.`,
+      )
+    ) {
+      return;
+    }
     setUnsending(true);
     const json = await actions.postAction({
       action: "unpublish_media",
@@ -418,8 +426,43 @@ export function MediaTab({
     });
     setUnsending(false);
     if (!json) return;
+    const removed = (json as { removed?: number }).removed ?? count;
     setSentSelected(new Set());
-    actions.setMessage("Returned to the Main gallery.");
+    actions.setMessage(
+      `Removed ${removed} photo${removed === 1 ? "" : "s"} from Whole event — back in Main gallery.`,
+    );
+    await actions.load(selectedEventId);
+  }
+
+  async function deleteSentPhotos() {
+    if (sentSelected.size === 0) return;
+    const count = sentSelected.size;
+    if (
+      !confirm(
+        `Permanently delete ${count} photo${count === 1 ? "" : "s"} from Whole event? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setBulkDeleting(true);
+    const ids = [...sentSelected];
+    // API caps bulk delete at 200 — chunk if needed.
+    let deleted = 0;
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const json = await actions.postAction({
+        action: "bulk_delete_media",
+        mediaIds: chunk,
+      });
+      if (!json) {
+        setBulkDeleting(false);
+        return;
+      }
+      deleted += (json as { deleted: number }).deleted;
+    }
+    setBulkDeleting(false);
+    setSentSelected(new Set());
+    actions.setMessage(`Deleted ${deleted} photo${deleted === 1 ? "" : "s"} from Whole event.`);
     await actions.load(selectedEventId);
   }
 
@@ -972,9 +1015,13 @@ export function MediaTab({
       {sentTeamPhotos.length ? (
         <AdminPanel
           title="In Whole event"
-          description="Already visible to every guest. Tap Untagged if you still need to name people on live photos."
+          description="Visible to every guest. Select photos to remove them from the album, send them to Needs editing, or delete forever."
         >
           <div className="space-y-4">
+            <p className="rounded-xl border border-[color:var(--line)] bg-mist/50 px-3 py-2 text-sm text-pine">
+              Tip: tap photos to select, then <strong className="text-ink">Remove from Whole event</strong>{" "}
+              (back to Main gallery) or <strong className="text-ink">Delete</strong> (permanent).
+            </p>
             <div className="flex flex-wrap items-center gap-2">
               {(
                 [
@@ -1026,6 +1073,7 @@ export function MediaTab({
               selectable
               selectedIds={sentSelected}
               onToggleSelect={(id) => toggleIdInSet(setSentSelected, id)}
+              onRemove={deleteMedia}
               onTag={setTaggingId}
             />
             {sentVisibleCount < filteredSentPhotos.length ? (
@@ -1035,8 +1083,10 @@ export function MediaTab({
             ) : null}
             {sentSelected.size > 0 ? (
               <div className="flex flex-wrap gap-2">
-                <AdminButton variant="secondary" disabled={unsending} onClick={unsendTeamPhotos}>
-                  {unsending ? "Returning…" : `Return ${sentSelected.size} to Main gallery`}
+                <AdminButton variant="primary" disabled={unsending} onClick={unsendTeamPhotos}>
+                  {unsending
+                    ? "Removing…"
+                    : `Remove ${sentSelected.size} from Whole event`}
                 </AdminButton>
                 <AdminButton
                   variant="secondary"
@@ -1046,6 +1096,13 @@ export function MediaTab({
                   {togglingEdit
                     ? "Saving…"
                     : `Move ${sentSelected.size} to Needs editing`}
+                </AdminButton>
+                <AdminButton
+                  variant="danger"
+                  disabled={bulkDeleting}
+                  onClick={() => void deleteSentPhotos()}
+                >
+                  {bulkDeleting ? "Deleting…" : `Delete ${sentSelected.size}`}
                 </AdminButton>
               </div>
             ) : null}

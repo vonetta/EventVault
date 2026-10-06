@@ -34,7 +34,7 @@ const ACTION_LABELS: Record<string, string> = {
   upload_media: "Uploaded media",
   publish_media: "Sent photos to Whole event",
   publish_group_photos_everyone: "Published group photos to Whole event",
-  unpublish_media: "Returned photos to Main gallery",
+  unpublish_media: "Removed photos from Whole event",
   tag_media: "Tagged people on a photo",
   import_guests: "Imported guests",
   email_ticket: "Emailed a ticket code",
