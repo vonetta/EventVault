@@ -21,19 +21,20 @@ import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/li
 import { collapseBurstMoments } from "@/lib/burst-moments";
 
 function mapFileMedia(item: {
-  _id: { toString(): string };
+  _id: { toString(): string } | string;
   title?: string | null;
   filename?: string | null;
   contentType?: string | null;
   createdAt?: Date | string | null;
   burstCount?: number;
 }) {
+  const id = String(item._id);
   return {
-    id: String(item._id),
+    id,
     title: item.title || item.filename || "Media",
     contentType: item.contentType || "application/octet-stream",
     provider: "file" as const,
-    url: mediaProxyUrl(String(item._id)),
+    url: mediaProxyUrl(id),
     createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : null,
     burstCount: item.burstCount && item.burstCount > 1 ? item.burstCount : undefined,
   };
@@ -151,12 +152,19 @@ export async function GET(request: Request) {
             sharpness:
               typeof item.sharpness === "number" ? item.sharpness : 0,
           })),
-        ).map((row) =>
-          mapFileMedia({
-            ...row.doc,
+        ).map((row) => {
+          // Use row.id — spreading a Mongoose doc drops `_id`, which produced
+          // `/api/media/undefined` and broke the Whole-event grid.
+          const doc = row.doc;
+          return mapFileMedia({
+            _id: row.id,
+            title: doc.title,
+            filename: doc.filename,
+            contentType: doc.contentType,
+            createdAt: doc.createdAt,
             burstCount: row.burstCount,
-          }),
-        )
+          });
+        })
       : eventVisible.map(mapFileMedia)
   );
 
