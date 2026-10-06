@@ -61,6 +61,7 @@ export type MediaDoc = {
   needsEditing?: boolean;
   uploadedByName?: string;
   createdAt?: string | null;
+  takenAt?: string | null;
 };
 
 export type MediaFilter = "all" | "event_photo" | "personal_photo" | "session_video";

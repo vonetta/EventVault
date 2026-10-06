@@ -158,6 +158,9 @@ const MediaSchema = new Schema(
     // until cleared. Tags may be prepared while editing but only go live when
     // this is false.
     needsEditing: { type: Boolean, default: false, index: true },
+    // Camera capture time from EXIF DateTimeOriginal (read on upload before
+    // we compress/strip EXIF). Used to section Whole event by shoot day.
+    takenAt: { type: Date, default: null, index: true },
     // Optional lighting/sharpness cleanup PREVIEW (separate from the original).
     // Never served to guests. Cleared when discarded or applied over the original.
     cleanupPreviewKey: { type: String, default: "" },
@@ -193,6 +196,7 @@ MediaSchema.index({ eventId: 1, kind: 1 });
 MediaSchema.index({ eventId: 1, kind: 1, guestId: 1 });
 MediaSchema.index({ eventId: 1, taggedGuestIds: 1 });
 MediaSchema.index({ eventId: 1, needsEditing: 1, kind: 1 });
+MediaSchema.index({ eventId: 1, kind: 1, takenAt: 1 });
 
 export type EventDoc = InferSchemaType<typeof EventSchema> & { _id: mongoose.Types.ObjectId };
 export type DayDoc = InferSchemaType<typeof DaySchema> & { _id: mongoose.Types.ObjectId };

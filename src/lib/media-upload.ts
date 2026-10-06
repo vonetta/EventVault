@@ -5,6 +5,7 @@ import { Event, Guest, Media, Session } from "@/lib/models";
 import { logAdminAction } from "@/lib/audit";
 import { storeFile } from "@/lib/storage";
 import { compressImageForStorage } from "@/lib/compress-image";
+import { extractTakenAtFromImage } from "@/lib/photo-taken-at";
 import { assertFileMatchesMime } from "@/lib/file-sniff";
 import {
   IMAGE_MIME,
@@ -174,8 +175,10 @@ export async function processMediaUpload(
     let uploadBytes = bytes;
     let uploadMime = verifiedMime || "application/octet-stream";
     let uploadName = file.name;
-
+    // Read camera time from the original bytes — compression strips EXIF.
+    let takenAt: Date | null = null;
     if (isImage) {
+      takenAt = await extractTakenAtFromImage(bytes);
       const compressed = await compressImageForStorage(bytes, verifiedMime);
       if (compressed) {
         uploadBytes = Buffer.from(compressed.buffer);
@@ -209,6 +212,7 @@ export async function processMediaUpload(
       groupIds: [],
       taggedGuestIds: [],
       needsEditing,
+      takenAt,
       uploadedByName: options.uploadedByName || "",
     });
 

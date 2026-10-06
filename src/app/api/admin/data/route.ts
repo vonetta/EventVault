@@ -17,6 +17,7 @@ import {
   consolidateGroupIntoEvent,
   recompressEventPhotosBatch,
 } from "@/lib/consolidate-galleries";
+import { backfillTakenAtBatch } from "@/lib/backfill-taken-at";
 import { isPersonalizedForGuest } from "@/lib/individual-photos";
 import { editGuestIdsFrom, showsInNeedsEditing } from "@/lib/needs-editing";
 import { adminActionSchema } from "@/lib/validate";
@@ -237,6 +238,7 @@ export async function GET(request: Request) {
       groupIds: (item.groupIds || []).map((id) => String(id)),
       taggedGuestIds: (item.taggedGuestIds || []).map((id) => String(id)),
       needsEditing: Boolean(item.needsEditing),
+      takenAt: item.takenAt ? new Date(item.takenAt).toISOString() : null,
       uploadedByName: item.uploadedByName || "",
       // storageKey intentionally omitted from admin list payloads
     })),
@@ -274,6 +276,7 @@ export async function POST(request: Request) {
     "sync_days",
     "consolidate_galleries",
     "recompress_media",
+    "backfill_taken_at",
   ]);
   if (sensitiveActions.has(body.action)) {
     const limited = await rateLimit(`admin-action:${clientIp(request)}`, 80, 60_000);
@@ -1150,6 +1153,19 @@ export async function POST(request: Request) {
     }
     const result = await recompressEventPhotosBatch(String(event._id), body.limit ?? 20);
     await logAdminAction(request, "recompress_media", {
+      eventId: String(event._id),
+      ...result,
+    });
+    return NextResponse.json({ ok: true, ...result });
+  }
+
+  if (body.action === "backfill_taken_at") {
+    const event = await Event.findById(body.eventId);
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+    const result = await backfillTakenAtBatch(String(event._id), body.limit ?? 25);
+    await logAdminAction(request, "backfill_taken_at", {
       eventId: String(event._id),
       ...result,
     });

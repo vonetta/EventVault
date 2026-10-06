@@ -462,9 +462,9 @@ export default function VaultPage() {
           {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
         </h2>
         <p className="text-sm text-pine">
-          Free for every guest — including group shots from the weekend. Browse page by page when
-          there are many photos. Personalized photos of you are under Photos of you above
-          (watermarked until unlocked).
+          Free for every guest — including group shots from the weekend. When camera dates are on
+          the photos, you can browse by shoot day; otherwise page through the album. Personalized
+          photos of you are under Photos of you above (watermarked until unlocked).
         </p>
         <WholeEventGallery
           items={data.eventGallery || []}
