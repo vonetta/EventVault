@@ -11,6 +11,8 @@ export type MediaItem = {
   provider?: "file" | "youtube";
   embedUrl?: string;
   availableUntil?: string | null;
+  /** When bursts are collapsed, how many near-duplicates this frame represents. */
+  burstCount?: number;
 };
 
 type MediaGridProps = {
@@ -219,6 +221,11 @@ export function MediaGrid({
                       <div className="px-3 py-2 text-sm text-pine">{item.title}</div>
                     ) : null}
                   </button>
+                  {item.burstCount && item.burstCount > 1 ? (
+                    <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-ink/80 px-2 py-1 text-[10px] font-medium text-foam">
+                      {item.burstCount} similar
+                    </span>
+                  ) : null}
                   {onTag ? (
                     <button
                       type="button"

@@ -511,16 +511,26 @@ export function MediaTab({
         (done, total) => setHighlightProgress({ done, total }),
       );
       const mediaIds = pickHighlights(analyzed);
+      const qualityIndex = analyzed
+        .filter((item) => item.aHash.length === 16 && item.dHash.length === 16)
+        .map((item) => ({
+          mediaId: item.id,
+          aHash: item.aHash,
+          dHash: item.dHash,
+          sharpness: item.sharpness,
+        }));
       const json = await actions.postAction({
         action: "set_gallery_highlights",
         eventId: data.event._id,
         mediaIds,
+        qualityIndex,
       });
       if (!json) return;
       const count = Number((json as { count?: number }).count || mediaIds.length);
+      const indexed = Number((json as { indexed?: number }).indexed || 0);
       actions.setMessage(
         count
-          ? `Weekend Highlights ready — ${count} strongest shot${count === 1 ? "" : "s"} (sharp, well-exposed, not near-duplicates). Guests see them at the top of Whole event.`
+          ? `Weekend Highlights ready — ${count} strongest shot${count === 1 ? "" : "s"}.${indexed ? ` Indexed ${indexed} photos so guests browse collapsed bursts.` : ""}`
           : "Couldn’t find strong enough shots yet — check that Whole event photos aren’t all soft or dark.",
       );
       await actions.load(selectedEventId);
@@ -732,8 +742,9 @@ export function MediaTab({
         </div>
         <p className="mt-3 text-xs text-pine">
           Auto-pick scans Whole event photos for sharpness and exposure, collapses near-duplicate
-          bursts, and saves about 20–40 diverse strongest shots for the guest Highlights reel.
-          Recompress rewrites oversized stills to ~1600px JPEG (quality 78).
+          bursts, saves about 20–40 diverse strongest shots for Highlights, and indexes hashes so
+          guests browse moments instead of every burst frame. Recompress keeps camera EXIF while
+          rewriting oversized stills to ~1600px JPEG.
         </p>
       </AdminPanel>
 

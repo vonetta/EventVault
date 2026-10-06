@@ -13,6 +13,7 @@ import {
 import { mediaProxyUrl } from "@/lib/storage";
 import { zelleConfigured, zellePaymentInfo } from "@/lib/payments";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
+import { collapseBurstMoments } from "@/lib/burst-moments";
 
 function mapFileMedia(item: {
   _id: { toString(): string };
@@ -20,6 +21,7 @@ function mapFileMedia(item: {
   filename?: string | null;
   contentType?: string | null;
   createdAt?: Date | string | null;
+  burstCount?: number;
 }) {
   return {
     id: String(item._id),
@@ -28,6 +30,7 @@ function mapFileMedia(item: {
     provider: "file" as const,
     url: mediaProxyUrl(String(item._id)),
     createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : null,
+    burstCount: item.burstCount && item.burstCount > 1 ? item.burstCount : undefined,
   };
 }
 
@@ -109,21 +112,48 @@ export async function GET(request: Request) {
     needsEditing: { $ne: true },
   }).sort({ createdAt: -1 });
 
-  const eventGallery = eventPhotoDocs
-    .filter(
-      (item) =>
-        isMediaAvailable(item.availableUntil) &&
-        !isPersonalizedForGuest(item, guestId),
-    )
-    .map(mapFileMedia);
+  const eventVisible = eventPhotoDocs.filter(
+    (item) =>
+      isMediaAvailable(item.availableUntil) &&
+      !isPersonalizedForGuest(item, guestId),
+  );
 
-  const eventHighlights = eventPhotoDocs
+  const hashedCount = eventVisible.filter(
+    (item) =>
+      typeof item.aHash === "string" &&
+      item.aHash.length === 16 &&
+      typeof item.dHash === "string" &&
+      item.dHash.length === 16,
+  ).length;
+  // Collapse bursts when a meaningful share of the album was indexed
+  // (happens automatically when admin auto-picks Weekend Highlights).
+  const canCollapseBursts =
+    hashedCount >= 12 && hashedCount >= eventVisible.length * 0.25;
+
+  const eventGallery = (
+    canCollapseBursts
+      ? collapseBurstMoments(
+          eventVisible.map((item) => ({
+            id: String(item._id),
+            doc: item,
+            aHash: item.aHash || "",
+            dHash: item.dHash || "",
+            sharpness:
+              typeof item.sharpness === "number" ? item.sharpness : 0,
+          })),
+        ).map((row) =>
+          mapFileMedia({
+            ...row.doc,
+            burstCount: row.burstCount,
+          }),
+        )
+      : eventVisible.map(mapFileMedia)
+  );
+
+  const eventHighlights = eventVisible
     .filter(
       (item) =>
-        typeof item.highlightOrder === "number" &&
-        item.highlightOrder > 0 &&
-        isMediaAvailable(item.availableUntil) &&
-        !isPersonalizedForGuest(item, guestId),
+        typeof item.highlightOrder === "number" && item.highlightOrder > 0,
     )
     .sort(
       (a, b) =>

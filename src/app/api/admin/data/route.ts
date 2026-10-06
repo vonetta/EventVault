@@ -1169,6 +1169,35 @@ export async function POST(request: Request) {
     const eventId = String(event._id);
     const mediaIds = [...new Set(body.mediaIds.map(String))];
 
+    // Persist perceptual hashes from the client scan so guests can browse
+    // collapsed bursts without another pass.
+    const qualityIndex = body.qualityIndex || [];
+    if (qualityIndex.length) {
+      const chunkSize = 100;
+      for (let i = 0; i < qualityIndex.length; i += chunkSize) {
+        const chunk = qualityIndex.slice(i, i + chunkSize);
+        await Promise.all(
+          chunk.map((row) =>
+            Media.updateOne(
+              {
+                _id: row.mediaId,
+                eventId,
+                kind: { $in: ["event_photo", "group_photo"] },
+              },
+              {
+                $set: {
+                  aHash: row.aHash || "",
+                  dHash: row.dHash || "",
+                  sharpness:
+                    typeof row.sharpness === "number" ? row.sharpness : null,
+                },
+              },
+            ),
+          ),
+        );
+      }
+    }
+
     // Clear previous reel for this event.
     await Media.updateMany(
       { eventId, highlightOrder: { $ne: null } },
@@ -1196,15 +1225,25 @@ export async function POST(request: Request) {
       await logAdminAction(request, "set_gallery_highlights", {
         eventId,
         count: ordered.length,
+        indexed: qualityIndex.length,
       });
-      return NextResponse.json({ ok: true, count: ordered.length });
+      return NextResponse.json({
+        ok: true,
+        count: ordered.length,
+        indexed: qualityIndex.length,
+      });
     }
 
     await logAdminAction(request, "set_gallery_highlights", {
       eventId,
       count: 0,
+      indexed: qualityIndex.length,
     });
-    return NextResponse.json({ ok: true, count: 0 });
+    return NextResponse.json({
+      ok: true,
+      count: 0,
+      indexed: qualityIndex.length,
+    });
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });

@@ -218,6 +218,9 @@ export function WholeEventGallery({
         <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
           <span>
             Showing {startN}–{endN} of {items.length}
+            {items.some((item) => (item.burstCount || 0) > 1)
+              ? " · bursts collapsed to best frame"
+              : ""}
           </span>
           {totalPages > 1 ? (
             <div className="ml-auto flex flex-wrap items-center gap-1.5">

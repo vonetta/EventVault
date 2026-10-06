@@ -160,6 +160,10 @@ const MediaSchema = new Schema(
     needsEditing: { type: Boolean, default: false, index: true },
     // Weekend Highlights reel order (1-based). null / unset = not in the reel.
     highlightOrder: { type: Number, default: null, index: true },
+    // Perceptual hashes from quality / highlights scan — used to collapse bursts.
+    aHash: { type: String, default: "" },
+    dHash: { type: String, default: "" },
+    sharpness: { type: Number, default: null },
     // Optional lighting/sharpness cleanup PREVIEW (separate from the original).
     // Never served to guests. Cleared when discarded or applied over the original.
     cleanupPreviewKey: { type: String, default: "" },
