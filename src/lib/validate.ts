@@ -205,11 +205,6 @@ export const adminActionSchema = z.discriminatedUnion("action", [
     eventId: objectIdSchema,
     limit: z.number().int().min(1).max(50).optional(),
   }),
-  z.object({
-    action: z.literal("backfill_taken_at"),
-    eventId: objectIdSchema,
-    limit: z.number().int().min(1).max(50).optional(),
-  }),
 ]);
 
 export const uploaderUpdateMediaSchema = z.object({

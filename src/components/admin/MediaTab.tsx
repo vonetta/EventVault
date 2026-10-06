@@ -109,7 +109,6 @@ export function MediaTab({
   const [editingVisibleCount, setEditingVisibleCount] = useState(60);
   const [consolidating, setConsolidating] = useState(false);
   const [recompressing, setRecompressing] = useState(false);
-  const [backfillingDates, setBackfillingDates] = useState(false);
   const nameOnlyGuests: NameOnlyGuest[] = useMemo(
     () =>
       data.guests
@@ -469,49 +468,6 @@ export function MediaTab({
     await actions.load(selectedEventId);
   }
 
-  async function backfillCameraDates() {
-    if (!data.event) return;
-    setBackfillingDates(true);
-    let updated = 0;
-    let noExif = 0;
-    let errors = 0;
-    let rounds = 0;
-    let hasMore = true;
-    while (hasMore && rounds < 40) {
-      rounds += 1;
-      const json = await actions.postAction({
-        action: "backfill_taken_at",
-        eventId: data.event._id,
-        limit: 25,
-      });
-      if (!json) {
-        setBackfillingDates(false);
-        return;
-      }
-      const batch = json as {
-        updated?: number;
-        skippedNoExif?: number;
-        skippedErrors?: number;
-        hasMore?: boolean;
-        scanned?: number;
-      };
-      updated += batch.updated || 0;
-      noExif += batch.skippedNoExif || 0;
-      errors += batch.skippedErrors || 0;
-      hasMore = Boolean(batch.hasMore);
-      if (!(batch.scanned || 0)) break;
-    }
-    setBackfillingDates(false);
-    actions.setMessage(
-      updated
-        ? `Read camera dates on ${updated} photo${updated === 1 ? "" : "s"}.${noExif ? ` ${noExif} had no EXIF left (upload compression strips it).` : ""}`
-        : noExif
-          ? `No camera dates found on stored files (${noExif} checked). New uploads will keep dates; older compressed files often lost EXIF.`
-          : "No photos needed a camera-date pass.",
-    );
-    await actions.load(selectedEventId);
-  }
-
   const filteredMediaItems = useMemo(() => {
     return data.media
       .filter((item) => item.kind !== "team_photo")
@@ -662,7 +618,7 @@ export function MediaTab({
 
       <AdminPanel
         title="Gallery tools"
-        description="One guest album (Whole event + Photos of you). Compress R2 files or read camera shoot dates for day sections."
+        description="One guest album (Whole event + Photos of you). Compress existing R2 files to cut storage cost."
       >
         <div className="flex flex-wrap gap-2">
           <AdminButton
@@ -679,18 +635,10 @@ export function MediaTab({
           >
             {recompressing ? "Recompressing…" : "Recompress large photos"}
           </AdminButton>
-          <AdminButton
-            variant="secondary"
-            disabled={backfillingDates || !data.event}
-            onClick={() => void backfillCameraDates()}
-          >
-            {backfillingDates ? "Reading dates…" : "Read camera dates"}
-          </AdminButton>
         </div>
         <p className="mt-3 text-xs text-pine">
-          Recompress rewrites oversized stills to ~1600px JPEG. Read camera dates pulls EXIF
-          DateTimeOriginal when it still exists on the file — new uploads save it automatically;
-          older compressed files often no longer have EXIF.
+          Recompress rewrites oversized stills to ~1600px JPEG (quality 78). Run after a big upload
+          weekend; safe to click again — already-small files are skipped.
         </p>
       </AdminPanel>
 

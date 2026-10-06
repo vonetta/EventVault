@@ -40,7 +40,6 @@ const ACTION_LABELS: Record<string, string> = {
   email_ticket: "Emailed a ticket code",
   regenerate_group_code: "Regenerated a group login code",
   regenerate_gallery_code: "Regenerated Whole-event gallery code",
-  backfill_taken_at: "Read camera dates from photos",
   mark_guest_paid: "Marked guest paid",
   consolidate_galleries: "Moved Shared → Whole event",
   recompress_media: "Recompressed photos",

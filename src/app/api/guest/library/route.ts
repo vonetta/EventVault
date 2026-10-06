@@ -20,7 +20,6 @@ function mapFileMedia(item: {
   filename?: string | null;
   contentType?: string | null;
   createdAt?: Date | string | null;
-  takenAt?: Date | string | null;
 }) {
   return {
     id: String(item._id),
@@ -29,7 +28,6 @@ function mapFileMedia(item: {
     provider: "file" as const,
     url: mediaProxyUrl(String(item._id)),
     createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : null,
-    takenAt: item.takenAt ? new Date(item.takenAt).toISOString() : null,
   };
 }
 
