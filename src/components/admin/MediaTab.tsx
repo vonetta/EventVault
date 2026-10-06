@@ -104,6 +104,7 @@ export function MediaTab({
   const [stagedFilter, setStagedFilter] = useState<"all" | "untagged" | "tagged">("all");
   const [editingFilter, setEditingFilter] = useState<"all" | "untagged" | "tagged">("all");
   const [sentFilter, setSentFilter] = useState<"all" | "untagged" | "tagged">("all");
+  const [sentDayFilter, setSentDayFilter] = useState<string>("all");
   const [stagedVisibleCount, setStagedVisibleCount] = useState(60);
   const [sentVisibleCount, setSentVisibleCount] = useState(60);
   const [editingVisibleCount, setEditingVisibleCount] = useState(60);
@@ -182,16 +183,32 @@ export function MediaTab({
   }, [needsEditingPhotos, editingFilter, taggingId]);
 
   const filteredSentPhotos = useMemo(() => {
+    let list = sentTeamPhotos;
     if (sentFilter === "untagged") {
-      return sentTeamPhotos.filter(
+      list = list.filter(
         (item) => !(item.taggedGuestIds || []).length || item._id === taggingId,
       );
+    } else if (sentFilter === "tagged") {
+      list = list.filter((item) => (item.taggedGuestIds || []).length > 0);
     }
-    if (sentFilter === "tagged") {
-      return sentTeamPhotos.filter((item) => (item.taggedGuestIds || []).length > 0);
+    if (sentDayFilter !== "all") {
+      list = list.filter((item) => {
+        const iso = item.createdAt ? new Date(item.createdAt).toISOString().slice(0, 10) : "";
+        return iso === sentDayFilter;
+      });
     }
-    return sentTeamPhotos;
-  }, [sentTeamPhotos, sentFilter, taggingId]);
+    return list;
+  }, [sentTeamPhotos, sentFilter, sentDayFilter, taggingId]);
+
+  const sentDayCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of sentTeamPhotos) {
+      if (!item.createdAt) continue;
+      const key = new Date(item.createdAt).toISOString().slice(0, 10);
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [sentTeamPhotos]);
 
   const visibleStagedPhotos = useMemo(
     () => filteredStagedPhotos.slice(0, stagedVisibleCount),
@@ -840,7 +857,7 @@ export function MediaTab({
       {sentTeamPhotos.length ? (
         <AdminPanel
           title="In Whole event"
-          description="Already visible to every guest. Tap Untagged if you still need to name people on live photos."
+          description="Already visible to every guest. Filter by tagged/untagged or upload day when the album is large."
         >
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -867,6 +884,43 @@ export function MediaTab({
                 </button>
               ))}
             </div>
+            {sentDayCounts.length > 1 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  aria-pressed={sentDayFilter === "all"}
+                  onClick={() => {
+                    setSentDayFilter("all");
+                    setSentVisibleCount(60);
+                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    sentDayFilter === "all" ? "bg-ink text-foam" : "bg-mist text-pine"
+                  }`}
+                >
+                  All days
+                </button>
+                {sentDayCounts.map(([day, count]) => (
+                  <button
+                    key={day}
+                    type="button"
+                    aria-pressed={sentDayFilter === day}
+                    onClick={() => {
+                      setSentDayFilter(day);
+                      setSentVisibleCount(60);
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      sentDayFilter === day ? "bg-ink text-foam" : "bg-mist text-pine"
+                    }`}
+                  >
+                    {new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}{" "}
+                    ({count})
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
               <span>
                 Showing {visibleSentPhotos.length} of {filteredSentPhotos.length}

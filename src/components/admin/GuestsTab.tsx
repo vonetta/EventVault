@@ -267,10 +267,15 @@ John Smith, john@email.com, standard`}
         </p>
       </HowTo>
 
-      <AdminPanel
-        title={`Photos of you (${photosOfYouList.length})`}
-        description="Who has personal / VIP photos tagged and how many. Whole-event shots (3+ people) stay free for everyone and are not counted here."
-        action={
+      <details className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
+        <summary className="cursor-pointer text-sm font-medium text-ink">
+          Photos of you counts ({photosOfYouList.length}) — admin only
+        </summary>
+        <p className="mt-2 text-xs text-pine">
+          Private for you in Admin. Guests never see this list. Counts are solo/couple personal
+          shots (not free Whole-event group photos).
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <select
             value={vipListFilter}
             onChange={(e) =>
@@ -283,10 +288,9 @@ John Smith, john@email.com, standard`}
             <option value="vip_only">VIP only</option>
             <option value="all">Everyone</option>
           </select>
-        }
-      >
+        </div>
         {photosOfYouList.length ? (
-          <div className="overflow-x-auto">
+          <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[28rem] text-left text-sm">
               <caption className="sr-only">Photos of you counts</caption>
               <thead>
@@ -333,12 +337,12 @@ John Smith, john@email.com, standard`}
             </table>
           </div>
         ) : (
-          <p className="text-sm text-pine">
+          <p className="mt-3 text-sm text-pine">
             No matching guests yet. Tag 1–2 people on a photo (or assign a VIP personal photo) to
             build this list.
           </p>
         )}
-      </AdminPanel>
+      </details>
 
       <AdminPanel
         title="Import guests"

@@ -19,6 +19,7 @@ function mapFileMedia(item: {
   title?: string | null;
   filename?: string | null;
   contentType?: string | null;
+  createdAt?: Date | string | null;
 }) {
   return {
     id: String(item._id),
@@ -26,6 +27,7 @@ function mapFileMedia(item: {
     contentType: item.contentType || "application/octet-stream",
     provider: "file" as const,
     url: mediaProxyUrl(String(item._id)),
+    createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : null,
   };
 }
 

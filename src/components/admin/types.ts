@@ -60,6 +60,7 @@ export type MediaDoc = {
   taggedGuestIds?: string[];
   needsEditing?: boolean;
   uploadedByName?: string;
+  createdAt?: string | null;
 };
 
 export type MediaFilter = "all" | "event_photo" | "personal_photo" | "session_video";
