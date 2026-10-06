@@ -49,6 +49,18 @@ export async function consolidateGroupIntoEvent(
     },
   );
 
+  // Ensure published whole-event stills are free for everyone (legacy rows).
+  // Do not clear needsEditing — editing photos must stay out of the gallery.
+  await Media.updateMany(
+    {
+      eventId,
+      kind: "event_photo",
+      needsEditing: { $ne: true },
+      everyone: { $ne: true },
+    },
+    { $set: { everyone: true, published: true } },
+  );
+
   return {
     groupPhotosMoved: groupResult.modifiedCount || 0,
     teamPhotosMoved: teamResult.modifiedCount || 0,

@@ -4,13 +4,18 @@ import { PassThrough } from "node:stream";
 import { Readable } from "node:stream";
 import { connectDB } from "@/lib/db";
 import { unauthorized, assertSameOrigin } from "@/lib/auth";
-import { Event, Media, type MediaDoc } from "@/lib/models";
+import { Event, Guest, Media, type MediaDoc } from "@/lib/models";
 import { openStoredObjectStream } from "@/lib/storage";
 import { resolveGuestSession } from "@/lib/guest-session";
 import {
   findIndividualPhotos,
   isPersonalizedForGuest,
 } from "@/lib/individual-photos";
+import {
+  editGuestIdsFrom,
+  guestFacingStillFilter,
+  showsInNeedsEditing,
+} from "@/lib/needs-editing";
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { logActivity } from "@/lib/audit";
@@ -106,16 +111,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
 
+  const editGuests = await Guest.find({ eventId: guest.eventId }).select("_id name").lean();
+  const editIds = editGuestIdsFrom(editGuests);
+
   const eventPhotos = await Media.find({
     eventId: guest.eventId,
     kind: { $in: ["event_photo", "group_photo"] },
-    needsEditing: { $ne: true },
+    ...guestFacingStillFilter(editIds),
   }).sort({ createdAt: -1 });
 
   const guestId = String(guest._id);
   const eventForZip = eventPhotos.filter(
     (item) =>
       isMediaAvailable(item.availableUntil) &&
+      !showsInNeedsEditing(item, editIds) &&
       !isPersonalizedForGuest(item, guestId),
   );
 
