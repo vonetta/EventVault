@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 
+const VISUAL_VESSELS_URL = "https://www.instagram.com/visualvessels/";
+
 function normalizeTicketInput(value: string) {
   return value.toUpperCase().replace(/\s+/g, "");
 }
@@ -118,138 +120,167 @@ export default function HomePage() {
   const looksLikeGalleryCode = ticketCode.startsWith("WE-");
 
   return (
-    <main id="main" tabIndex={-1} className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-8 md:px-10">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[78vh] opacity-90"
-        style={{
-          backgroundImage: looksLikeGalleryCode
-            ? "linear-gradient(165deg, rgba(28,25,23,0.72), rgba(28,25,23,0.2) 50%, transparent), radial-gradient(ellipse at 70% 10%, rgba(87,83,78,0.35), transparent 50%)"
-            : "linear-gradient(180deg, rgba(28,25,23,0.5), rgba(28,25,23,0.12) 55%, transparent), url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22 viewBox=%220 0 160 160%22%3E%3Cpath fill=%22%2344403c%22 fill-opacity=%220.06%22 d=%22M0 160L160 0H80L0 80zm160 0V80L80 160z%22/%3E%3C/svg%3E')",
-          backgroundSize: "cover, 160px 160px",
-        }}
-      />
-
-      <header className="flex items-center justify-between">
-        <p className="font-[family-name:var(--font-fraunces)] text-3xl tracking-tight text-ink md:text-4xl">
-          EventVault
-        </p>
-        <a
-          href="/admin/login"
-          className="text-sm text-pine underline-offset-4 hover:underline"
-        >
-          Admin
-        </a>
-      </header>
-
-      <section className="mt-20 flex flex-1 flex-col justify-center gap-10 md:mt-28 md:max-w-xl">
-        <div className="ev-fade-in space-y-4">
-          <h1 className="font-[family-name:var(--font-fraunces)] text-4xl leading-tight text-ink md:text-5xl">
-            {looksLikeGalleryCode
-              ? "Enter the weekend."
-              : "Your event photos, ready when you are."}
-          </h1>
-          <p className="max-w-md text-lg leading-relaxed text-pine">
-            {looksLikeGalleryCode
-              ? "This gallery code opens the free Whole-event album — highlights, the full weekend, and keepers you can save."
-              : "Enter the ticket code from your email. VIP guests also see personal photos and speaker sessions."}
-          </p>
+    <main
+      id="main"
+      tabIndex={-1}
+      className="home-shell relative flex min-h-screen flex-col overflow-hidden text-[color:var(--home-foam)]"
+    >
+      <div aria-hidden className="home-atmosphere">
+        <div className="home-atmosphere__base" />
+        <div className="home-atmosphere__beam" />
+        <div className="home-atmosphere__grain" />
+        <div className="home-atmosphere__frames">
+          <span className="home-frame home-frame--a" />
+          <span className="home-frame home-frame--b" />
+          <span className="home-frame home-frame--c" />
         </div>
+      </div>
 
-        {openingFromLinkAndBusy ? (
-          <p role="status" className="text-lg text-pine">
-            {looksLikeGalleryCode ? "Opening the weekend…" : "Opening your vault…"}
-          </p>
-        ) : (
-          <>
-            <form onSubmit={onSubmit} className="flex w-full max-w-md flex-col gap-3">
-              <label className="text-sm font-medium text-pine" htmlFor="ticket">
-                {looksLikeGalleryCode ? "Gallery code" : "Ticket code"}
-              </label>
-              <input
-                id="ticket"
-                value={ticketCode}
-                onChange={(e) => setTicketCode(normalizeTicketInput(e.target.value))}
-                placeholder={looksLikeGalleryCode ? "WE-XXXXXXXX" : "EV-XXXXXXXX"}
-                autoComplete="off"
-                autoCapitalize="characters"
-                autoFocus
-                spellCheck={false}
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? "ticket-error" : undefined}
-                className="h-14 rounded-2xl border border-[color:var(--line)] bg-white/80 px-4 tracking-[0.18em] text-ink outline-none ring-ink/20 placeholder:tracking-normal placeholder:text-pine focus:ring-2"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="h-14 rounded-2xl bg-ink px-5 text-foam transition hover:bg-pine disabled:opacity-60"
-              >
-                {loading
-                  ? "Opening…"
-                  : looksLikeGalleryCode
-                    ? "Enter the weekend"
-                    : "Open my vault"}
-              </button>
-              {error ? (
-                <p id="ticket-error" role="alert" className="text-sm text-red-700">
-                  {error}
-                </p>
-              ) : null}
-            </form>
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-7 md:px-10 md:py-9">
+        <header className="flex items-center justify-end home-rise" style={{ animationDelay: "80ms" }}>
+          <a
+            href="/admin/login"
+            className="text-sm text-[color:var(--home-mist)]/70 underline-offset-4 transition hover:text-[color:var(--home-mist)] hover:underline"
+          >
+            Admin
+          </a>
+        </header>
 
-            {!looksLikeGalleryCode ? (
-            <div className="w-full max-w-md">
-              <button
-                type="button"
-                onClick={() => setShowResend((open) => !open)}
-                className="text-sm text-pine underline-offset-4 hover:underline"
-                aria-expanded={showResend}
-                aria-controls="resend-form"
-              >
-                {showResend ? "Hide" : "Lost your ticket code?"}
-              </button>
+        <section className="flex flex-1 flex-col justify-center py-10 md:py-16">
+          <div className="home-rise max-w-3xl" style={{ animationDelay: "120ms" }}>
+            <p className="home-brand font-[family-name:var(--font-fraunces)] tracking-tight">
+              EventVault
+            </p>
+            <p className="mt-5 max-w-lg text-lg leading-relaxed text-[color:var(--home-mist)]/85 md:text-xl">
+              {looksLikeGalleryCode
+                ? "This gallery code opens the free Whole-event album — highlights, the full weekend, and keepers you can save."
+                : "Private photos from your event, waiting behind your ticket."}
+            </p>
+          </div>
 
-              {showResend ? (
-                <form id="resend-form" onSubmit={onResend} className="mt-4 flex flex-col gap-3 rounded-2xl border border-[color:var(--line)] bg-white/70 p-4">
-                  <p className="text-sm text-pine">
-                    Enter the email address on your guest list. We&apos;ll resend your ticket code.
-                  </p>
-                  <label className="text-sm font-medium text-pine" htmlFor="resend-email">
-                    Email address
+          <div className="home-rise mt-10 w-full max-w-md" style={{ animationDelay: "280ms" }}>
+            {openingFromLinkAndBusy ? (
+              <p role="status" className="text-lg text-[color:var(--home-mist)]">
+                {looksLikeGalleryCode ? "Opening the weekend…" : "Opening your vault…"}
+              </p>
+            ) : (
+              <>
+                <form onSubmit={onSubmit} className="flex flex-col gap-3">
+                  <label
+                    className="text-sm font-medium text-[color:var(--home-mist)]/80"
+                    htmlFor="ticket"
+                  >
+                    {looksLikeGalleryCode ? "Gallery code" : "Ticket code"}
                   </label>
                   <input
-                    id="resend-email"
-                    type="email"
-                    value={resendEmail}
-                    onChange={(e) => setResendEmail(e.target.value)}
-                    placeholder="you@email.com"
-                    required
-                    autoComplete="email"
-                    className="h-12 rounded-xl border border-[color:var(--line)] bg-white/80 px-4 text-ink outline-none ring-ink/20 focus:ring-2"
+                    id="ticket"
+                    value={ticketCode}
+                    onChange={(e) => setTicketCode(normalizeTicketInput(e.target.value))}
+                    placeholder={looksLikeGalleryCode ? "WE-XXXXXXXX" : "EV-XXXXXXXX"}
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    autoFocus
+                    spellCheck={false}
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? "ticket-error" : undefined}
+                    className="h-14 rounded-xl border border-white/15 bg-black/25 px-4 tracking-[0.18em] text-[color:var(--home-foam)] outline-none backdrop-blur-sm placeholder:tracking-normal placeholder:text-[color:var(--home-mist)]/45 focus:border-[color:var(--home-amber)]/50 focus:ring-2 focus:ring-[color:var(--home-amber)]/25"
                   />
                   <button
                     type="submit"
-                    disabled={resendLoading}
-                    className="h-12 rounded-xl border border-pine/20 bg-mist/60 px-4 text-ink transition hover:bg-mist disabled:opacity-60"
+                    disabled={loading}
+                    className="home-cta h-14 rounded-xl bg-[color:var(--home-amber)] px-5 font-medium text-[color:var(--home-ink)] transition hover:bg-[color:var(--home-amber-bright)] disabled:opacity-60"
                   >
-                    {resendLoading ? "Sending…" : "Resend my code"}
+                    {loading
+                      ? "Opening…"
+                      : looksLikeGalleryCode
+                        ? "Enter the weekend"
+                        : "Open my vault"}
                   </button>
-                  {resendMessage ? (
-                    <p role="status" className="text-sm text-pine">
-                      {resendMessage}
+                  {error ? (
+                    <p id="ticket-error" role="alert" className="text-sm text-red-300">
+                      {error}
                     </p>
                   ) : null}
                 </form>
-              ) : null}
-            </div>
-            ) : (
-              <p className="max-w-md text-sm text-pine">
-                Have a personal VIP ticket too? Use that code instead for Photos of you.
-              </p>
+
+                {!looksLikeGalleryCode ? (
+                  <div className="mt-5">
+                    <button
+                      type="button"
+                      onClick={() => setShowResend((open) => !open)}
+                      className="text-sm text-[color:var(--home-mist)]/70 underline-offset-4 transition hover:text-[color:var(--home-mist)] hover:underline"
+                      aria-expanded={showResend}
+                      aria-controls="resend-form"
+                    >
+                      {showResend ? "Hide" : "Lost your ticket code?"}
+                    </button>
+
+                    {showResend ? (
+                      <form
+                        id="resend-form"
+                        onSubmit={onResend}
+                        className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4"
+                      >
+                        <p className="text-sm text-[color:var(--home-mist)]/75">
+                          Enter the email on your guest list. We&apos;ll resend your ticket code.
+                        </p>
+                        <label
+                          className="text-sm font-medium text-[color:var(--home-mist)]/80"
+                          htmlFor="resend-email"
+                        >
+                          Email address
+                        </label>
+                        <input
+                          id="resend-email"
+                          type="email"
+                          value={resendEmail}
+                          onChange={(e) => setResendEmail(e.target.value)}
+                          placeholder="you@email.com"
+                          required
+                          autoComplete="email"
+                          className="h-12 rounded-xl border border-white/15 bg-black/25 px-4 text-[color:var(--home-foam)] outline-none backdrop-blur-sm placeholder:text-[color:var(--home-mist)]/45 focus:border-[color:var(--home-amber)]/50 focus:ring-2 focus:ring-[color:var(--home-amber)]/25"
+                        />
+                        <button
+                          type="submit"
+                          disabled={resendLoading}
+                          className="h-12 rounded-xl border border-white/20 bg-white/5 px-4 text-[color:var(--home-foam)] transition hover:bg-white/10 disabled:opacity-60"
+                        >
+                          {resendLoading ? "Sending…" : "Resend my code"}
+                        </button>
+                        {resendMessage ? (
+                          <p role="status" className="text-sm text-[color:var(--home-mist)]">
+                            {resendMessage}
+                          </p>
+                        ) : null}
+                      </form>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="mt-5 text-sm text-[color:var(--home-mist)]/70">
+                    Have a personal VIP ticket too? Use that code instead for Photos of you.
+                  </p>
+                )}
+              </>
             )}
-          </>
-        )}
-      </section>
+          </div>
+        </section>
+
+        <footer className="home-rise flex flex-col gap-2 border-t border-white/10 pt-5 text-sm text-[color:var(--home-mist)]/65 sm:flex-row sm:items-center sm:justify-between" style={{ animationDelay: "420ms" }}>
+          <p>
+            A{" "}
+            <a
+              href={VISUAL_VESSELS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[color:var(--home-mist)] underline-offset-4 transition hover:text-[color:var(--home-amber)] hover:underline"
+            >
+              Visual Vessels
+            </a>{" "}
+            experience
+          </p>
+          <p className="text-[color:var(--home-mist)]/45">Private event media delivery</p>
+        </footer>
+      </div>
     </main>
   );
 }

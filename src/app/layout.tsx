@@ -14,7 +14,8 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: "EventVault",
-  description: "Private event media delivery — personal photos and session access by ticket.",
+  description:
+    "Private event photos, delivered by ticket. An experience from Visual Vessels.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
