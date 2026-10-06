@@ -4,12 +4,17 @@ import {
   unauthorized,
   assertSameOrigin,
 } from "@/lib/auth";
-import { Day, Event, Media, Session } from "@/lib/models";
+import { Day, Event, Guest, Media, Session } from "@/lib/models";
 import { resolveGuestSession } from "@/lib/guest-session";
 import {
   findIndividualPhotos,
   isPersonalizedForGuest,
 } from "@/lib/individual-photos";
+import {
+  editGuestIdsFrom,
+  guestFacingStillFilter,
+  showsInNeedsEditing,
+} from "@/lib/needs-editing";
 import { mediaProxyUrl } from "@/lib/storage";
 import { zelleConfigured, zellePaymentInfo } from "@/lib/payments";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
@@ -101,16 +106,21 @@ export async function GET(request: Request) {
   // Whole-event album (includes former group/team shares after consolidate).
   // Personalized tags (solo/couple) live under Photos of you only; crowd tags
   // stay here so group shots are not sold as “photos of you”.
+  // Needs editing / Edit-tagged stills never appear in the guest gallery.
+  const editGuests = await Guest.find({ eventId: guest.eventId }).select("_id name").lean();
+  const editIds = editGuestIdsFrom(editGuests);
+
   const eventPhotoDocs = await Media.find({
     eventId: guest.eventId,
     kind: { $in: ["event_photo", "group_photo"] },
-    needsEditing: { $ne: true },
+    ...guestFacingStillFilter(editIds),
   }).sort({ createdAt: -1 });
 
   const eventGallery = eventPhotoDocs
     .filter(
       (item) =>
         isMediaAvailable(item.availableUntil) &&
+        !showsInNeedsEditing(item, editIds) &&
         !isPersonalizedForGuest(item, guestId),
     )
     .map(mapFileMedia);

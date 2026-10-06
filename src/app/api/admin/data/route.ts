@@ -843,11 +843,15 @@ export async function POST(request: Request) {
     if (!media.length) {
       return NextResponse.json({ error: "No team photos to send" }, { status: 400 });
     }
-    const stillEditing = media.filter((item) => item.needsEditing);
+    const { editGuestIdsFrom, showsInNeedsEditing } = await import("@/lib/needs-editing");
+    const eventIds = [...new Set(media.map((item) => String(item.eventId)))];
+    const guests = await Guest.find({ eventId: { $in: eventIds } }).select("_id name").lean();
+    const editIds = editGuestIdsFrom(guests);
+    const stillEditing = media.filter((item) => showsInNeedsEditing(item, editIds));
     if (stillEditing.length) {
       return NextResponse.json(
         {
-          error: `${stillEditing.length} photo${stillEditing.length === 1 ? "" : "s"} still need editing. Mark them ready before sending.`,
+          error: `${stillEditing.length} photo${stillEditing.length === 1 ? "" : "s"} still need editing (or have the Edit tag). Mark ready / remove Edit before sending.`,
         },
         { status: 400 },
       );

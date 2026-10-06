@@ -1,6 +1,7 @@
 import { isAdminAuthenticated, isUploaderAuthenticated } from "@/lib/auth";
 import { isPersonalizedForGuest } from "@/lib/individual-photos";
-import { type MediaDoc } from "@/lib/models";
+import { Guest, type MediaDoc } from "@/lib/models";
+import { isEditTagName } from "@/lib/needs-editing";
 import { resolveGuestSession } from "@/lib/guest-session";
 import { isMediaAvailable } from "@/lib/youtube";
 
@@ -18,6 +19,22 @@ export function guestCanSeeTeamPhoto(
 
 export type MediaAccessLevel = "full" | "preview" | "none";
 
+/** Needs editing flag or Edit person-tag — keep out of the guest vault. */
+async function mediaHeldForEditing(
+  media: Pick<MediaDoc, "needsEditing" | "taggedGuestIds" | "eventId">,
+): Promise<boolean> {
+  if (media.needsEditing) return true;
+  const tags = media.taggedGuestIds || [];
+  if (!tags.length) return false;
+  const taggedGuests = await Guest.find({
+    _id: { $in: tags },
+    eventId: media.eventId,
+  })
+    .select("name")
+    .lean();
+  return taggedGuests.some((guest) => isEditTagName(guest.name || ""));
+}
+
 /**
  * How much of a media item the current requester may see:
  *   full    -> original bytes (view + download)
@@ -30,8 +47,8 @@ export async function getMediaAccessLevel(media: MediaDoc): Promise<MediaAccessL
     const { session, guest } = resolved;
     if (String(guest.eventId) !== String(media.eventId)) return "none";
     if (!isMediaAvailable(media.availableUntil)) return "none";
-    // Needs-editing photos stay out of the guest vault entirely.
-    if (media.needsEditing) return "none";
+    // Needs-editing / Edit-tagged photos stay out of the guest vault entirely.
+    if (await mediaHeldForEditing(media)) return "none";
 
     const guestId = String(guest._id);
 
