@@ -117,6 +117,20 @@ export async function GET(request: Request) {
     )
     .map(mapFileMedia);
 
+  const eventHighlights = eventPhotoDocs
+    .filter(
+      (item) =>
+        typeof item.highlightOrder === "number" &&
+        item.highlightOrder > 0 &&
+        isMediaAvailable(item.availableUntil) &&
+        !isPersonalizedForGuest(item, guestId),
+    )
+    .sort(
+      (a, b) =>
+        (a.highlightOrder as number) - (b.highlightOrder as number),
+    )
+    .map(mapFileMedia);
+
   const preview = Boolean(session.adminPreview);
   const paid =
     Boolean(guest.personalPhotosPaid) || guest.tier === "vip" || preview;
@@ -180,6 +194,7 @@ export async function GET(request: Request) {
     event: { name: event.name, description: event.description },
     groupGallery: [],
     eventGallery,
+    eventHighlights,
     personalPhotos: personal,
     personalPhotosPaid: paid,
     personalPhotosLocked: hasPersonal && !paid,

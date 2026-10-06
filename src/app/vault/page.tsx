@@ -27,6 +27,7 @@ type Library = {
   event: { name: string; description?: string };
   groupGallery: MediaItem[];
   eventGallery: DatedMediaItem[];
+  eventHighlights?: MediaItem[];
   personalPhotos: MediaItem[];
   personalPhotosPaid?: boolean;
   personalPhotosLocked?: boolean;
@@ -462,12 +463,13 @@ export default function VaultPage() {
           {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
         </h2>
         <p className="text-sm text-pine">
-          Free for every guest — including group shots from the weekend. Browse page by page when
-          there are many photos. Personalized photos of you are under Photos of you above
-          (watermarked until unlocked).
+          Free for every guest — including group shots from the weekend. Start with Weekend
+          Highlights when they’re ready, then browse the full album page by page. Personalized
+          photos of you are under Photos of you above (watermarked until unlocked).
         </p>
         <WholeEventGallery
           items={data.eventGallery || []}
+          highlights={data.eventHighlights || []}
           emptyMessage="Whole-event photos will appear here after they’re uploaded."
         />
       </section>
