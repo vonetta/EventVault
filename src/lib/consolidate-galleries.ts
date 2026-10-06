@@ -49,6 +49,16 @@ export async function consolidateGroupIntoEvent(
     },
   );
 
+  // Ensure every whole-event still is free for everyone (legacy rows).
+  await Media.updateMany(
+    {
+      eventId,
+      kind: "event_photo",
+      everyone: { $ne: true },
+    },
+    { $set: { everyone: true, published: true, needsEditing: false } },
+  );
+
   return {
     groupPhotosMoved: groupResult.modifiedCount || 0,
     teamPhotosMoved: teamResult.modifiedCount || 0,

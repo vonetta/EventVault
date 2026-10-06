@@ -21,7 +21,10 @@ const publishSchema = z.object({
 /**
  * Publish staged team photos to Everyone (free for all guests).
  * Used after AI group-photo review on the upload page.
- * Skips Needs editing and already-published items.
+ *
+ * Intentionally allows Needs editing / Edit-tagged shots: Group AI is how
+ * crowd photos leave the edit pile and land in free Whole event. Already-
+ * published items are skipped.
  */
 export async function POST(request: Request) {
   if (!(await isUploaderAuthenticated()) && !(await isAdminAuthenticated())) {
@@ -54,18 +57,17 @@ export async function POST(request: Request) {
   });
 
   let sent = 0;
-  let skippedEditing = 0;
   let skippedPublished = 0;
+  let clearedEditing = 0;
   const readyIds: typeof media = [];
 
   for (const item of media) {
-    if (item.needsEditing) {
-      skippedEditing += 1;
-      continue;
-    }
     if (item.published) {
       skippedPublished += 1;
       continue;
+    }
+    if (item.needsEditing) {
+      clearedEditing += 1;
     }
     readyIds.push(item);
   }
@@ -78,9 +80,10 @@ export async function POST(request: Request) {
           kind: "event_photo",
           published: true,
           everyone: true,
+          needsEditing: false,
           groupIds: [],
-          // Group shots are free Whole event — clear person tags so they do not
-          // land in watermarked Photos of you for everyone in the frame.
+          // Group shots are free Whole event — clear person tags (and Edit) so
+          // they do not land in watermarked Photos of you for everyone in frame.
           taggedGuestIds: [],
         },
       },
@@ -88,10 +91,20 @@ export async function POST(request: Request) {
     sent = readyIds.length;
   }
 
+  // Integrity: any event_photo for this event should be free for everyone.
+  await Media.updateMany(
+    {
+      eventId: body.eventId,
+      kind: "event_photo",
+      everyone: { $ne: true },
+    },
+    { $set: { everyone: true, published: true, needsEditing: false } },
+  );
+
   await logAdminAction(request, "publish_group_photos_everyone", {
     eventId: body.eventId,
     sent,
-    skippedEditing,
+    clearedEditing,
     skippedPublished,
     actor: (await isAdminAuthenticated()) ? "admin" : "uploader",
   });
@@ -99,7 +112,9 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ok: true,
     sent,
-    skippedEditing,
+    clearedEditing,
     skippedPublished,
+    // Keep skippedEditing for older clients; Group AI no longer skips the pile.
+    skippedEditing: 0,
   });
 }
