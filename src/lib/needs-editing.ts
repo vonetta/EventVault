@@ -74,3 +74,17 @@ export function showsInNeedsEditing(
 ) {
   return Boolean(media.needsEditing) || mediaHasEditTag(media.taggedGuestIds, editGuestIds);
 }
+
+/**
+ * Mongo filter: stills that are ready for guest Whole event / publish.
+ * Excludes Needs editing flag and Edit-tagged photos.
+ */
+export function guestFacingStillFilter(editGuestIds: string[] = []) {
+  if (!editGuestIds.length) {
+    return { needsEditing: { $ne: true } as const };
+  }
+  return {
+    needsEditing: { $ne: true } as const,
+    taggedGuestIds: { $nin: editGuestIds },
+  };
+}

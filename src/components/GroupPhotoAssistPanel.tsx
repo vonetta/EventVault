@@ -9,6 +9,7 @@ type GalleryPhoto = {
   title: string;
   url: string;
   needsEditing: boolean;
+  hasEditTag?: boolean;
 };
 
 type GroupPhotoAssistPanelProps = {
@@ -30,6 +31,10 @@ const SCAN_CONCURRENCY = 3;
 /** Photos with at least this many detected faces are group-shot candidates. */
 const DEFAULT_MIN_FACES = 3;
 
+function isReadyForWholeEvent(photo: GalleryPhoto) {
+  return !photo.needsEditing && !photo.hasEditTag;
+}
+
 export function GroupPhotoAssistPanel({
   eventId,
   photos,
@@ -42,12 +47,15 @@ export function GroupPhotoAssistPanel({
   const [hits, setHits] = useState<GroupHit[]>([]);
   const [publishing, setPublishing] = useState(false);
 
-  const readyPhotos = photos.filter((photo) => !photo.needsEditing);
+  // Only Main-gallery ready shots — Edit / Needs editing stay out of Whole event.
+  const readyPhotos = photos.filter(isReadyForWholeEvent);
   const selectedCount = hits.filter((hit) => hit.selected).length;
 
   async function scanForGroups() {
     if (!readyPhotos.length) {
-      onMessage("No ready photos to scan. Upload first, or clear Needs editing.");
+      onMessage(
+        "No ready photos to scan. Remove Edit / Mark ready first — Needs editing stays out of Whole event.",
+      );
       return;
     }
 
@@ -109,6 +117,8 @@ export function GroupPhotoAssistPanel({
     try {
       const mediaIds = selected.map((hit) => hit.mediaId);
       let sent = 0;
+      let skippedEditing = 0;
+      let skippedPublished = 0;
       const CHUNK = 200;
       for (let i = 0; i < mediaIds.length; i += CHUNK) {
         const chunk = mediaIds.slice(i, i + CHUNK);
@@ -123,10 +133,27 @@ export function GroupPhotoAssistPanel({
           return;
         }
         sent += Number(json.sent) || 0;
+        skippedEditing += Number(json.skippedEditing) || 0;
+        skippedPublished += Number(json.skippedPublished) || 0;
       }
 
+      if (!sent) {
+        onMessage(
+          skippedEditing
+            ? "Those photos still need editing (or have the Edit tag). Mark ready / remove Edit before sending to Whole event."
+            : skippedPublished
+              ? "Those photos were already published — nothing new sent to Whole event."
+              : "Could not publish those photos. Refresh and try again.",
+        );
+        return;
+      }
+
+      const skippedNote =
+        skippedEditing > 0
+          ? ` Skipped ${skippedEditing} still in Needs editing.`
+          : "";
       onMessage(
-        `Published ${sent} photo${sent === 1 ? "" : "s"} to Whole event — free for all guests.`,
+        `Published ${sent} photo${sent === 1 ? "" : "s"} to Whole event — free for all guests.${skippedNote}`,
       );
       setHits((prev) => prev.filter((hit) => !hit.selected));
       await onPhotosChanged();
@@ -142,7 +169,8 @@ export function GroupPhotoAssistPanel({
           Group photos → Whole event
         </h2>
         <p className="mt-1 text-sm text-pine">
-          AI finds shots with several people (no tagging needed). Review the list, then one click
+          AI finds ready shots with several people (no tagging needed). Needs editing and Edit-tagged
+          photos stay out of Whole event until you mark them ready. Review the list, then one click
           puts them in the free whole-event album.
         </p>
       </div>

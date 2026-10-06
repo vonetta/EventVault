@@ -109,6 +109,7 @@ type StagedPhoto = {
   url: string;
   uploadedByName?: string;
   needsEditing: boolean;
+  hasEditTag?: boolean;
   taggedGuestIds: string[];
   taggedNames: string[];
   hasCleanupPreview?: boolean;
@@ -793,12 +794,10 @@ export default function UploadPage() {
         <li>
           <span className="font-medium text-ink">2. Upload · clean · sort</span>
           <span className="mt-0.5 block">
-            Group-photo AI → free Whole event. Tag people for Photos of you. Tag{" "}
-            <span className="font-medium text-ink">Edit</span> to park a photo under Needs editing
-            (Edit stays on the photo — tap{" "}
-            <span className="font-medium text-ink">Remove from photo</span> on Edit to send it back
-            to Main). Typo? Open{" "}
-            <span className="font-medium text-ink">Tag</span> →{" "}
+            Group-photo AI → free Whole event (ready photos only). Tag people for Photos of you.
+            Tag <span className="font-medium text-ink">Edit</span> to park a photo under Needs
+            editing — Edit / Needs editing never go in Whole event until you remove Edit or Mark
+            ready. Typo? Open <span className="font-medium text-ink">Tag</span> →{" "}
             <span className="font-medium text-ink">Fix spelling</span>.
           </span>
         </li>
