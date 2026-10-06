@@ -1,161 +1,174 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MediaGrid, type MediaItem } from "@/components/MediaGrid";
 
 export type DatedMediaItem = MediaItem & {
   createdAt?: string | null;
 };
 
-function dayKey(iso?: string | null) {
-  if (!iso) return "unknown";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "unknown";
-  return d.toISOString().slice(0, 10);
-}
-
-function formatDayLabel(key: string) {
-  if (key === "unknown") return "Other";
-  const d = new Date(`${key}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return key;
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 type WholeEventGalleryProps = {
   items: DatedMediaItem[];
   emptyMessage?: string;
+  /** Photos per page for large albums. */
+  pageSize?: number;
 };
 
 /**
- * Guest Whole-event browser for large albums: filter by upload day, sort, and
- * section the grid so 700+ photos are easier to skim.
+ * Guest Whole-event browser for large flat albums.
+ * Pages through photos — does not pretend upload date is an event day.
+ * (True Day 1 / Day 2 sections need photos assigned to schedule days or camera EXIF.)
  */
 export function WholeEventGallery({
   items,
   emptyMessage = "Whole-event photos will appear here after they’re uploaded.",
+  pageSize = 48,
 }: WholeEventGalleryProps) {
-  const [dayFilter, setDayFilter] = useState<string>("all");
-  const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const [page, setPage] = useState(0);
 
-  const dayCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const item of items) {
-      const key = dayKey(item.createdAt);
-      map.set(key, (map.get(key) || 0) + 1);
-    }
-    return [...map.entries()]
-      .filter(([key]) => key !== "unknown" || map.size === 1)
-      .sort((a, b) => b[0].localeCompare(a[0]));
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+
+  useEffect(() => {
+    setPage(0);
   }, [items]);
 
-  const showDayFilters = dayCounts.length > 1;
+  useEffect(() => {
+    if (page > totalPages - 1) setPage(Math.max(0, totalPages - 1));
+  }, [page, totalPages]);
 
-  const filtered = useMemo(() => {
-    let list =
-      dayFilter === "all"
-        ? items
-        : items.filter((item) => dayKey(item.createdAt) === dayFilter);
-    list = [...list].sort((a, b) => {
-      const aT = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bT = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return sort === "newest" ? bT - aT : aT - bT;
-    });
+  const pageItems = useMemo(() => {
+    const start = page * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, page, pageSize]);
+
+  const startN = items.length ? page * pageSize + 1 : 0;
+  const endN = Math.min(items.length, (page + 1) * pageSize);
+
+  const pageButtons = useMemo(() => {
+    if (totalPages <= 1) return [] as number[];
+    // Show a compact window of page numbers around the current page.
+    const window = 5;
+    let from = Math.max(0, page - Math.floor(window / 2));
+    let to = Math.min(totalPages - 1, from + window - 1);
+    from = Math.max(0, to - window + 1);
+    const list: number[] = [];
+    for (let i = from; i <= to; i++) list.push(i);
     return list;
-  }, [items, dayFilter, sort]);
-
-  const sections = useMemo(() => {
-    if (dayFilter !== "all" || !showDayFilters) {
-      return [{ key: dayFilter === "all" ? "all" : dayFilter, label: "", items: filtered }];
-    }
-    const byDay = new Map<string, DatedMediaItem[]>();
-    for (const item of filtered) {
-      const key = dayKey(item.createdAt);
-      const list = byDay.get(key) || [];
-      list.push(item);
-      byDay.set(key, list);
-    }
-    const keys = [...byDay.keys()].sort((a, b) =>
-      sort === "newest" ? b.localeCompare(a) : a.localeCompare(b),
-    );
-    return keys.map((key) => ({
-      key,
-      label: `${formatDayLabel(key)} · ${byDay.get(key)!.length}`,
-      items: byDay.get(key)!,
-    }));
-  }, [filtered, dayFilter, showDayFilters, sort]);
+  }, [page, totalPages]);
 
   if (!items.length) {
     return <p className="text-sm text-pine">{emptyMessage}</p>;
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        {showDayFilters ? (
-          <>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 text-sm text-pine">
+        <span>
+          Showing {startN}–{endN} of {items.length}
+        </span>
+        {totalPages > 1 ? (
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setDayFilter("all")}
-              aria-pressed={dayFilter === "all"}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                dayFilter === "all" ? "bg-ink text-foam" : "bg-mist text-pine hover:text-ink"
-              }`}
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="rounded-lg border border-[color:var(--line)] bg-white px-3 py-1.5 text-xs text-ink disabled:cursor-not-allowed disabled:opacity-40"
             >
-              All ({items.length})
+              Previous
             </button>
-            {dayCounts.map(([key, count]) => (
+            {pageButtons[0] > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setPage(0)}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+                    page === 0 ? "bg-ink text-foam" : "bg-mist text-pine hover:text-ink"
+                  }`}
+                >
+                  1
+                </button>
+                {pageButtons[0] > 1 ? <span className="px-1 text-xs text-pine">…</span> : null}
+              </>
+            ) : null}
+            {pageButtons.map((n) => (
               <button
-                key={key}
+                key={n}
                 type="button"
-                onClick={() => setDayFilter(key)}
-                aria-pressed={dayFilter === key}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                  dayFilter === key ? "bg-ink text-foam" : "bg-mist text-pine hover:text-ink"
+                aria-current={page === n ? "page" : undefined}
+                onClick={() => setPage(n)}
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+                  page === n ? "bg-ink text-foam" : "bg-mist text-pine hover:text-ink"
                 }`}
               >
-                {formatDayLabel(key)} ({count})
+                {n + 1}
               </button>
             ))}
-          </>
+            {pageButtons[pageButtons.length - 1] < totalPages - 1 ? (
+              <>
+                {pageButtons[pageButtons.length - 1] < totalPages - 2 ? (
+                  <span className="px-1 text-xs text-pine">…</span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setPage(totalPages - 1)}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+                    page === totalPages - 1 ? "bg-ink text-foam" : "bg-mist text-pine hover:text-ink"
+                  }`}
+                >
+                  {totalPages}
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              className="rounded-lg border border-[color:var(--line)] bg-white px-3 py-1.5 text-xs text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         ) : null}
-        <label className="ml-auto flex items-center gap-2 text-xs text-pine">
-          <span className="sr-only">Sort Whole event photos</span>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as "newest" | "oldest")}
-            className="h-9 rounded-lg border border-[color:var(--line)] bg-white px-2 text-xs text-ink"
-          >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-          </select>
-        </label>
       </div>
 
-      <p className="text-xs text-pine">
-        Showing {filtered.length} of {items.length} photos
-        {dayFilter !== "all" ? ` · ${formatDayLabel(dayFilter)}` : ""}.
-      </p>
+      <MediaGrid
+        items={pageItems}
+        showDownload
+        showCaptions={false}
+        emptyMessage={emptyMessage}
+      />
 
-      {sections.map((section) => (
-        <div key={section.key} className="space-y-3">
-          {section.label ? (
-            <h3 className="text-sm font-medium uppercase tracking-[0.08em] text-pine">
-              {section.label}
-            </h3>
-          ) : null}
-          <MediaGrid
-            items={section.items}
-            showDownload
-            showCaptions={false}
-            pageSize={36}
-            emptyMessage={emptyMessage}
-          />
+      {totalPages > 1 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-pine">
+          <span>
+            Page {page + 1} of {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => {
+                setPage((p) => Math.max(0, p - 1));
+                document.getElementById("event-gallery")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="rounded-lg border border-[color:var(--line)] bg-white px-3 py-1.5 text-xs text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages - 1}
+              onClick={() => {
+                setPage((p) => Math.min(totalPages - 1, p + 1));
+                document.getElementById("event-gallery")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="rounded-lg border border-[color:var(--line)] bg-white px-3 py-1.5 text-xs text-ink disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }

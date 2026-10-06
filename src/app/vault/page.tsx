@@ -462,8 +462,8 @@ export default function VaultPage() {
           {eventCount ? <span className="ml-2 text-lg text-pine">{eventCount}</span> : null}
         </h2>
         <p className="text-sm text-pine">
-          Free for every guest — including group shots from the weekend. Use the filters to browse by
-          day when there are many photos. Personalized photos of you are under Photos of you above
+          Free for every guest — including group shots from the weekend. Browse page by page when
+          there are many photos. Personalized photos of you are under Photos of you above
           (watermarked until unlocked).
         </p>
         <WholeEventGallery
