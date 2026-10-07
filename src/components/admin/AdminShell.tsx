@@ -18,7 +18,7 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "groups", label: "Groups" },
   { id: "media", label: "Media" },
   { id: "email", label: "Email" },
-  { id: "audit", label: "Activity" },
+  { id: "audit", label: "Usage" },
 ];
 
 export function AdminShell({

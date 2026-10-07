@@ -89,6 +89,16 @@ const SLIDES: {
     tab: "email",
     actionLabel: "Open Email",
   },
+  {
+    title: "7. Track usage",
+    body: [
+      "Open the Usage tab to see guest sign-ins, unique visitors, and downloads.",
+      "Every ticket or gallery-code login is logged automatically with who and when.",
+      "Use Sign-ins for the login log, or Guests for each person’s last seen and login count.",
+    ],
+    tab: "audit",
+    actionLabel: "Open Usage",
+  },
 ];
 
 export function Walkthrough({

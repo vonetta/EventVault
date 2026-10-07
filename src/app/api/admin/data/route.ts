@@ -78,7 +78,8 @@ export async function GET(request: Request) {
   if (searchParams.get("auditLog") === "1") {
     try {
       const eventFilter = searchParams.get("eventId");
-      const query =
+      const focus = searchParams.get("focus") || "";
+      const eventScope =
         eventFilter && /^[a-f\d]{24}$/i.test(eventFilter)
           ? {
               $or: [
@@ -88,11 +89,98 @@ export async function GET(request: Request) {
               ],
             }
           : {};
+
+      const SIGNIN_ACTIONS = [
+        "guest_login",
+        "guest_login_failed",
+        "guest_logout",
+        "guest_download",
+        "admin_login",
+        "admin_login_failed",
+        "admin_logout",
+        "uploader_login",
+        "uploader_login_failed",
+        "uploader_logout",
+      ] as const;
+
+      const query =
+        focus === "signins"
+          ? { ...eventScope, action: { $in: [...SIGNIN_ACTIONS] } }
+          : eventScope;
+
       const logs = await AuditLog.find(query)
         .sort({ createdAt: -1 })
-        .limit(200)
+        .limit(focus === "signins" ? 300 : 200)
         .lean();
+
+      const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const since7 = new Date(now - 7 * dayMs);
+      const since30 = new Date(now - 30 * dayMs);
+
+      const usageMatch = {
+        ...eventScope,
+        action: { $in: ["guest_login", "guest_download", "admin_login", "uploader_login"] },
+      };
+
+      const [usageRows, uniqueGuestRows] = await Promise.all([
+        AuditLog.aggregate([
+          { $match: usageMatch },
+          {
+            $group: {
+              _id: "$action",
+              all: { $sum: 1 },
+              today: {
+                $sum: { $cond: [{ $gte: ["$createdAt", startOfToday] }, 1, 0] },
+              },
+              last7Days: {
+                $sum: { $cond: [{ $gte: ["$createdAt", since7] }, 1, 0] },
+              },
+              last30Days: {
+                $sum: { $cond: [{ $gte: ["$createdAt", since30] }, 1, 0] },
+              },
+            },
+          },
+        ]),
+        AuditLog.aggregate([
+          {
+            $match: {
+              ...eventScope,
+              action: "guest_login",
+              createdAt: { $gte: since30 },
+              guestId: { $ne: null },
+            },
+          },
+          { $group: { _id: "$guestId" } },
+          { $count: "unique" },
+        ]),
+      ]);
+
+      const byAction = Object.fromEntries(
+        usageRows.map((row: { _id: string; all: number; today: number; last7Days: number; last30Days: number }) => [
+          row._id,
+          {
+            all: row.all || 0,
+            today: row.today || 0,
+            last7Days: row.last7Days || 0,
+            last30Days: row.last30Days || 0,
+          },
+        ]),
+      ) as Record<string, { all: number; today: number; last7Days: number; last30Days: number }>;
+
+      const empty = { all: 0, today: 0, last7Days: 0, last30Days: 0 };
+      const usage = {
+        guestSignIns: byAction.guest_login || empty,
+        guestDownloads: byAction.guest_download || empty,
+        adminSignIns: byAction.admin_login || empty,
+        uploaderSignIns: byAction.uploader_login || empty,
+        uniqueGuestsLast30Days: uniqueGuestRows[0]?.unique || 0,
+      };
+
       return NextResponse.json({
+        usage,
         logs: logs.map((entry) => ({
           _id: String(entry._id),
           action: entry.action,
