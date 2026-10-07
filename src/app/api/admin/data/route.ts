@@ -109,6 +109,7 @@ export async function GET(request: Request) {
           { "details.meta.galleryLogin": true },
           { "details.galleryLogin": true },
           { actorName: { $regex: /^Gallery visitor/i } },
+          { actorName: { $regex: /Whole event \(shared gallery\)/i } },
           { "details.summary": { $regex: /Whole-event gallery/i } },
         ],
       };
