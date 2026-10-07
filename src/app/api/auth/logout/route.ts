@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth";
 import { resolveGuestSession } from "@/lib/guest-session";
 import { logActivity } from "@/lib/audit";
+import { requestUserAgent, summarizeUserAgent } from "@/lib/request-meta";
 
 export async function POST(request: Request) {
   try {
@@ -17,12 +18,22 @@ export async function POST(request: Request) {
 
   const guestResolved = await resolveGuestSession();
   if (guestResolved) {
+    const galleryLogin = Boolean(guestResolved.guest.sharedEventGalleryId);
+    const device = summarizeUserAgent(requestUserAgent(request));
     await logActivity(request, {
       action: "guest_logout",
       actor: "guest",
-      actorName: guestResolved.guest.name,
+      actorName: galleryLogin
+        ? `Gallery visitor · ${device}`
+        : guestResolved.guest.name,
       guestId: String(guestResolved.guest._id),
       eventId: String(guestResolved.guest.eventId),
+      details: {
+        summary: galleryLogin
+          ? `Signed out of Whole-event vault · ${device}`
+          : undefined,
+        meta: { galleryLogin, device },
+      },
     });
   } else if (await isAdminAuthenticated()) {
     await logActivity(request, {

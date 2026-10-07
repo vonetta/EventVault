@@ -6,6 +6,7 @@ import { guestSessionPayload } from "@/lib/guest-session";
 import { normalizeTicketCode } from "@/lib/tickets";
 import { ticketLoginSchema } from "@/lib/validate";
 import { logActivity } from "@/lib/audit";
+import { requestUserAgent, summarizeUserAgent } from "@/lib/request-meta";
 import { z } from "zod";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -65,23 +66,31 @@ export async function POST(request: Request) {
 
     const sharedLogin = Boolean(guest.sharedGroupId || guest.sharedEventGalleryId);
     const galleryLogin = Boolean(guest.sharedEventGalleryId);
+    const device = summarizeUserAgent(requestUserAgent(request));
+    const actorName = galleryLogin
+      ? `Gallery visitor · ${device}`
+      : sharedLogin
+        ? `${guest.name} · ${device}`
+        : guest.name;
     await logActivity(request, {
       action: "guest_login",
       actor: "guest",
-      actorName: guest.name,
+      actorName,
       guestId: String(guest._id),
       eventId: String(guest.eventId),
       details: {
         summary: galleryLogin
-          ? `${guest.name} · Whole-event gallery code`
+          ? `Whole-event gallery code · ${device}`
           : sharedLogin
-            ? `${guest.name} · group shared login`
-            : `${guest.name} · ${String(guest.tier).toUpperCase()}`,
+            ? `${guest.name} · group shared login · ${device}`
+            : `${guest.name} · ${String(guest.tier).toUpperCase()} · ${device}`,
         meta: {
           tier: guest.tier,
           sharedLogin,
           galleryLogin,
           loginCount: guest.loginCount,
+          device,
+          ticketCodePrefix: ticketCode.slice(0, 3),
         },
       },
     });

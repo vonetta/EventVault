@@ -125,6 +125,8 @@ const AuditLogSchema = new Schema(
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
+AuditLogSchema.index({ action: 1, createdAt: -1 });
+AuditLogSchema.index({ action: 1, guestId: 1, createdAt: -1 });
 
 const MediaSchema = new Schema(
   {

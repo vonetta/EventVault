@@ -19,6 +19,7 @@ import {
 import { isMediaAvailable } from "@/lib/youtube";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { logActivity } from "@/lib/audit";
+import { requestUserAgent, summarizeUserAgent } from "@/lib/request-meta";
 
 const MAX_ZIP_FILES = 300;
 const MAX_ZIP_BYTES = 150 * 1024 * 1024;
@@ -174,19 +175,25 @@ export async function GET(request: Request) {
     );
   }
 
+  const galleryLogin = Boolean(guest.sharedEventGalleryId);
+  const device = summarizeUserAgent(requestUserAgent(request));
   await logActivity(request, {
     action: "guest_download",
     actor: "guest",
-    actorName: guest.name,
+    actorName: galleryLogin ? `Gallery visitor · ${device}` : guest.name,
     guestId: String(guest._id),
     eventId: String(guest.eventId),
     details: {
-      summary: `${guest.name} · ${entries.length} photos${favoriteIds.length ? " (favorites)" : ""}`,
+      summary: galleryLogin
+        ? `Whole-event gallery download · ${entries.length} photos · ${device}${favoriteIds.length ? " (favorites)" : ""}`
+        : `${guest.name} · ${entries.length} photos${favoriteIds.length ? " (favorites)" : ""}`,
       meta: {
         photoCount: entries.length,
         wholeEvent: eventForZip.length,
         photosOfYou: personalPhotos.length,
         favorites: favoriteIds.length > 0,
+        galleryLogin,
+        device,
       },
     },
   });

@@ -89,6 +89,16 @@ const SLIDES: {
     tab: "email",
     actionLabel: "Open Email",
   },
+  {
+    title: "7. Track usage",
+    body: [
+      "Open the Usage tab — Whole-event code activity is listed by device and IP (everyone shares the WE- login).",
+      "See approx. people, vault opens, downloads, and a day-by-day breakdown.",
+      "Filter Gallery code for shared-code visits, or Guests for personal ticket last-seen counts.",
+    ],
+    tab: "audit",
+    actionLabel: "Open Usage",
+  },
 ];
 
 export function Walkthrough({
