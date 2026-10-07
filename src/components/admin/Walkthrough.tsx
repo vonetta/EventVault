@@ -92,9 +92,9 @@ const SLIDES: {
   {
     title: "7. Track usage",
     body: [
-      "Open the Usage tab to see guest sign-ins, unique visitors, and downloads.",
-      "Every ticket or gallery-code login is logged automatically with who and when.",
-      "Use Sign-ins for the login log, or Guests for each person’s last seen and login count.",
+      "Open the Usage tab — Whole-event code activity is listed by device and IP (everyone shares the WE- login).",
+      "See approx. people, vault opens, downloads, and a day-by-day breakdown.",
+      "Filter Gallery code for shared-code visits, or Guests for personal ticket last-seen counts.",
     ],
     tab: "audit",
     actionLabel: "Open Usage",

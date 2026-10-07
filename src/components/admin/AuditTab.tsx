@@ -27,12 +27,19 @@ type UsageBucket = {
 type UsageStats = {
   guestSignIns: UsageBucket;
   guestDownloads: UsageBucket;
+  guestVaultOpens?: UsageBucket;
   adminSignIns: UsageBucket;
   uploaderSignIns: UsageBucket;
   uniqueGuestsLast30Days: number;
+  galleryCode?: {
+    signIns: UsageBucket;
+    uniqueIpsLast30Days: number;
+    downloadsLast30Days: number;
+    daily: { day: string; signIns: number; uniqueIps: number }[];
+  };
 };
 
-type FilterId = "signins" | "all" | "guest" | "admin" | "uploader";
+type FilterId = "gallery" | "signins" | "all" | "guest" | "admin" | "uploader";
 
 const EMPTY_BUCKET: UsageBucket = { all: 0, today: 0, last7Days: 0, last30Days: 0 };
 
@@ -40,6 +47,7 @@ const ACTION_LABELS: Record<string, string> = {
   guest_login: "Signed in to vault",
   guest_login_failed: "Failed vault sign-in",
   guest_logout: "Signed out of vault",
+  guest_vault_open: "Opened Whole-event vault",
   guest_download: "Downloaded photos",
   guest_zelle_pending: "Marked Zelle as sent",
   admin_login: "Admin signed in",
@@ -192,7 +200,7 @@ export function AuditTab({ eventId }: { eventId?: string }) {
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<FilterId>("signins");
+  const [filter, setFilter] = useState<FilterId>("gallery");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -200,7 +208,7 @@ export function AuditTab({ eventId }: { eventId?: string }) {
     try {
       const params = new URLSearchParams({ auditLog: "1" });
       if (eventId) params.set("eventId", eventId);
-      if (filter === "signins") params.set("focus", "signins");
+      if (filter === "signins" || filter === "gallery") params.set("focus", filter);
       const response = await fetch(`/api/admin/data?${params}`);
       const json = await response.json();
       if (!response.ok) {
@@ -223,15 +231,21 @@ export function AuditTab({ eventId }: { eventId?: string }) {
   }, [load]);
 
   const filtered = useMemo(() => {
-    if (filter === "signins" || filter === "all") return logs;
+    if (filter === "signins" || filter === "gallery" || filter === "all") return logs;
     return logs.filter((entry) => (entry.actor || "admin") === filter);
   }, [logs, filter]);
 
   const counts = useMemo(() => {
-    const next = { signins: 0, all: logs.length, guest: 0, admin: 0, uploader: 0 };
-    if (filter === "signins") {
-      next.signins = logs.length;
-    }
+    const next = {
+      gallery: 0,
+      signins: 0,
+      all: logs.length,
+      guest: 0,
+      admin: 0,
+      uploader: 0,
+    };
+    if (filter === "signins") next.signins = logs.length;
+    if (filter === "gallery") next.gallery = logs.length;
     for (const entry of logs) {
       const actor = entry.actor || "admin";
       if (actor === "guest") next.guest += 1;
@@ -243,12 +257,15 @@ export function AuditTab({ eventId }: { eventId?: string }) {
 
   const guestSignIns = usage?.guestSignIns || EMPTY_BUCKET;
   const downloads = usage?.guestDownloads || EMPTY_BUCKET;
+  const gallery = usage?.galleryCode;
+  const gallerySignIns = gallery?.signIns || EMPTY_BUCKET;
+  const daily = gallery?.daily || [];
 
   return (
     <div className="space-y-6">
       <AdminPanel
-        title="Usage"
-        description="How often people open the vault — sign-ins are logged automatically."
+        title="Whole-event code"
+        description="Everyone sharing the free gallery code shows up here — by device and IP, since they all use the same login."
         action={
           <AdminButton onClick={load} disabled={loading} className="!h-9">
             {loading ? "Refreshing…" : "Refresh"}
@@ -257,45 +274,88 @@ export function AuditTab({ eventId }: { eventId?: string }) {
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Guest sign-ins"
+            label="Code sign-ins today"
+            value={gallerySignIns.today}
+            hint={`${gallerySignIns.last7Days} this week · ${gallerySignIns.all} total`}
+          />
+          <StatCard
+            label="Approx. people (30d)"
+            value={gallery?.uniqueIpsLast30Days ?? 0}
+            hint="Unique IPs using the Whole-event code"
+          />
+          <StatCard
+            label="Vault opens (30d)"
+            value={usage?.guestVaultOpens?.last30Days ?? 0}
+            hint="Gallery visitors who loaded the album"
+          />
+          <StatCard
+            label="Downloads (30d)"
+            value={gallery?.downloadsLast30Days ?? 0}
+            hint="ZIP downloads from the gallery code"
+          />
+        </div>
+        {daily.length ? (
+          <div className="mt-5">
+            <p className="text-xs font-medium uppercase tracking-wide text-pine">Last 30 days</p>
+            <ul className="mt-2 divide-y divide-[color:var(--line)] rounded-xl border border-[color:var(--line)] bg-white/50">
+              {[...daily].reverse().slice(0, 14).map((row) => (
+                <li
+                  key={row.day}
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="text-ink">{row.day}</span>
+                  <span className="text-pine">
+                    {row.signIns} sign-in{row.signIns === 1 ? "" : "s"}
+                    {row.uniqueIps ? ` · ~${row.uniqueIps} people` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-pine">
+            No Whole-event code activity yet. When guests enter the WE- code, each visit is logged with
+            device and IP so you can see how many people are opening the album.
+          </p>
+        )}
+      </AdminPanel>
+
+      <AdminPanel
+        title="All vault usage"
+        description="Personal tickets plus the shared gallery code."
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            label="All guest sign-ins"
             value={guestSignIns.today}
             hint={`${guestSignIns.last7Days} this week · ${guestSignIns.all} total`}
           />
           <StatCard
-            label="Unique guests (30d)"
-            value={usage?.uniqueGuestsLast30Days ?? 0}
-            hint={`${guestSignIns.last30Days} sign-ins in 30 days`}
+            label="Personal tickets (30d)"
+            value={Math.max(0, (usage?.uniqueGuestsLast30Days ?? 0) - (gallerySignIns.last30Days > 0 ? 1 : 0))}
+            hint="Distinct guest accounts (gallery code counts as one)"
           />
           <StatCard
-            label="Downloads"
+            label="All downloads"
             value={downloads.last30Days}
             hint={`${downloads.all} photo ZIPs all time`}
           />
-          <StatCard
-            label="Team / admin"
-            value={(usage?.adminSignIns.last7Days || 0) + (usage?.uploaderSignIns.last7Days || 0)}
-            hint={`${usage?.adminSignIns.all || 0} admin · ${usage?.uploaderSignIns.all || 0} photo team`}
-          />
         </div>
-        <p className="mt-4 text-sm text-pine">
-          Each vault ticket sign-in is saved with who, when, and whether they used a personal code or
-          the Whole-event gallery code. Open <strong className="text-ink">Guests</strong> for per-person
-          last seen and login counts.
-        </p>
       </AdminPanel>
 
       <AdminPanel
-        title="Sign-in log"
-        description="Recent vault opens, downloads, and admin/team sign-ins."
+        title="Activity log"
+        description="Gallery-code visits show device + IP so shared WE- logins stay distinguishable."
       >
         <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Filter activity">
           {(
             [
-              ["signins", "Sign-ins"],
+              ["gallery", "Gallery code"],
+              ["signins", "All sign-ins"],
               ["guest", "Guests"],
               ["admin", "Admin"],
               ["uploader", "Photo team"],
-              ["all", "All activity"],
+              ["all", "Everything"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -308,10 +368,10 @@ export function AuditTab({ eventId }: { eventId?: string }) {
               }`}
             >
               {label}
-              {id !== "signins" && counts[id] ? ` (${counts[id]})` : ""}
-              {id === "signins" && filter === "signins" && counts.signins
-                ? ` (${counts.signins})`
+              {(id === "gallery" || id === "signins") && filter === id && counts[id]
+                ? ` (${counts[id]})`
                 : ""}
+              {id !== "gallery" && id !== "signins" && counts[id] ? ` (${counts[id]})` : ""}
             </button>
           ))}
         </div>
@@ -324,13 +384,15 @@ export function AuditTab({ eventId }: { eventId?: string }) {
           </p>
         ) : !filtered.length ? (
           <p className="text-sm text-pine">
-            {filter === "signins"
-              ? "No sign-ins yet. The next guest ticket or gallery-code login will show up here."
-              : filter === "guest"
-                ? "No guest activity yet. Sign-ins, downloads, and Zelle taps will show up here."
-                : filter === "all"
-                  ? "No activity yet. Guest sign-ins and admin changes will appear here."
-                  : "Nothing in this filter yet."}
+            {filter === "gallery"
+              ? "No Whole-event gallery code activity yet. The next WE- sign-in will show device and IP here."
+              : filter === "signins"
+                ? "No sign-ins yet. The next guest ticket or gallery-code login will show up here."
+                : filter === "guest"
+                  ? "No guest activity yet. Sign-ins, downloads, and Zelle taps will show up here."
+                  : filter === "all"
+                    ? "No activity yet. Guest sign-ins and admin changes will appear here."
+                    : "Nothing in this filter yet."}
           </p>
         ) : (
           <ul>

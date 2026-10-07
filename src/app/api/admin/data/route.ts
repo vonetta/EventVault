@@ -94,6 +94,7 @@ export async function GET(request: Request) {
         "guest_login",
         "guest_login_failed",
         "guest_logout",
+        "guest_vault_open",
         "guest_download",
         "admin_login",
         "admin_login_failed",
@@ -103,14 +104,36 @@ export async function GET(request: Request) {
         "uploader_logout",
       ] as const;
 
-      const query =
-        focus === "signins"
-          ? { ...eventScope, action: { $in: [...SIGNIN_ACTIONS] } }
-          : eventScope;
+      const galleryMetaClause = {
+        $or: [
+          { "details.meta.galleryLogin": true },
+          { "details.galleryLogin": true },
+          { actorName: { $regex: /^Gallery visitor/i } },
+          { "details.summary": { $regex: /Whole-event gallery/i } },
+        ],
+      };
+
+      function andScope(...clauses: Record<string, unknown>[]) {
+        const parts = [eventScope, ...clauses].filter(
+          (clause) => clause && Object.keys(clause).length > 0,
+        );
+        if (parts.length <= 1) return parts[0] || {};
+        return { $and: parts };
+      }
+
+      let query: Record<string, unknown> = eventScope;
+      if (focus === "signins") {
+        query = andScope({ action: { $in: [...SIGNIN_ACTIONS] } });
+      } else if (focus === "gallery") {
+        query = andScope(
+          { action: { $in: ["guest_login", "guest_vault_open", "guest_download", "guest_logout"] } },
+          galleryMetaClause,
+        );
+      }
 
       const logs = await AuditLog.find(query)
         .sort({ createdAt: -1 })
-        .limit(focus === "signins" ? 300 : 200)
+        .limit(focus === "signins" || focus === "gallery" ? 300 : 200)
         .lean();
 
       const now = Date.now();
@@ -120,43 +143,97 @@ export async function GET(request: Request) {
       const since7 = new Date(now - 7 * dayMs);
       const since30 = new Date(now - 30 * dayMs);
 
-      const usageMatch = {
-        ...eventScope,
-        action: { $in: ["guest_login", "guest_download", "admin_login", "uploader_login"] },
-      };
+      const usageMatch = andScope({
+        action: {
+          $in: ["guest_login", "guest_vault_open", "guest_download", "admin_login", "uploader_login"],
+        },
+      });
 
-      const [usageRows, uniqueGuestRows] = await Promise.all([
-        AuditLog.aggregate([
-          { $match: usageMatch },
-          {
-            $group: {
-              _id: "$action",
-              all: { $sum: 1 },
-              today: {
-                $sum: { $cond: [{ $gte: ["$createdAt", startOfToday] }, 1, 0] },
-              },
-              last7Days: {
-                $sum: { $cond: [{ $gte: ["$createdAt", since7] }, 1, 0] },
-              },
-              last30Days: {
-                $sum: { $cond: [{ $gte: ["$createdAt", since30] }, 1, 0] },
+      const galleryLoginMatch = andScope({ action: "guest_login" }, galleryMetaClause);
+
+      const [usageRows, uniqueGuestRows, galleryIpRows, galleryDaily, galleryDownloadCount] =
+        await Promise.all([
+          AuditLog.aggregate([
+            { $match: usageMatch },
+            {
+              $group: {
+                _id: "$action",
+                all: { $sum: 1 },
+                today: {
+                  $sum: { $cond: [{ $gte: ["$createdAt", startOfToday] }, 1, 0] },
+                },
+                last7Days: {
+                  $sum: { $cond: [{ $gte: ["$createdAt", since7] }, 1, 0] },
+                },
+                last30Days: {
+                  $sum: { $cond: [{ $gte: ["$createdAt", since30] }, 1, 0] },
+                },
               },
             },
-          },
-        ]),
-        AuditLog.aggregate([
-          {
-            $match: {
-              ...eventScope,
-              action: "guest_login",
-              createdAt: { $gte: since30 },
-              guestId: { $ne: null },
+          ]),
+          AuditLog.aggregate([
+            {
+              $match: andScope({
+                action: "guest_login",
+                createdAt: { $gte: since30 },
+                guestId: { $ne: null },
+              }),
             },
-          },
-          { $group: { _id: "$guestId" } },
-          { $count: "unique" },
-        ]),
-      ]);
+            { $group: { _id: "$guestId" } },
+            { $count: "unique" },
+          ]),
+          AuditLog.aggregate([
+            {
+              $match: {
+                ...galleryLoginMatch,
+                createdAt: { $gte: since30 },
+                ip: { $nin: ["", "unknown"] },
+              },
+            },
+            { $group: { _id: "$ip" } },
+            { $count: "unique" },
+          ]),
+          AuditLog.aggregate([
+            {
+              $match: {
+                ...galleryLoginMatch,
+                createdAt: { $gte: since30 },
+              },
+            },
+            {
+              $group: {
+                _id: {
+                  $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+                },
+                signIns: { $sum: 1 },
+                uniqueIps: { $addToSet: "$ip" },
+              },
+            },
+            { $sort: { _id: 1 } },
+            {
+              $project: {
+                day: "$_id",
+                signIns: 1,
+                uniqueIps: {
+                  $size: {
+                    $filter: {
+                      input: "$uniqueIps",
+                      as: "ip",
+                      cond: { $and: [{ $ne: ["$$ip", ""] }, { $ne: ["$$ip", "unknown"] }] },
+                    },
+                  },
+                },
+                _id: 0,
+              },
+            },
+          ]),
+          AuditLog.countDocuments(
+            andScope(
+              { action: "guest_download", createdAt: { $gte: since30 } },
+              galleryMetaClause,
+            ),
+          ),
+        ]);
 
       const byAction = Object.fromEntries(
         usageRows.map((row: { _id: string; all: number; today: number; last7Days: number; last30Days: number }) => [
@@ -171,12 +248,43 @@ export async function GET(request: Request) {
       ) as Record<string, { all: number; today: number; last7Days: number; last30Days: number }>;
 
       const empty = { all: 0, today: 0, last7Days: 0, last30Days: 0 };
+      const gallerySignInRows = await AuditLog.aggregate([
+        { $match: galleryLoginMatch },
+        {
+          $group: {
+            _id: null,
+            all: { $sum: 1 },
+            today: {
+              $sum: { $cond: [{ $gte: ["$createdAt", startOfToday] }, 1, 0] },
+            },
+            last7Days: {
+              $sum: { $cond: [{ $gte: ["$createdAt", since7] }, 1, 0] },
+            },
+            last30Days: {
+              $sum: { $cond: [{ $gte: ["$createdAt", since30] }, 1, 0] },
+            },
+          },
+        },
+      ]);
+
       const usage = {
         guestSignIns: byAction.guest_login || empty,
         guestDownloads: byAction.guest_download || empty,
+        guestVaultOpens: byAction.guest_vault_open || empty,
         adminSignIns: byAction.admin_login || empty,
         uploaderSignIns: byAction.uploader_login || empty,
         uniqueGuestsLast30Days: uniqueGuestRows[0]?.unique || 0,
+        galleryCode: {
+          signIns: {
+            all: gallerySignInRows[0]?.all || 0,
+            today: gallerySignInRows[0]?.today || 0,
+            last7Days: gallerySignInRows[0]?.last7Days || 0,
+            last30Days: gallerySignInRows[0]?.last30Days || 0,
+          },
+          uniqueIpsLast30Days: galleryIpRows[0]?.unique || 0,
+          downloadsLast30Days: galleryDownloadCount || 0,
+          daily: galleryDaily as { day: string; signIns: number; uniqueIps: number }[],
+        },
       };
 
       return NextResponse.json({

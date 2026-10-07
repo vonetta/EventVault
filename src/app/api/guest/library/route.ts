@@ -19,6 +19,9 @@ import { mediaProxyUrl } from "@/lib/storage";
 import { zelleConfigured, zellePaymentInfo } from "@/lib/payments";
 import { isMediaAvailable, youtubeEmbedForRef, youtubeOpenUrlForRef } from "@/lib/youtube";
 import { collapseBurstMoments } from "@/lib/burst-moments";
+import { logActivity } from "@/lib/audit";
+import { requestUserAgent, summarizeUserAgent } from "@/lib/request-meta";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 function mapFileMedia(item: {
   _id: { toString(): string } | string;
@@ -108,6 +111,32 @@ export async function GET(request: Request) {
 
   const tier = guest.tier;
   const guestId = String(guest._id);
+  const galleryLogin = Boolean(guest.sharedEventGalleryId);
+
+  // Whole-event code traffic all shares one guest row — log vault opens by IP/device
+  // (rate-limited) so Usage can tell visitors apart.
+  if (galleryLogin && !session.adminPreview) {
+    const ip = clientIp(request);
+    const openLimit = await rateLimit(`vault-open:${guestId}:${ip}`, 1, 15 * 60_000);
+    if (openLimit.ok) {
+      const device = summarizeUserAgent(requestUserAgent(request));
+      await logActivity(request, {
+        action: "guest_vault_open",
+        actor: "guest",
+        actorName: `Gallery visitor · ${device}`,
+        guestId,
+        eventId: String(guest.eventId),
+        details: {
+          summary: `Opened Whole-event vault · ${device}`,
+          meta: {
+            galleryLogin: true,
+            device,
+            photoCountHint: "whole-event",
+          },
+        },
+      });
+    }
+  }
 
   // Whole-event album (includes former group/team shares after consolidate).
   // Personalized tags (solo/couple) live under Photos of you only; crowd tags
