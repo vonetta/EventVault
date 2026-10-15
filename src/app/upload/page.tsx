@@ -1079,6 +1079,20 @@ export default function UploadPage() {
                   aiModel={cleanupMeta.model}
                   onMessage={setMessage}
                   onPhotoUpdated={(id, patch) => {
+                    if (patch.movedToMain || patch.needsEditing === false) {
+                      setEditingGallery((prev) => prev.filter((photo) => photo.id !== id));
+                      setGalleryTotals((prev) => ({
+                        ...prev,
+                        editing: Math.max(0, prev.editing - 1),
+                        ready: prev.ready + 1,
+                      }));
+                      void refreshGalleries(eventId).then(() => {
+                        setBucket("ready");
+                        setTagFilter("all");
+                        setVisibleCount(GALLERY_PAGE_SIZE);
+                      });
+                      return;
+                    }
                     setEditingGallery((prev) =>
                       prev.map((photo) => (photo.id === id ? { ...photo, ...patch } : photo)),
                     );
