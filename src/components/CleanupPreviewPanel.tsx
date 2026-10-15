@@ -27,7 +27,8 @@ function isAdaptiveLabel(value?: string | null) {
 /**
  * Sandbox cleanup for Needs editing photos.
  * Uses OpenAI image edit when configured; otherwise local adaptive sharp.
- * Originals stay untouched until “Use this version”.
+ * Originals stay untouched until “Use this version”, which moves the photo
+ * to Main gallery.
  */
 export function CleanupPreviewPanel({
   photos,
@@ -50,6 +51,9 @@ export function CleanupPreviewPanel({
       cleanupPreviewEngine?: string;
       cleanupPreviewPreset?: string;
       url?: string;
+      needsEditing?: boolean;
+      movedToMain?: boolean;
+      taggedGuestIds?: string[];
     },
   ) => void;
 }) {
@@ -150,6 +154,11 @@ export function CleanupPreviewPanel({
           cleanupPreviewEngine: "",
           cleanupPreviewPreset: "",
           url: json.url || undefined,
+          needsEditing: false,
+          movedToMain: true,
+          taggedGuestIds: Array.isArray(json.taggedGuestIds)
+            ? json.taggedGuestIds.map(String)
+            : undefined,
         });
         setStatsById((prev) => {
           const next = { ...prev };
@@ -157,7 +166,7 @@ export function CleanupPreviewPanel({
           return next;
         });
         if (compareId === mediaId) setCompareId(null);
-        onMessage("Applied cleanup to this photo. It’s still in Needs editing until you mark ready.");
+        onMessage("Applied cleanup — moved to Main gallery.");
       }
     } catch {
       onMessage("Cleanup action failed.");
@@ -257,14 +266,16 @@ export function CleanupPreviewPanel({
               ) : null}{" "}
               — ChatGPT-class lighting/clarity per photo. Prompt asks it to preserve faces and
               framing. Originals stay untouched until{" "}
-              <span className="font-medium text-ink">Use this version</span>.
+              <span className="font-medium text-ink">Use this version</span>, which moves the photo
+              to Main gallery.
             </>
           ) : (
             <>
               Local adaptive lighting/sharpen (no{" "}
               <span className="font-medium text-ink">OPENAI_API_KEY</span> configured). Add the
               key for ChatGPT-class AI cleanup. Originals stay untouched until{" "}
-              <span className="font-medium text-ink">Use this version</span>.
+              <span className="font-medium text-ink">Use this version</span>, which moves the photo
+              to Main gallery.
             </>
           )}
         </p>

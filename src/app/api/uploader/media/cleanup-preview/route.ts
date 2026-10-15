@@ -7,7 +7,7 @@ import {
   isUploaderAuthenticated,
   unauthorized,
 } from "@/lib/auth";
-import { Media } from "@/lib/models";
+import { Guest, Media } from "@/lib/models";
 import { logActivity } from "@/lib/audit";
 import { objectIdSchema } from "@/lib/validate";
 import {
@@ -15,6 +15,10 @@ import {
   enhanceCleanupPreview,
   preferredCleanupEngine,
 } from "@/lib/cleanup-preview";
+import {
+  clearNeedsEditingPileSet,
+  isEditTagName,
+} from "@/lib/needs-editing";
 import { deleteStoredObject, mediaProxyUrl, readStoredObject, storeBytes } from "@/lib/storage";
 import { z } from "zod";
 
@@ -26,7 +30,7 @@ const bodySchema = z.object({
 /**
  * Sandbox cleanup for Needs editing photos.
  * generate → write a separate preview (original untouched)
- * apply    → replace the original with the preview (still Needs editing)
+ * apply    → replace the original with the preview and move to Main gallery
  * discard  → delete the preview only
  */
 export async function POST(request: Request) {
@@ -115,6 +119,30 @@ export async function POST(request: Request) {
     const oldProvider = media.storageProvider;
     const previewKey = media.cleanupPreviewKey;
     const previewProvider = media.cleanupPreviewProvider as "r2" | "local";
+
+    // Cleaned photos leave Needs editing — same destination as Mark ready.
+    // Drop the workflow "Edit" person-tag so the pile filter doesn’t keep them.
+    const previousTagIds = (media.taggedGuestIds || []).map((id) => String(id));
+    let nextTagIds = previousTagIds;
+    let removedEditTag = false;
+    if (previousTagIds.length) {
+      const taggedGuests = await Guest.find({
+        _id: { $in: previousTagIds },
+        eventId: media.eventId,
+      })
+        .select("_id name")
+        .lean();
+      const editIds = new Set(
+        taggedGuests
+          .filter((guest) => isEditTagName(guest.name || ""))
+          .map((guest) => String(guest._id)),
+      );
+      if (editIds.size) {
+        nextTagIds = previousTagIds.filter((id) => !editIds.has(id));
+        removedEditTag = nextTagIds.length !== previousTagIds.length;
+      }
+    }
+
     await Media.updateOne(
       { _id: media._id },
       {
@@ -128,6 +156,8 @@ export async function POST(request: Request) {
           cleanupPreviewEngine: "",
           cleanupPreviewPreset: "",
           cleanupPreviewAt: null,
+          ...clearNeedsEditingPileSet(),
+          taggedGuestIds: nextTagIds,
         },
       },
     );
@@ -147,8 +177,12 @@ export async function POST(request: Request) {
       actor: isAdmin ? "admin" : "uploader",
       eventId: String(media.eventId),
       details: {
-        summary: `Applied cleanup preview · ${media.filename || media._id}`,
-        meta: { engine: media.cleanupPreviewEngine || null },
+        summary: `Applied cleanup → Main gallery · ${media.filename || media._id}`,
+        meta: {
+          engine: media.cleanupPreviewEngine || null,
+          movedToMain: true,
+          removedEditTag,
+        },
       },
     });
 
@@ -159,6 +193,10 @@ export async function POST(request: Request) {
       cleanupPreviewUrl: null,
       url: mediaProxyUrl(String(media._id)),
       applied: true,
+      needsEditing: false,
+      movedToMain: true,
+      taggedGuestIds: nextTagIds,
+      removedEditTag,
     });
   }
 
